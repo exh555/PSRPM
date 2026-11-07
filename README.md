@@ -27,6 +27,7 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
 - [Keyboard Shortcuts & Navigation](#keyboard-shortcuts--navigation)
 - [Repository Structure & Documentation](#repository-structure--documentation)
 - [License](#license)
+- [Development Note](#development-note)
 
 ---
 
@@ -315,3 +316,10 @@ PSRPM/
 ## License
 
 This project is licensed under the terms of the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Development Note
+
+This project was built from conception to production through human-directed **agentic AI coding** (pair programming with Google DeepMind Antigravity). All architectural guardrails, native `Reflection.Emit` kernel collectors, WinRM differential telemetry wire protocols, and WPF desktop interfaces were engineered, benchmarked, and verified under the strict fileless security and performance budgets documented in the [Engineering Playbook](docs/ENGINEERING_PLAYBOOK.md) and [AGENTS.md](AGENTS.md).
+
