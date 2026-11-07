@@ -1,0 +1,64 @@
+name: CI & Publish to PowerShell Gallery
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-publish:
+    name: Test & Publish PSRPM
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Module Manifest
+        shell: powershell
+        run: |
+          Test-ModuleManifest -Path .\PSRPM\PSRPM.psd1
+
+      - name: Run PSRPM Engine Verification Suite
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-PSRPMEngine.ps1
+
+      - name: Check Gallery Version & Publish
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        shell: powershell
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          $manifest = Import-PowerShellDataFile .\PSRPM\PSRPM.psd1
+          $localVersion = [version]$manifest.ModuleVersion
+          Write-Host "Local PSRPM version: $localVersion"
+
+          $galleryVersion = $null
+          try {
+              $pkg = Find-Module -Name PSRPM -ErrorAction Stop
+              $galleryVersion = [version]$pkg.Version
+              Write-Host "PowerShell Gallery current version: $galleryVersion"
+          } catch {
+              Write-Host "PSRPM is not yet published on PowerShell Gallery (initial release)."
+          }
+
+          if ($null -eq $galleryVersion -or $localVersion -gt $galleryVersion) {
+              if ([string]::IsNullOrWhiteSpace($env:PSGALLERY_API_KEY)) {
+                  Write-Error "PSGALLERY_API_KEY secret is not set in GitHub repository secrets!"
+                  exit 1
+              }
+              Write-Host "Publishing version $localVersion to PowerShell Gallery..."
+              Publish-Module -Path .\PSRPM -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
+              Write-Host "Successfully published PSRPM $localVersion to PowerShell Gallery!"
+          } else {
+              Write-Host "Module version $localVersion is not newer than PowerShell Gallery version $galleryVersion."
+              Write-Host "Skipping publish. To release a new version, bump 'ModuleVersion' in PSRPM/PSRPM.psd1."
+          }
