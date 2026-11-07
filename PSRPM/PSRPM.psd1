@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '1.1.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -51,8 +51,20 @@
         'UI\PropertiesWindow.xaml',
         'UI\ConnectDialog.xaml',
         'UI\SystemInfoWindow.xaml',
+        'UI\HelpWindow.xaml',
         'Assets\psrpm.ico',
-        'Assets\psrpm.png'
+        'Assets\psrpm.png',
+        'Assets\psrpm.svg',
+        'Assets\psrpm_16.png',
+        'Assets\psrpm_16.svg',
+        'Assets\psrpm_24.png',
+        'Assets\psrpm_24.svg',
+        'Assets\psrpm_256.png',
+        'Assets\psrpm_256.svg',
+        'Assets\psrpm_32.png',
+        'Assets\psrpm_32.svg',
+        'Assets\psrpm_48.png',
+        'Assets\psrpm_48.svg'
     )
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess
@@ -63,15 +75,13 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.0.0 - Initial Production Release
-- 100% Fileless & EDR-Safe: Native in-memory Reflection.Emit P/Invoke and pure PS 5.1 classes. Zero csc.exe, zero temp DLLs on disk.
-- Ultra-Low Target Impact: Single-call NtQuerySystemInformation(5) (< 0.25% CPU, 2-10ms per tick).
-- Differential Wire Protocol: Transmits static metadata once per process; steady-state delta GZIP payloads ~1.1-1.8 KB/s.
-- Process Explorer Unified Tree-Grid: Pixel-snapped vector connectors, semantic category colors, auto-flat column sorting, ancestor-preserving search.
-- 7-Tab Process Properties Inspector: Instant Core mode (< 20ms) with lazy tab-activated DLLs and kernel Handles inspection.
-- 4-Tab System Information Graphs: Summary, CPU, Memory, and I/O live graphs with bounded 120-sample (< 12 KB) circular ring buffers.
-- Multi-Host Tabbed Sessions: Rapid switching (< 5ms) across concurrent remote/local sessions with 0 KB/s zero-bandwidth standby.
-- Live Audit Trail & Network Telemetry Console (Ctrl+L) with real-time RTT, bandwidth, compression ratio, and event streams.
+PSRPM v1.1.0 - Help Reference Modal, Keyboard Shortcuts & Diagnostics
+- Help / ? Menu & Reference Modal: Added dedicated Help menu bar item, File menu integration, toolbar quick button, and F1 global accelerator.
+- Keyboard Shortcuts & Actions Reference: Interactive reference cataloging tree navigation, instant filtering, process actions, and multi-host session shortcuts.
+- Architecture & EDR Safety Guide: Built-in operational documentation covering 100% fileless security, kernel handle safety, and bounded memory ring buffers.
+- Remoting & Connectivity Guide: Step-by-step guidance for WinRM remote monitoring, TrustedHosts workgroup configuration, and -LocalOnly local execution.
+- About & Runtime Environment Diagnostics: System diagnostics tab displaying host, user, target, transport, PowerShell/CLR versions, and bitness.
+- Audit Console Telemetry Jitter Elimination: Fixed-width telemetry grid preventing control shifting and horizontal twitching.
 '@
         }
     }

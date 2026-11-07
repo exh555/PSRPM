@@ -917,17 +917,21 @@ function Start-PSRPMEngine {
             $deadCount = if ($deadArr) { $deadArr.Count } else { 0 }
 
             if ($txtTelemTransport) {
-                $txtTelemTransport.Text = "$($stateContainer.TransportBadge) [$($stateContainer.TargetDisplayName)] | RTT: $($stateContainer.PollLatencyMs)ms (Avg: ${avgRtt}ms)"
+                $txtTelemTransport.Text = "$($stateContainer.TransportBadge) | RTT: $($stateContainer.PollLatencyMs)ms (avg $($avgRtt.ToString('F0'))ms)"
+                $txtTelemTransport.ToolTip = "$($stateContainer.TransportBadge) [$($stateContainer.TargetDisplayName)] | RTT: $($stateContainer.PollLatencyMs)ms (Avg: $($avgRtt.ToString('F1'))ms)"
             }
             if ($txtTelemPayload) {
                 $encLabel = if ($wasGzip) { "${gzipSavedPct}% GZIP" } else { "Uncompressed" }
-                $txtTelemPayload.Text = "Wire: ${wireKB} KB -> Raw: ${rawKB} KB ($encLabel)"
+                $txtTelemPayload.Text = "Wire: $($wireKB.ToString('F2')) KB ($encLabel)"
+                $txtTelemPayload.ToolTip = "Differential Wire: $($wireKB.ToString('F2')) KB -> Raw: $($rawKB.ToString('F2')) KB ($encLabel)"
             }
             if ($txtTelemNetwork) {
-                $txtTelemNetwork.Text = "BW: ${bwKBs} KB/s | Total RX: ${totRxKB} KB (Raw: ${totRawKB} KB)"
+                $txtTelemNetwork.Text = "BW: $($bwKBs.ToString('F2')) KB/s | RX: $($totRxKB.ToString('F1')) KB"
+                $txtTelemNetwork.ToolTip = "Bandwidth: $($bwKBs.ToString('F2')) KB/s | Total Wire RX: $($totRxKB.ToString('F1')) KB (Raw: $($totRawKB.ToString('F1')) KB)"
             }
             if ($txtTelemDelta) {
-                $txtTelemDelta.Text = "Seq #$seq | Dyn: $dynCount | +Meta: $metaCount | -Exit: $deadCount"
+                $txtTelemDelta.Text = "Seq #$seq | Dyn: $dynCount (+${metaCount}/-${deadCount})"
+                $txtTelemDelta.ToolTip = "Sequence #$seq | Dynamic Updates: $dynCount | New Processes (+Meta): $metaCount | Exited (-Exit): $deadCount"
             }
 
             if ($data['hw']) {

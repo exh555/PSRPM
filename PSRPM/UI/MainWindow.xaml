@@ -95,6 +95,8 @@
                 <MenuItem x:Name="MenuExportCsv" Header="_Export Process Snapshot (CSV)..." InputGestureText="Ctrl+S"/>
                 <MenuItem x:Name="MenuExportJson" Header="Export Forensic Snapshot (_JSON)..."/>
                 <Separator/>
+                <MenuItem x:Name="MenuFileHelp" Header="_Help &amp; Shortcuts..." InputGestureText="F1"/>
+                <Separator/>
                 <MenuItem x:Name="MenuExit" Header="E_xit" InputGestureText="Alt+F4"/>
             </MenuItem>
             <MenuItem Header="_Options">
@@ -142,6 +144,13 @@
                     <MenuItem x:Name="MenuPrioAbove" Header="Above Normal"/>
                     <MenuItem x:Name="MenuPrioHigh" Header="High"/>
                 </MenuItem>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem x:Name="MenuHelpTopics" Header="_Keyboard Shortcuts &amp; Reference..." InputGestureText="F1" FontWeight="SemiBold"/>
+                <MenuItem x:Name="MenuHelpArchitecture" Header="_Architecture &amp; Safety Overview..."/>
+                <MenuItem x:Name="MenuHelpConnectivity" Header="_Remoting &amp; Connectivity Guide..."/>
+                <Separator/>
+                <MenuItem x:Name="MenuHelpAbout" Header="_About PSRPM..."/>
             </MenuItem>
         </Menu>
 
@@ -249,6 +258,9 @@
                     <Button x:Name="BtnToolbarTheme" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Switch Light / Dark Theme (Ctrl+D)">
                         <TextBlock x:Name="TxtThemeToggle" Text="Dark Mode" FontSize="11" FontWeight="SemiBold"/>
                     </Button>
+                    <Button x:Name="BtnToolbarHelp" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Help, Keyboard Shortcuts &amp; About (F1)" Margin="2,0,0,0">
+                        <Path Data="M11,18h2v-2h-2V18z M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M12,20c-4.41,0-8-3.59-8-8s3.59-8,8-8s8,3.59,8,8S16.41,20,12,20z M12,6c-2.21,0-4,1.79-4,4h2c0-1.1,0.9-2,2-2s2,0.9,2,2c0,2-3,1.75-3,5h2c0-2.25,3-2.5,3-5C16,7.79,14.21,6,12,6z" Fill="#0284C7" Width="14" Height="14" Stretch="Uniform"/>
+                    </Button>
                 </StackPanel>
 
                 <!-- Col 2: Sysinternals Mini Telemetry Sparkline Strip (Double-Click for System Information) -->
@@ -348,33 +360,47 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <Border Grid.Row="0" Background="#1E293B" Padding="8,4" BorderBrush="#334155" BorderThickness="0,0,0,1">
-                    <DockPanel>
-                        <TextBlock Text="Audit Trail &amp; Network Telemetry" Foreground="#F8FAFC" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                        <!-- Right Action Controls -->
-                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- Left: Console Title -->
+                        <TextBlock Grid.Column="0" Text="Audit Trail &amp; Network Telemetry" Foreground="#F8FAFC" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                        <!-- Center: Fixed 4-Column Live Telemetry Grid Eliminating Horizontal Jitter Across Ticks -->
+                        <Grid Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Transport Mode, Round-Trip Latency &amp; Average Latency">
+                                <TextBlock x:Name="TxtTelemTransport" Text="Mode: Initializing..." Foreground="#38BDF8" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            </Border>
+                            <Border Grid.Column="1" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Differential Compressed Wire Payload vs Uncompressed Raw JSON">
+                                <TextBlock x:Name="TxtTelemPayload" Text="Wire: 0.00 KB (0% GZIP)" Foreground="#A7F3D0" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            </Border>
+                            <Border Grid.Column="2" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Real-Time Network Bandwidth &amp; Cumulative Wire Transfer (RX)">
+                                <TextBlock x:Name="TxtTelemNetwork" Text="BW: 0.00 KB/s | RX: 0.0 KB" Foreground="#FDE68A" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            </Border>
+                            <Border Grid.Column="3" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" ToolTip="Telemetry Sync Sequence &amp; Differential Process Delta (Dyn / +Meta / -Exit)">
+                                <TextBlock x:Name="TxtTelemDelta" Text="Seq #0 | Dyn: 0 (+0/-0)" Foreground="#DDD6FE" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- Right: Action Controls -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                             <CheckBox x:Name="ChkStreamTicks" Content="Stream Ticks" IsChecked="True" Foreground="#CBD5E1" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand" ToolTip="Stream per-tick differential payload and network metrics"/>
                             <Button x:Name="BtnCopyLog" Content="Copy" Padding="7,1" FontSize="10" Margin="0,0,5,0" Background="#334155" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Copy Console Log to Clipboard"/>
                             <Button x:Name="BtnClearLog" Content="Clear" Padding="7,1" FontSize="10" Margin="0,0,5,0" Background="#334155" Foreground="White" BorderThickness="0" Cursor="Hand"/>
                             <Button x:Name="BtnToggleLogPane" Content="Close [X]" Padding="6,1" FontSize="10" Background="#475569" Foreground="White" BorderThickness="0" Cursor="Hand"/>
                         </StackPanel>
-
-                        <!-- Live Network & Payload Telemetry Pills -->
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,0,6,0">
-                                <TextBlock x:Name="TxtTelemTransport" Text="Mode: Initializing..." Foreground="#38BDF8" FontFamily="Consolas" FontSize="10.5"/>
-                            </Border>
-                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,0,6,0">
-                                <TextBlock x:Name="TxtTelemPayload" Text="Wire: 0.00 KB | Raw: 0.00 KB (0% GZIP)" Foreground="#A7F3D0" FontFamily="Consolas" FontSize="10.5"/>
-                            </Border>
-                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,0,6,0">
-                                <TextBlock x:Name="TxtTelemNetwork" Text="BW: 0.00 KB/s | Total RX: 0.0 KB" Foreground="#FDE68A" FontFamily="Consolas" FontSize="10.5"/>
-                            </Border>
-                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="6,1">
-                                <TextBlock x:Name="TxtTelemDelta" Text="Seq #0 | Dyn: 0 | +Meta: 0 | -Exit: 0" Foreground="#DDD6FE" FontFamily="Consolas" FontSize="10.5"/>
-                            </Border>
-                        </StackPanel>
-                    </DockPanel>
+                    </Grid>
                 </Border>
                 <TextBox x:Name="TxtLogConsole" Grid.Row="1" Background="#0F172A" Foreground="#38BDF8" FontFamily="Consolas" FontSize="11" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" BorderThickness="0" Padding="8,4" TextWrapping="NoWrap"/>
             </Grid>

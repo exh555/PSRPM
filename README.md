@@ -4,7 +4,7 @@
 
 # PSRPM — PowerShell Remote Process Manager
 
-[![Version: 1.0.0](https://img.shields.io/badge/version-1.0.0-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.1.0](https://img.shields.io/badge/version-1.1.0-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 
@@ -257,6 +257,7 @@ Press **`Ctrl+L`** (or click **Audit Console (Ctrl+L)** in the bottom-right stat
 | `Ctrl+I` / `Double-Click Mini Graph` | Open **System Information** window (`Summary`, `CPU`, `Memory`, `I/O` live graphs) |
 | `Ctrl+L` | Toggle bottom **Audit Trail & Network Telemetry Console** |
 | `Ctrl+S` | Export live process snapshot to CSV |
+| `F1` | Open **Help, Keyboard Shortcuts & Information Reference** modal |
 | `Del` | Terminate selected process (`KillProcess`) |
 | `Shift+Del` | Terminate selected process and all descendants (`KillTree`) |
 
@@ -294,7 +295,8 @@ PSRPM/
 │       ├── MainWindow.xaml                # Process Explorer-Inspired Tree-Grid Main Window
 │       ├── PropertiesWindow.xaml          # 7-Tab Process Properties Inspector Modal
 │       ├── SystemInfoWindow.xaml          # 4-Tab Live System Information Graphs Modal
-│       └── ConnectDialog.xaml             # In-App Remote Host / LocalOnly Switcher Modal
+│       ├── ConnectDialog.xaml             # In-App Remote Host / LocalOnly Switcher Modal
+│       └── HelpWindow.xaml                # 4-Tab Help, Shortcuts & Runtime Diagnostics Modal
 └── Tests/
     └── Test-PSRPMEngine.ps1               # Automated 7-Suite Verification & Benchmark Script
 ```

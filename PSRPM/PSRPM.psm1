@@ -191,6 +191,7 @@ function Start-PSRPM {
     $propXamlPath    = Join-Path $uiDir "PropertiesWindow.xaml"
     $connXamlPath    = Join-Path $uiDir "ConnectDialog.xaml"
     $sysInfoXamlPath = Join-Path $uiDir "SystemInfoWindow.xaml"
+    $helpXamlPath    = Join-Path $uiDir "HelpWindow.xaml"
 
     $xamlBytes = [System.IO.File]::ReadAllBytes($mainXamlPath)
     $msXaml = [System.IO.MemoryStream]::new($xamlBytes)
@@ -1951,6 +1952,77 @@ function Start-PSRPM {
         })
     }
 
+    # 15C. Help, Reference & About Modal Window (F1 or Help Menu)
+    $actionShowHelp = {
+        param([int]$initialTabIndex = 0)
+        try {
+            $hBytes = [System.IO.File]::ReadAllBytes($helpXamlPath)
+            $msHelp = [System.IO.MemoryStream]::new($hBytes)
+            $helpWin = [System.Windows.Markup.XamlReader]::Load($msHelp)
+            $msHelp.Close()
+
+            $helpWin.Owner = $window
+            if ($appIconFrame) { $helpWin.Icon = $appIconFrame }
+
+            $tcHelp = $helpWin.FindName("HelpTabControl")
+            if ($tcHelp -and $initialTabIndex -ge 0 -and $initialTabIndex -lt $tcHelp.Items.Count) {
+                $tcHelp.SelectedIndex = $initialTabIndex
+            }
+
+            # Populate live diagnostic information in About tab
+            $txtAboutHost = $helpWin.FindName("TxtAboutHost")
+            if ($txtAboutHost) { $txtAboutHost.Text = "$env:COMPUTERNAME" }
+
+            $txtAboutUser = $helpWin.FindName("TxtAboutUser")
+            if ($txtAboutUser) { $txtAboutUser.Text = "$env:USERDOMAIN\$env:USERNAME" }
+
+            $txtAboutTarget = $helpWin.FindName("TxtAboutTarget")
+            if ($txtAboutTarget) { $txtAboutTarget.Text = "$($stateContainer.TargetDisplayName)" }
+
+            $txtAboutTransport = $helpWin.FindName("TxtAboutTransport")
+            if ($txtAboutTransport) { $txtAboutTransport.Text = "$($stateContainer.TransportBadge) ($($stateContainer.ConnectionState))" }
+
+            $txtAboutPsVer = $helpWin.FindName("TxtAboutPsVersion")
+            if ($txtAboutPsVer) { $txtAboutPsVer.Text = "$($PSVersionTable.PSVersion)" }
+
+            $txtAboutClrVer = $helpWin.FindName("TxtAboutClrVersion")
+            if ($txtAboutClrVer) { $txtAboutClrVer.Text = "$([Environment]::Version)" }
+
+            $txtAboutArch = $helpWin.FindName("TxtAboutArch")
+            if ($txtAboutArch) {
+                $bitStr = if ([System.Environment]::Is64BitProcess) { "64-bit (x64)" } else { "32-bit (x86)" }
+                $txtAboutArch.Text = "$bitStr on $($env:PROCESSOR_ARCHITECTURE)"
+            }
+
+            $btnHelpClose = $helpWin.FindName("BtnHelpClose")
+            if ($btnHelpClose) {
+                $btnHelpClose.add_Click({ $helpWin.Close() })
+            }
+
+            [void]$helpWin.ShowDialog()
+        } catch {
+            &$writeAuditLog "ERROR" "Failed to display Help window: $($_.Exception.Message)"
+        }
+    }
+
+    $menuHelpTopics = $window.FindName("MenuHelpTopics")
+    if ($menuHelpTopics) { $menuHelpTopics.add_Click({ &$actionShowHelp 0 }) }
+
+    $menuHelpArchitecture = $window.FindName("MenuHelpArchitecture")
+    if ($menuHelpArchitecture) { $menuHelpArchitecture.add_Click({ &$actionShowHelp 1 }) }
+
+    $menuHelpConnectivity = $window.FindName("MenuHelpConnectivity")
+    if ($menuHelpConnectivity) { $menuHelpConnectivity.add_Click({ &$actionShowHelp 2 }) }
+
+    $menuHelpAbout = $window.FindName("MenuHelpAbout")
+    if ($menuHelpAbout) { $menuHelpAbout.add_Click({ &$actionShowHelp 3 }) }
+
+    $menuFileHelp = $window.FindName("MenuFileHelp")
+    if ($menuFileHelp) { $menuFileHelp.add_Click({ &$actionShowHelp 0 }) }
+
+    $btnToolbarHelp = $window.FindName("BtnToolbarHelp")
+    if ($btnToolbarHelp) { $btnToolbarHelp.add_Click({ &$actionShowHelp 0 }) }
+
     # 16. Global Keyboard Accelerators
     $window.add_PreviewKeyDown({
         param($sender, $e)
@@ -1958,7 +2030,10 @@ function Start-PSRPM {
         $isCtrl  = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
         $isShift = ($mods -band [System.Windows.Input.ModifierKeys]::Shift) -ne 0
 
-        if ($e.Key -eq [System.Windows.Input.Key]::F5) {
+        if ($e.Key -eq [System.Windows.Input.Key]::F1) {
+            &$actionShowHelp 0
+            $e.Handled = $true
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::F5) {
             &$triggerImmediateRefresh
             $e.Handled = $true
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $txtSearch.IsKeyboardFocusWithin) {

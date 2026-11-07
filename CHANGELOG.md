@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-07
+
+### Added
+- **Help / ? Menu Bar & Comprehensive Reference Modal**:
+  - Top-level `Help` menu with access to keyboard shortcuts reference, architecture & safety overview, remoting guide, and About dialog.
+  - Integration into the `File` menu (`Help & Shortcuts...`, `F1`) and top action toolbar with vector `?` quick-access button (`BtnToolbarHelp`).
+  - Global `F1` keyboard accelerator opening the modal from any view or focus state.
+- **4-Tab Help & Information Reference Modal (`HelpWindow.xaml`)**:
+  - **Shortcuts Tab**: Clean, categorized table of all keyboard accelerators across Navigation & Views, Process Operations, Multi-Host Session Management, and Snapshots with visual key badges.
+  - **Architecture & Safety Tab**: Operator overview of PSRPM's four non-negotiable architectural pillars: 100% fileless EDR safety, ultra-low remote CPU budget (< 0.25%), differential GZIP wire streaming (~1.1-1.8 KB/s), and bounded zero-leak memory eviction.
+  - **Connectivity Tab**: Actionable setup instructions for WinRM remoting, TrustedHosts workgroup configuration, zero-privilege `-LocalOnly` execution, and the semantic process color legend.
+  - **About Tab**: Product version, licensing, copyright, documentation links, and live diagnostic environment telemetry (host, operator user, target session, transport protocol, PowerShell version, CLR/.NET runtime, and processor architecture).
+
+### Fixed
+- **Audit Console Top Row Telemetry Layout & Jitter Elimination**:
+  - Replaced unconstrained horizontal `StackPanel` in `LogPane` header with a stable 3-column `Grid` (`Auto`, `*`, `Auto`) and a fixed 4-column telemetry grid, guaranteeing right action controls (`Stream Ticks`, `Copy`, `Clear`, `Close [X]`) are never overlapped, clipped, or shifted by updating text.
+  - Formatted telemetry badges (`Transport / RTT`, `Wire / Compression`, `Bandwidth / RX`, `Sequence / Delta`) to fixed-character layouts with `Tabular` numeral alignment and `TextTrimming="CharacterEllipsis"`, completely eliminating horizontal jitter/twitching across refresh ticks.
+  - Added rich on-hover tooltips on all 4 telemetry pills displaying complete long-form metrics, host targets, and uncompressed raw JSON payload ratios.
+
 ## [1.0.0] - 2026-11-07
 
 ### Added

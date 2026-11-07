@@ -37,6 +37,14 @@ jobs:
         run: |
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+          if (-not (Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue)) {
+              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
+          }
+          if (-not (Get-PSRepository -Name "PSGallery" -ErrorAction SilentlyContinue)) {
+              Register-PSRepository -Default -ErrorAction SilentlyContinue
+          }
+          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+
           $manifest = Import-PowerShellDataFile .\PSRPM\PSRPM.psd1
           $localVersion = [version]$manifest.ModuleVersion
           Write-Host "Local PSRPM version: $localVersion"
