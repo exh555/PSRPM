@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Bypass minor-only filter and force publish'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -34,6 +40,7 @@ jobs:
         shell: powershell
         env:
           PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+          FORCE_PUBLISH: ${{ inputs.force_publish }}
         run: |
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -58,15 +65,40 @@ jobs:
               Write-Host "PSRPM is not yet published on PowerShell Gallery (initial release)."
           }
 
-          if ($null -eq $galleryVersion -or $localVersion -gt $galleryVersion) {
+          $forcePublish = ($env:FORCE_PUBLISH -eq 'true')
+
+          $isEligible = $false
+          if ($forcePublish) {
+              Write-Host "Manual override active: force publish requested."
+              $isEligible = ($null -eq $galleryVersion -or $localVersion -gt $galleryVersion)
+          } elseif ($null -eq $galleryVersion) {
+              # Initial release: must be a .0 release
+              $isEligible = ($localVersion.Build -le 0)
+          } else {
+              $localMajorMinor   = [version]"$($localVersion.Major).$($localVersion.Minor)"
+              $galleryMajorMinor = [version]"$($galleryVersion.Major).$($galleryVersion.Minor)"
+
+              # Only publish if Major.Minor incremented AND it is a clean .0 release
+              $isNewMinorOrMajor = ($localMajorMinor -gt $galleryMajorMinor)
+              $isZeroPatch       = ($localVersion.Build -le 0)
+
+              $isEligible = ($isNewMinorOrMajor -and $isZeroPatch)
+          }
+
+          if ($isEligible) {
               if ([string]::IsNullOrWhiteSpace($env:PSGALLERY_API_KEY)) {
                   Write-Error "PSGALLERY_API_KEY secret is not set in GitHub repository secrets!"
                   exit 1
               }
-              Write-Host "Publishing version $localVersion to PowerShell Gallery..."
+              Write-Host "Publishing minor/major version $localVersion to PowerShell Gallery..."
               Publish-Module -Path .\PSRPM -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
               Write-Host "Successfully published PSRPM $localVersion to PowerShell Gallery!"
           } else {
-              Write-Host "Module version $localVersion is not newer than PowerShell Gallery version $galleryVersion."
-              Write-Host "Skipping publish. To release a new version, bump 'ModuleVersion' in PSRPM/PSRPM.psd1."
+              if ($localVersion.Build -gt 0) {
+                  Write-Host "Local version $localVersion is a patch-level release (patch: $($localVersion.Build))."
+                  Write-Host "Skipping PSGallery publish: PSGallery only receives minor (.X.0) and major (.0.0) releases."
+              } else {
+                  Write-Host "Local version $localVersion does not advance Major/Minor over PowerShell Gallery ($galleryVersion)."
+                  Write-Host "Skipping publish. To release to PSGallery, increment the minor version (e.g. 1.2.0) in PSRPM/PSRPM.psd1."
+              }
           }

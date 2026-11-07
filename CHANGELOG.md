@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-11-07
+## [1.1.1] - 2026-11-07
+
+### Added
+- **Visual Pause State Indication & UX Overhaul**:
+  - **Dynamic Toolbar Pause / Resume Button**: Replaced static pause button with a reactive state toggle. When paused, `BtnToolbarPause` transforms to display an amber Play/Resume vector icon (`▶`), an accented amber background, a bold `"PAUSED"` text label (`TxtToolbarPause`), and updated `"Resume Polling (Space)"` tooltip.
+  - **Status Bar Amber [PAUSED] Badge**: Added a high-contrast amber `[PAUSED]` indicator pill (`BadgePaused`) directly in the status bar alongside an explicit notification (`PAUSED - Telemetry collection suspended`), eliminating any ambiguity when background updates are halted.
+  - **Active Session Tab Status Synchronization**: The active host tab in `HostTabBar` immediately reflects the paused state, turning its status indicator dot amber (`#F59E0B`) and updating latency text to `"Paused"`.
+  - **Immediate Multi-Control Recovery**: Restoring real-time telemetry polling via Spacebar, `F5` / Refresh button, or menu rate selection immediately reverts all visual indicators to running state and triggers a fast NtQuerySystemInformation collection tick.
+  - **Audit Trail Rate Logging**: Detailed audit events recorded to the telemetry console upon entering (`RATE: Telemetry collection paused`) and exiting (`RATE: Telemetry collection resumed`) pause mode.
 
 ### Added
 - **Help / ? Menu Bar & Comprehensive Reference Modal**:

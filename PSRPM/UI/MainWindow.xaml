@@ -232,8 +232,11 @@
                     <Button x:Name="BtnToolbarRefresh" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Refresh Now (F5)">
                         <Path Data="M12,4V1L8,5l4,4V6c3.31,0,6,2.69,6,6c0,1.01-0.25,1.97-0.7,2.8l1.46,1.46C19.54,15.03,20,13.57,20,12C20,7.58,16.42,4,12,4z M12,18c-3.31,0-6-2.69-6-6c0-1.01,0.25-1.97,0.7-2.8L5.24,7.74C4.46,8.97,4,10.43,4,12c0,4.42,3.58,8,8,8v3l4-4l-4-4V18z" Fill="#0284C7" Width="15" Height="15" Stretch="Uniform"/>
                     </Button>
-                    <Button x:Name="BtnToolbarPause" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Pause / Resume Polling (Space)">
-                        <Path Data="M6,19h4V5H6V19z M14,5v14h4V5H14z" Fill="{DynamicResource BrushTextSecondary}" Width="14" Height="14" Stretch="Uniform"/>
+                    <Button x:Name="BtnToolbarPause" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Pause Polling (Space)">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path x:Name="IconToolbarPause" Data="M6,19h4V5H6V19z M14,5v14h4V5H14z" Fill="{DynamicResource BrushTextSecondary}" Width="14" Height="14" Stretch="Uniform"/>
+                            <TextBlock x:Name="TxtToolbarPause" Text="" FontSize="11" FontWeight="SemiBold" Margin="4,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                        </StackPanel>
                     </Button>
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
                     <Button x:Name="BtnToolbarTree" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Toggle Process Tree / Flat View (Ctrl+T)">
@@ -325,7 +328,12 @@
         <StatusBar DockPanel.Dock="Bottom" Background="{DynamicResource BrushHeaderBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,1,0,0" Padding="6,2">
             <!-- Fixed-width left telemetry section eliminates horizontal jitter across ticks -->
             <StatusBarItem Width="610">
-                <TextBlock x:Name="StatusText" Text="Initializing Telemetry Engine..." FontSize="11" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border x:Name="BadgePaused" Background="#F59E0B" CornerRadius="2" Padding="5,1" Margin="0,0,6,0" Visibility="Collapsed" VerticalAlignment="Center">
+                        <TextBlock Text="PAUSED" Foreground="#0F172A" FontSize="9.5" FontWeight="Bold"/>
+                    </Border>
+                    <TextBlock x:Name="StatusText" Text="Initializing Telemetry Engine..." FontSize="11" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                </StackPanel>
             </StatusBarItem>
             <Separator/>
             <StatusBarItem>

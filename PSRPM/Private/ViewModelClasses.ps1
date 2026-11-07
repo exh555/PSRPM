@@ -1267,13 +1267,15 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.BadgeBackground  = if ($this.IsLocal) { "#0D9488" } else { "#0284C7" }
 
         if ($active) {
-            $this.LatencyText = "${rttMs}ms"
             if ($isPaused) {
                 $this.StatusDotFill = "#F59E0B"
+                $this.LatencyText   = "Paused"
             } elseif ($connState -in @("Connected", "LocalMode")) {
                 $this.StatusDotFill = "#16A34A"
+                $this.LatencyText   = "${rttMs}ms"
             } else {
                 $this.StatusDotFill = "#DC2626"
+                $this.LatencyText   = "${rttMs}ms"
             }
             if ($isDark) {
                 $this.TabBackground   = "#0F172A"

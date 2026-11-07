@@ -341,6 +341,7 @@ function Start-PSRPM {
         foreach ($tVm in $hostTabsCollection) {
             $tVm.UpdateVisualState(($tVm -eq $script:ActiveHostTab), $useDark, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
         }
+        if ($updatePauseUi) { &$updatePauseUi [bool]$stateContainer.IsPaused }
     }
 
     if ($menuThemeLight) { $menuThemeLight.add_Click({ &$applyTheme $false }) }
@@ -656,6 +657,10 @@ function Start-PSRPM {
     $menuRefresh      = $window.FindName("MenuRefresh")
     $btnToolbarRef    = $window.FindName("BtnToolbarRefresh")
     $btnToolbarPause  = $window.FindName("BtnToolbarPause")
+    $iconToolbarPause = $window.FindName("IconToolbarPause")
+    $txtToolbarPause  = $window.FindName("TxtToolbarPause")
+    $badgePaused      = $window.FindName("BadgePaused")
+    $statusText       = $window.FindName("StatusText")
     $menuRate500ms    = $window.FindName("MenuRate500ms")
     $menuRate1s       = $window.FindName("MenuRate1s")
     $menuRate2s       = $window.FindName("MenuRate2s")
@@ -663,16 +668,80 @@ function Start-PSRPM {
     $menuRatePaused   = $window.FindName("MenuRatePaused")
     $menuVerbose      = $window.FindName("MenuVerboseTelemetry")
 
-    $triggerImmediateRefresh = {
-        $stateContainer.IsPaused = $false
-        if ($menuRatePaused) { $menuRatePaused.IsChecked = $false }
-        [void]$stateContainer.WakeEvent.Set()
+    $geomPause      = [System.Windows.Media.Geometry]::Parse("M6,19h4V5H6V19z M14,5v14h4V5H14z")
+    $geomResume     = [System.Windows.Media.Geometry]::Parse("M8,5.14v14l11-7-11-7z")
+    $brushAmber     = $brushConv.ConvertFromString("#F59E0B")
+    $brushAmberDark = $brushConv.ConvertFromString("#D97706")
+    $brushAmberBg   = $brushConv.ConvertFromString("#26F59E0B")
+
+    $updatePauseUi = {
+        param([bool]$pauseState)
+        $useDark = [bool]$stateContainer.IsDarkTheme
+        if ($pauseState) {
+            if ($iconToolbarPause) {
+                $iconToolbarPause.Data = $geomResume
+                $iconToolbarPause.Fill = if ($useDark) { $brushAmber } else { $brushAmberDark }
+            }
+            if ($txtToolbarPause) {
+                $txtToolbarPause.Text = "PAUSED"
+                $txtToolbarPause.Foreground = if ($useDark) { $brushAmber } else { $brushAmberDark }
+                $txtToolbarPause.FontWeight = [System.Windows.FontWeights]::Bold
+                $txtToolbarPause.Visibility = [System.Windows.Visibility]::Visible
+            }
+            if ($btnToolbarPause) {
+                $btnToolbarPause.ToolTip = "Resume Polling (Space)"
+                $btnToolbarPause.Background = $brushAmberBg
+                $btnToolbarPause.BorderBrush = if ($useDark) { $brushAmber } else { $brushAmberDark }
+            }
+            if ($badgePaused) {
+                $badgePaused.Visibility = [System.Windows.Visibility]::Visible
+            }
+            if ($statusText) {
+                $lastTelem = [string]$stateContainer.LastStatusText
+                if ($lastTelem) {
+                    $statusText.Text = "[PAUSED] $lastTelem"
+                } else {
+                    $statusText.Text = "PAUSED - Telemetry collection suspended. Press Space or click Resume to continue."
+                }
+            }
+        } else {
+            if ($iconToolbarPause) {
+                $iconToolbarPause.Data = $geomPause
+                $secBrush = $window.TryFindResource("BrushTextSecondary")
+                if ($null -eq $secBrush) {
+                    $secBrush = if ($useDark) { $brushConv.ConvertFromString("#CBD5E1") } else { $brushConv.ConvertFromString("#334155") }
+                }
+                $iconToolbarPause.Fill = $secBrush
+            }
+            if ($txtToolbarPause) {
+                $txtToolbarPause.Text = ""
+                $txtToolbarPause.Visibility = [System.Windows.Visibility]::Collapsed
+            }
+            if ($btnToolbarPause) {
+                $btnToolbarPause.ToolTip = "Pause Polling (Space)"
+                $btnToolbarPause.Background = [System.Windows.Media.Brushes]::Transparent
+                $btnToolbarPause.BorderBrush = [System.Windows.Media.Brushes]::Transparent
+            }
+            if ($badgePaused) {
+                $badgePaused.Visibility = [System.Windows.Visibility]::Collapsed
+            }
+            if ($statusText) {
+                $lastTelem = [string]$stateContainer.LastStatusText
+                if ($lastTelem) {
+                    $statusText.Text = $lastTelem
+                }
+            }
+        }
+
+        if ($script:ActiveHostTab) {
+            $canClose = ($hostTabsCollection.Count -gt 1)
+            $script:ActiveHostTab.UpdateVisualState($true, $useDark, $canClose, $stateContainer.ConnectionState, $pauseState, $stateContainer.PollLatencyMs)
+        }
     }
-    if ($menuRefresh)   { $menuRefresh.add_Click($triggerImmediateRefresh) }
-    if ($btnToolbarRef) { $btnToolbarRef.add_Click($triggerImmediateRefresh) }
 
     $setPollingRate = {
         param([int]$ms, [bool]$pause)
+        $prevPaused = [bool]$stateContainer.IsPaused
         $stateContainer.IsPaused = $pause
         if (-not $pause -and $ms -ge 250) {
             $stateContainer.IntervalMs = $ms
@@ -682,8 +751,24 @@ function Start-PSRPM {
         if ($menuRate2s)     { $menuRate2s.IsChecked     = (-not $pause -and $ms -eq 2000) }
         if ($menuRate5s)     { $menuRate5s.IsChecked     = (-not $pause -and $ms -eq 5000) }
         if ($menuRatePaused) { $menuRatePaused.IsChecked = $pause }
+
+        &$updatePauseUi $pause
+
+        if ($prevPaused -ne $pause) {
+            if ($pause) {
+                &$writeAuditLog "RATE" "Telemetry collection paused. Press Space or click Resume to continue."
+            } else {
+                &$writeAuditLog "RATE" "Telemetry collection resumed (Interval: $($stateContainer.IntervalMs) ms)."
+            }
+        }
         [void]$stateContainer.WakeEvent.Set()
     }
+
+    $triggerImmediateRefresh = {
+        &$setPollingRate $stateContainer.IntervalMs $false
+    }
+    if ($menuRefresh)   { $menuRefresh.add_Click($triggerImmediateRefresh) }
+    if ($btnToolbarRef) { $btnToolbarRef.add_Click($triggerImmediateRefresh) }
 
     if ($menuRate500ms)   { $menuRate500ms.add_Click({ &$setPollingRate 500 $false }) }
     if ($menuRate1s)      { $menuRate1s.add_Click({ &$setPollingRate 1000 $false }) }

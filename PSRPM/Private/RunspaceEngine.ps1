@@ -677,6 +677,7 @@ function Start-PSRPMEngine {
     $txtTransport      = $Window.FindName("TxtTransportBadge")
     $txtLatency        = $Window.FindName("TxtLatencyBadge")
     $statusText        = $Window.FindName("StatusText")
+    $badgePaused       = $Window.FindName("BadgePaused")
     $txtTelemTransport = $Window.FindName("TxtTelemTransport")
     $txtTelemPayload   = $Window.FindName("TxtTelemPayload")
     $txtTelemNetwork   = $Window.FindName("TxtTelemNetwork")
@@ -737,7 +738,8 @@ function Start-PSRPMEngine {
         }
         if ($txtTarget)    { $txtTarget.Text    = [string]$stateContainer.TargetDisplayName }
         if ($txtTransport) { $txtTransport.Text = [string]$stateContainer.TransportBadge }
-        if ($txtLatency)   { $txtLatency.Text   = "$($stateContainer.PollLatencyMs) ms" }
+        if ($txtLatency)   { $txtLatency.Text   = if ($stateContainer.IsPaused) { "Paused" } else { "$($stateContainer.PollLatencyMs) ms" } }
+        if ($badgePaused)  { $badgePaused.Visibility = if ($stateContainer.IsPaused) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed } }
 
         # 4. Consume Differential Telemetry Payload
         $payloadStr = $stateContainer.Payload
@@ -956,7 +958,13 @@ function Start-PSRPMEngine {
                 }
 
                 if ($statusText) {
-                    $statusText.Text = "CPU Usage: $($SummaryViewModel.CpuSummaryFormatted) | Commit Charge: $($SummaryViewModel.CommitSummaryFormatted) | Processes: $($SummaryViewModel.ProcessCount) | Physical Usage: $($SummaryViewModel.RamPctFormatted) | Wire: ${wireKB} KB ($($stateContainer.PollLatencyMs) ms)"
+                    $telemMsg = "CPU Usage: $($SummaryViewModel.CpuSummaryFormatted) | Commit Charge: $($SummaryViewModel.CommitSummaryFormatted) | Processes: $($SummaryViewModel.ProcessCount) | Physical Usage: $($SummaryViewModel.RamPctFormatted) | Wire: ${wireKB} KB ($($stateContainer.PollLatencyMs) ms)"
+                    $stateContainer.LastStatusText = $telemMsg
+                    if ($stateContainer.IsPaused) {
+                        $statusText.Text = "[PAUSED] $telemMsg"
+                    } else {
+                        $statusText.Text = $telemMsg
+                    }
                 }
             }
 

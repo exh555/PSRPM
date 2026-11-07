@@ -154,6 +154,12 @@ The authoritative source of truth for the active release version is **`PSRPM/PSR
 6. **Automated Verification**: Run `Test-ModuleManifest` and `Tests/Test-PSRPMEngine.ps1` to ensure all 7 verification suites pass with zero errors.
 
 ### C. Publishing to the PowerShell Gallery
+Automated CI/CD via GitHub Actions (`.github/workflows/publish.yml`) automatically executes tests and gates publication on every push to `main`:
+- **Automated PSGallery Gate**: The pipeline queries PowerShell Gallery and only publishes when `ModuleVersion` represents a new **Minor** (`X.Y.0`) or **Major** (`X.0.0`) release relative to the gallery version.
+- **Patch Releases**: Patch-level increments (`X.Y.Z` where `Z > 0`, such as `1.1.1`) run the full verification test suite but are automatically skipped for PSGallery publication, keeping patch-level maintenance internal to GitHub/Git.
+- **Manual Force Publish**: If an emergency patch must be pushed to PSGallery, trigger the `publish.yml` workflow manually via GitHub Actions `workflow_dispatch` with `force_publish: true`.
+
+For manual publication outside CI:
 ```powershell
 # 1. Validate manifest integrity
 Test-ModuleManifest .\PSRPM\PSRPM.psd1

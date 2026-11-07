@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.1.0'
+    ModuleVersion     = '1.1.1'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -75,13 +75,12 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.1.0 - Help Reference Modal, Keyboard Shortcuts & Diagnostics
-- Help / ? Menu & Reference Modal: Added dedicated Help menu bar item, File menu integration, toolbar quick button, and F1 global accelerator.
-- Keyboard Shortcuts & Actions Reference: Interactive reference cataloging tree navigation, instant filtering, process actions, and multi-host session shortcuts.
-- Architecture & EDR Safety Guide: Built-in operational documentation covering 100% fileless security, kernel handle safety, and bounded memory ring buffers.
-- Remoting & Connectivity Guide: Step-by-step guidance for WinRM remote monitoring, TrustedHosts workgroup configuration, and -LocalOnly local execution.
-- About & Runtime Environment Diagnostics: System diagnostics tab displaying host, user, target, transport, PowerShell/CLR versions, and bitness.
-- Audit Console Telemetry Jitter Elimination: Fixed-width telemetry grid preventing control shifting and horizontal twitching.
+PSRPM v1.1.1 - Visual Pause State Indication & UX Enhancements
+- Visual Pause State Indication: Added clear, unambiguous visual indicators across the toolbar, status bar, and active host session tab when telemetry polling is paused.
+- Toolbar Pause/Resume Toggle: BtnToolbarPause transforms into an amber Play/Resume vector icon with a bold "PAUSED" indicator and accented background when polling is paused.
+- Status Bar Paused Badge: Integrated an amber [PAUSED] pill badge and informative status message notifying operators that telemetry is suspended.
+- Host Tab Session Indicator: The active session tab dot turns amber and latency displays "Paused" while collection is paused, synchronizing instantly.
+- Fast Keyboard & Refresh Recovery: Seamless unpausing via Spacebar, F5, or Toolbar Refresh with audit trail logging for pause/resume lifecycle transitions.
 '@
         }
     }
