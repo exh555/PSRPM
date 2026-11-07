@@ -21,7 +21,7 @@
     Copyright         = '(c) 2026 exh555. All rights reserved. MIT License.'
 
     # Description of the functionality provided by this module
-    Description       = 'PSRPM (PowerShell Remote Process Manager) - Enterprise-grade, ultra-low-overhead, fileless remote and local process monitoring and management GUI built with WPF and native Reflection.Emit.'
+    Description       = 'PSRPM (PowerShell Remote Process Manager) - Enterprise-grade, ultra-low-overhead, fileless remote and local process monitoring and management GUI built with WPF and native Reflection.Emit. Documentation & source: https://github.com/exh555/psrpm'
 
     # Minimum version of the Windows PowerShell engine required by this module
     PowerShellVersion = '5.1'
@@ -61,6 +61,7 @@
             Tags         = @('ProcessManager', 'TaskManager', 'ProcessExplorer', 'WinRM', 'RemoteAdministration', 'WPF', 'Sysinternals', 'Security')
             ProjectUri   = 'https://github.com/exh555/psrpm'
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
+            IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
 PSRPM v1.0.0 - Initial Production Release
 - 100% Fileless & EDR-Safe: Native in-memory Reflection.Emit P/Invoke and pure PS 5.1 classes. Zero csc.exe, zero temp DLLs on disk.
