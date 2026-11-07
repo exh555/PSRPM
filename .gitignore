@@ -1,0 +1,23 @@
+# AI Agent & Assistant metadata
+.agent/
+
+# OS-specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Editor & IDE artifacts
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Temporary build & scratch artifacts
+scratch/
+*.tmp
+*.log
+*~

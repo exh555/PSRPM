@@ -1,0 +1,801 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="System Information"
+        Width="790" Height="640" MinWidth="680" MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        Background="#F4F5F7" Foreground="#0F172A"
+        FontFamily="Segoe UI" FontSize="11.5"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
+
+    <Window.Resources>
+        <Style x:Key="LblMuted" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,1.5,8,1.5"/>
+        </Style>
+        <Style x:Key="ValText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,1.5,0,1.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="ValNum" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Margin" Value="8,1.5,0,1.5"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+        </Style>
+        <Style x:Key="ChartBorder" TargetType="Border">
+            <Setter Property="Background" Value="#ECEEF1"/>
+            <Setter Property="BorderBrush" Value="#9CA3AF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl x:Name="SysInfoTabControl" Grid.Row="0" Background="#FFFFFF" BorderBrush="#CBD5E1">
+            <!-- TAB 1: SUMMARY -->
+            <TabItem Header="Summary" Padding="10,3">
+                <Grid Margin="10,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Top Row: System & Storage GroupBoxes -->
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.05*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="1*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <GroupBox Grid.Column="0" Header="System" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="92"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Machine" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMachine}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Host" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwHost}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Operating" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwOS}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="CPU" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HwCpuName}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Architecture" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding HwArch}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Cores" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding HwCoresText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                            </Grid>
+                        </GroupBox>
+
+                        <GroupBox Grid.Column="2" Header="Storage" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="72"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="72"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Memory" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMemoryGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="3" Text="Commit Lim" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="4" Text="{Binding HwCommitLimitGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Boot" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwBootDrive}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="3" Text="Type" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="4" Text="{Binding HwDriveType}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Capacity" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwCapacityGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="3" Text="Available" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="4" Text="{Binding HwAvailableGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="File System" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HwFileSystem}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="3" Grid.Column="3" Text="Read-Only" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="4" Text="{Binding HwReadOnly}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                            </Grid>
+                        </GroupBox>
+                    </Grid>
+
+                    <!-- Row 1: CPU Usage & System Commit -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- CPU Usage Quadrant -->
+                        <Grid x:Name="QuadCpu" Grid.Column="0" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open CPU tab">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="CPU Usage" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="44" Height="120" ClipToBounds="True">
+                                        <Rectangle Width="44" Height="{Binding CpuGaugeTotalHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeTotalTop}" Fill="#86EFAC" Stroke="#16A34A" StrokeThickness="0.8"/>
+                                        <Rectangle Width="44" Height="{Binding CpuGaugeKernelHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeKernelTop}" Fill="#FCA5A5" Stroke="#DC2626" StrokeThickness="0.8"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding CpuGaugeText}" HorizontalAlignment="Center" Margin="0,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="360" Height="120" ClipToBounds="True">
+                                        <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Polygon Points="{Binding SysCpuFillPoints}" Fill="#8886EFAC"/>
+                                        <Polyline Points="{Binding SysCpuPoints}" Stroke="#16A34A" StrokeThickness="1.1"/>
+                                        <Polygon Points="{Binding SysKernelFillPoints}" Fill="#AAFCA5A5"/>
+                                        <Polyline Points="{Binding SysKernelPoints}" Stroke="#DC2626" StrokeThickness="1.1"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
+
+                        <!-- System Commit Quadrant -->
+                        <Grid x:Name="QuadCommit" Grid.Column="2" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open Memory tab">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="System Commit" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="44" Height="120" ClipToBounds="True">
+                                        <Rectangle Width="44" Height="{Binding CommitGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding CommitGaugeTop}" Fill="#D4D47A" Stroke="#A16207" StrokeThickness="0.8"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding CommitGaugeText}" HorizontalAlignment="Center" Margin="0,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="360" Height="120" ClipToBounds="True">
+                                        <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Polygon Points="{Binding SysCommitFillPoints}" Fill="#AAD4D47A"/>
+                                        <Polyline Points="{Binding SysCommitPoints}" Stroke="#A16207" StrokeThickness="1.2"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Row 2: Physical Memory & I/O -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Physical Memory Quadrant -->
+                        <Grid x:Name="QuadRam" Grid.Column="0" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open Memory tab">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="Physical Memory" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="44" Height="120" ClipToBounds="True">
+                                        <Rectangle Width="44" Height="{Binding RamGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding RamGaugeTop}" Fill="#FDBA74" Stroke="#EA580C" StrokeThickness="0.8"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding RamGaugeText}" HorizontalAlignment="Center" Margin="0,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="360" Height="120" ClipToBounds="True">
+                                        <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Polygon Points="{Binding SysRamFillPoints}" Fill="#AAFDBA74"/>
+                                        <Polyline Points="{Binding SysRamPoints}" Stroke="#EA580C" StrokeThickness="1.2"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
+
+                        <!-- I/O Quadrant -->
+                        <Grid x:Name="QuadIo" Grid.Column="2" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open I/O tab">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="I/O" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="44" Height="120" ClipToBounds="True">
+                                        <Rectangle Width="44" Height="{Binding IoGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding IoGaugeTop}" Fill="#93C5FD" Stroke="#3B82F6" StrokeThickness="0.8"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding IoGaugeText}" HorizontalAlignment="Center" Margin="0,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="360" Height="120" ClipToBounds="True">
+                                        <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.7"/>
+                                        <Polygon Points="{Binding SysIoFillPoints}" Fill="#AA93C5FD"/>
+                                        <Polyline Points="{Binding SysIoPoints}" Stroke="#3B82F6" StrokeThickness="1.1"/>
+                                        <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="#BBF9A8D4"/>
+                                        <Polyline Points="{Binding SysIoWritePoints}" Stroke="#DB2777" StrokeThickness="1.1"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 2: CPU -->
+            <TabItem Header="CPU" Padding="12,3">
+                <Grid Margin="10,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="CPU" FontWeight="SemiBold" Margin="6,0,0,4"/>
+
+                    <!-- Upper CPU Gauge + Chart Area -->
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="56"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Left Vertical CPU Bar Gauge -->
+                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ChartBorder}">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="44" Height="120" ClipToBounds="True">
+                                    <Rectangle Width="44" Height="{Binding CpuGaugeTotalHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeTotalTop}" Fill="#86EFAC" Stroke="#16A34A" StrokeThickness="0.8"/>
+                                    <Rectangle Width="44" Height="{Binding CpuGaugeKernelHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeKernelTop}" Fill="#FCA5A5" Stroke="#DC2626" StrokeThickness="0.8"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding CpuGaugeText}" HorizontalAlignment="Center" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
+
+                        <!-- Combined Single CPU History Chart -->
+                        <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource ChartBorder}" Visibility="{Binding SingleCpuGraphVisibility}">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="360" Height="120" ClipToBounds="True">
+                                    <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Polygon Points="{Binding SysCpuFillPoints}" Fill="#8886EFAC"/>
+                                    <Polyline Points="{Binding SysCpuPoints}" Stroke="#16A34A" StrokeThickness="1.0"/>
+                                    <Polygon Points="{Binding SysKernelFillPoints}" Fill="#AAFCA5A5"/>
+                                    <Polyline Points="{Binding SysKernelPoints}" Stroke="#DC2626" StrokeThickness="1.0"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+
+                        <!-- Per-CPU UniformGrid Charts (When 'Show one graph per CPU' is checked) -->
+                        <ItemsControl Grid.Row="0" Grid.Column="2" ItemsSource="{Binding CoreGraphs}" Visibility="{Binding PerCpuGridVisibility}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource ChartBorder}" Margin="2">
+                                        <Grid>
+                                            <Viewbox Stretch="Fill">
+                                                <Canvas Width="180" Height="80" ClipToBounds="True">
+                                                    <Line X1="0" Y1="16" X2="180" Y2="16" Stroke="#CBD5E1" StrokeThickness="0.5"/>
+                                                    <Line X1="0" Y1="32" X2="180" Y2="32" Stroke="#CBD5E1" StrokeThickness="0.5"/>
+                                                    <Line X1="0" Y1="48" X2="180" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.5"/>
+                                                    <Line X1="0" Y1="64" X2="180" Y2="64" Stroke="#CBD5E1" StrokeThickness="0.5"/>
+                                                    <Polygon Points="{Binding TotalFillPoints}" Fill="#8886EFAC"/>
+                                                    <Polyline Points="{Binding TotalPoints}" Stroke="#16A34A" StrokeThickness="1.0"/>
+                                                    <Polygon Points="{Binding KernelFillPoints}" Fill="#AAFCA5A5"/>
+                                                    <Polyline Points="{Binding KernelPoints}" Stroke="#DC2626" StrokeThickness="1.0"/>
+                                                </Canvas>
+                                            </Viewbox>
+                                            <TextBlock Text="{Binding CoreLabel}" FontSize="10" FontWeight="SemiBold" Foreground="#334155" Margin="5,2,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
+                                            <TextBlock Text="{Binding UsageFormatted}" FontSize="10" Foreground="#0F172A" Margin="0,2,5,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
+                    <!-- Bottom GroupBoxes: Totals, CPU, Topology -->
+                    <Grid Grid.Row="2" Margin="0,8,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="185"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="210"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="195"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <GroupBox Grid.Column="0" Header="Totals" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Handles" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HandlesFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Threads" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ThreadsFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Processes" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ProcessesFormatted}" Style="{StaticResource ValNum}"/>
+                            </Grid>
+                        </GroupBox>
+
+                        <GroupBox Grid.Column="2" Header="CPU" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Context Switch Delta" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ContextSwitchDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Interrupt Delta" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding InterruptDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="System Call Delta" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SystemCallDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                            </Grid>
+                        </GroupBox>
+
+                        <GroupBox Grid.Column="4" Header="Topology" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Cores" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwCoresCount}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Sockets" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwSocketsCount}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Logical Processors" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwLogicalCount}" Style="{StaticResource ValNum}"/>
+                            </Grid>
+                        </GroupBox>
+                    </Grid>
+
+                    <CheckBox x:Name="ChkPerCpuGraph" Grid.Row="3" Content="Show one graph per CPU" IsChecked="{Binding ShowOneGraphPerCpu}" Margin="2,2,0,0" Cursor="Hand"/>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 3: MEMORY -->
+            <TabItem Header="Memory" Padding="12,3">
+                <Grid Margin="10,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- System Commit Wide Graph -->
+                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="System Commit" FontWeight="SemiBold" Margin="6,0,0,3"/>
+                        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}" Margin="6,0,0,0">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="44" Height="120" ClipToBounds="True">
+                                    <Rectangle Width="44" Height="{Binding CommitGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding CommitGaugeTop}" Fill="#D4D47A" Stroke="#A16207" StrokeThickness="0.8"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding CommitGaugeText}" HorizontalAlignment="Center" Margin="6,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="360" Height="120" ClipToBounds="True">
+                                    <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Polygon Points="{Binding SysCommitFillPoints}" Fill="#AAD4D47A"/>
+                                    <Polyline Points="{Binding SysCommitPoints}" Stroke="#A16207" StrokeThickness="1.1"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                    </Grid>
+
+                    <!-- Physical Memory Wide Graph -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="Physical Memory" FontWeight="SemiBold" Margin="6,0,0,3"/>
+                        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}" Margin="6,0,0,0">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="44" Height="120" ClipToBounds="True">
+                                    <Rectangle Width="44" Height="{Binding RamGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding RamGaugeTop}" Fill="#FDBA74" Stroke="#EA580C" StrokeThickness="0.8"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding RamGaugeText}" HorizontalAlignment="Center" Margin="6,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="360" Height="120" ClipToBounds="True">
+                                    <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Polygon Points="{Binding SysRamFillPoints}" Fill="#AAFDBA74"/>
+                                    <Polyline Points="{Binding SysRamPoints}" Stroke="#EA580C" StrokeThickness="1.1"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                    </Grid>
+
+                    <!-- Bottom Memory Counter GroupBoxes -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.1*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="1.1*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="1.2*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Column 0: Commit Charge (K) + Physical Memory (K) -->
+                        <StackPanel Grid.Column="0">
+                            <GroupBox Header="Commit Charge (K)" BorderBrush="#E2E8F0" Padding="8,4" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Current" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CommitCurrentK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Limit" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CommitLimitK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Peak" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CommitPeakK}" Style="{StaticResource ValNum}"/>
+                                    <Separator Grid.Row="3" Grid.ColumnSpan="2" Background="#E2E8F0"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Peak/Limit" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding CommitPeakLimitPct}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Current/Limit" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding CommitCurrentLimitPct}" Style="{StaticResource ValNum}"/>
+                                </Grid>
+                            </GroupBox>
+
+                            <GroupBox Header="Physical Memory (K)" BorderBrush="#E2E8F0" Padding="8,4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Total" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PhysTotalK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Available" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PhysAvailableK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="In Use" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PhysInUseK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="System Cache (WS)" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SystemCacheK}" Style="{StaticResource ValNum}"/>
+                                </Grid>
+                            </GroupBox>
+                        </StackPanel>
+
+                        <!-- Column 2: Kernel Memory (K) -->
+                        <StackPanel Grid.Column="2">
+                            <GroupBox Header="Kernel Memory (K)" BorderBrush="#E2E8F0" Padding="8,4" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Paged Pool" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding KernelPagedK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Nonpaged Pool" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding KernelNonpagedK}" Style="{StaticResource ValNum}"/>
+                                    <Separator Grid.Row="2" Grid.ColumnSpan="2" Background="#E2E8F0"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Total Kernel" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding KernelTotalK}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Nonpaged Limit" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PhysTotalK}" Style="{StaticResource ValNum}"/>
+                                </Grid>
+                            </GroupBox>
+                        </StackPanel>
+
+                        <!-- Column 4: Paging -->
+                        <StackPanel Grid.Column="4">
+                            <GroupBox Header="Paging" BorderBrush="#E2E8F0" Padding="8,4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Page Fault Delta" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PageFaultDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Page Read Delta" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PageReadDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Paging File Write Delta" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PageFileWriteDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Mapped File Write Delta" Style="{StaticResource ValText}"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding MappedFileWriteDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                </Grid>
+                            </GroupBox>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 4: I/O -->
+            <TabItem Header="I/O" Padding="12,3">
+                <Grid Margin="10,8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="I/O Bytes History (Blue: Read + Write + Other | Pink: Write + Other)" FontWeight="SemiBold" Margin="6,0,0,4"/>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="56"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ChartBorder}">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="44" Height="120" ClipToBounds="True">
+                                    <Rectangle Width="44" Height="{Binding IoGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding IoGaugeTop}" Fill="#93C5FD" Stroke="#3B82F6" StrokeThickness="0.8"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding IoGaugeText}" HorizontalAlignment="Center" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource ChartBorder}">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="360" Height="120" ClipToBounds="True">
+                                    <Line X1="0" Y1="12" X2="360" Y2="12" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="24" X2="360" Y2="24" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="36" X2="360" Y2="36" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="48" X2="360" Y2="48" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="60" X2="360" Y2="60" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="72" X2="360" Y2="72" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="#CBD5E1" StrokeThickness="0.6"/>
+                                    <Polygon Points="{Binding SysIoFillPoints}" Fill="#AA93C5FD"/>
+                                    <Polyline Points="{Binding SysIoPoints}" Stroke="#3B82F6" StrokeThickness="1.1"/>
+                                    <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="#BBF9A8D4"/>
+                                    <Polyline Points="{Binding SysIoWritePoints}" Stroke="#DB2777" StrokeThickness="1.1"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="260"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="260"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <GroupBox Grid.Column="0" Header="I/O Transfer Delta (Per Tick)" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Total I/O Rate" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding IoTotalRateFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Read Transfer Delta" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding IoReadDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Write Transfer Delta" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding IoWriteDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Other Transfer Delta" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding IoOtherDeltaFormatted}" Style="{StaticResource ValNum}"/>
+                            </Grid>
+                        </GroupBox>
+
+                        <GroupBox Grid.Column="2" Header="I/O Scaling &amp; Session Totals" BorderBrush="#E2E8F0" Padding="8,4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Peak I/O Rate (2m Window)" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding IoPeakRateFormatted}" Style="{StaticResource ValNum}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Session Cumulative I/O" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding IoSessionTotalFormatted}" Style="{StaticResource ValNum}"/>
+                            </Grid>
+                        </GroupBox>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Bottom Action Bar -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="BtnSysInfoOk" Content="OK" Width="88" Height="26" IsDefault="True" IsCancel="True" Background="#FFFFFF" BorderBrush="#0284C7" BorderThickness="1.5" Cursor="Hand"/>
+        </StackPanel>
+    </Grid>
+</Window>

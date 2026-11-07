@@ -1,0 +1,68 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Connect to Target System"
+        Height="355" Width="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#F8FAFC"
+        Foreground="#0F172A"
+        FontFamily="Segoe UI" FontSize="12"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Connect to Remote Computer or Local Host" FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
+            <TextBlock Text="Establish a persistent, low-overhead WinRM session or run locally without WinRM." Foreground="#475569" FontSize="11" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1">
+            <RadioButton x:Name="RbRemoteHost" Content="Remote Computer via WinRM (-ComputerName)" IsChecked="True" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+            <Grid Margin="20,0,0,10" x:Name="GridRemoteInputs">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Computer Name:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                <TextBox x:Name="TxtConnectComputer" Grid.Row="0" Grid.Column="1" Text="localhost" Padding="5,3" Margin="0,0,0,6" BorderBrush="#CBD5E1"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Transport Options:" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                    <CheckBox x:Name="ChkUseSSL" Content="Use SSL (HTTPS)" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox x:Name="TxtConnectPort" Width="58" Text="" Padding="4,2" BorderBrush="#CBD5E1" ToolTip="Leave blank for default WinRM port (5985 / 5986)"/>
+                </StackPanel>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Authentication:" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="BtnPickCredential" Content="Specify Credential..." Padding="8,2"/>
+                    <TextBlock x:Name="TxtCredStatus" Text="Current User" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <RadioButton x:Name="RbLocalOnly" Content="Local Host Only (-LocalOnly / No WinRM or Admin required)" FontWeight="SemiBold" Margin="0,6,0,10"/>
+
+            <Border Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="3" Padding="8,6">
+                <CheckBox x:Name="ChkOpenInNewTab" Content="Open in a new Host Tab (keep current session warm in standby)" IsChecked="False" FontWeight="SemiBold" Foreground="#0F172A"/>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button x:Name="BtnConnectSubmit" Content="Connect" Width="92" Height="28" Margin="0,0,8,0" IsDefault="True" FontWeight="SemiBold"/>
+            <Button x:Name="BtnConnectCancel" Content="Cancel" Width="82" Height="28" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>
