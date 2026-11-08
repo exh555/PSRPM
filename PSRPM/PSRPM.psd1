@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.3.0'
+    ModuleVersion     = '1.3.1'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -76,12 +76,11 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.3.0 - Remote Session-Cached Invokers, 75% Remote CPU Reduction & Zero-Allocation Serialization
-- WinRM Remote Session-Cached Invoker Architecture: Replaced per-tick ScriptBlock re-transmission and JIT compilation over WinRM with session-cached remote invokers, reducing request wire payload by 99.9% (from 46 KB/s to 44 bytes/s).
-- Target CPU Consumption Slashed: Reduced remote wsmprovhost.exe CPU usage by ~75% and EDR/AMSI inspection overhead to a one-time scan during initial PSSession registration.
-- Automatic Session Resilience: Built-in state detection that transparently re-initializes cached invokers if a remote session is recycled without dropping a single tick of telemetry.
-- In-Process Telemetry Collector Streamlining: Pre-allocated reusable JavaScriptSerializer instances, zero-allocation empty update emission, and direct collection traversal for dead PID pruning.
-- Native Memory Reads: Prioritized native psapi!GetPerformanceInfo unmanaged reads for RAM and commit charge, bypassing private reflection on steady-state ticks.
+PSRPM v1.3.1 - Real-Time Performance Tab Polling, Remote Invoker Self-Healing & Comprehensive QA Verification
+- Real-Time Performance Tab Telemetry: Added lightweight "Performance" mode to DeepInspector and background DispatcherTimer to poll CPU cycles, processor times, and I/O counters dynamically every 1 second when the Performance tab is active.
+- Fixed 0% CPU Formatting: Corrected CPU usage percentage formatting when idle to cleanly display 0.00% rather than empty string.
+- Remote Invoker Self-Healing: Added transparent automatic fallback and re-initialization in RunspaceEngine if a remote PSSession recycles or drops the cached inspector invoker.
+- Deep Automated QA Suite: Added 39-check automated stress and resilience test suite validating static AST guardrails, synthetic kernel edge cases, headless WPF UX/UI, and network fault tolerance with 100% pass rate.
 '@
         }
     }

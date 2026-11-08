@@ -153,7 +153,7 @@ function Start-PSRPMEngine {
                                     } -ArgumentList @($inspectorCode) -ErrorAction Stop
                                     $activeSessObj.InspectorInitialized = $true
                                 }
-                                Invoke-Command -Session $useSess -ScriptBlock {
+                                $resInsp = Invoke-Command -Session $useSess -ScriptBlock {
                                     param($p, $v, $m)
                                     if ($script:PSRPMInspectorInvoker) {
                                         & $script:PSRPMInspectorInvoker $p $v $m
@@ -161,6 +161,23 @@ function Start-PSRPMEngine {
                                         $null
                                     }
                                 } -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
+
+                                if (-not $resInsp) {
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($code)
+                                        $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
+                                    } -ArgumentList @($inspectorCode) -ErrorAction Stop
+                                    $activeSessObj.InspectorInitialized = $true
+                                    $resInsp = Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($p, $v, $m)
+                                        if ($script:PSRPMInspectorInvoker) {
+                                            & $script:PSRPMInspectorInvoker $p $v $m
+                                        } else {
+                                            $null
+                                        }
+                                    } -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
+                                }
+                                $resInsp
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{

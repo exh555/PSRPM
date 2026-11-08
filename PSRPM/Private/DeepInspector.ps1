@@ -60,9 +60,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
     if (-not $script:DllMetaCache)    { $script:DllMetaCache    = @{} }
     if (-not $script:HandleTypeCache) { $script:HandleTypeCache = @{} }
 
-    $runCore    = ($InspectMode -eq "Core" -or $InspectMode -eq "All")
-    $runModules = ($InspectMode -eq "Modules" -or $InspectMode -eq "All")
-    $runHandles = ($InspectMode -eq "Handles" -or $InspectMode -eq "All")
+    $runCore        = ($InspectMode -eq "Core" -or $InspectMode -eq "All")
+    $runPerformance = ($InspectMode -eq "Performance" -or $runCore)
+    $runModules     = ($InspectMode -eq "Modules" -or $InspectMode -eq "All")
+    $runHandles     = ($InspectMode -eq "Handles" -or $InspectMode -eq "All")
 
     $result = @{
         PID              = $TargetPid
@@ -324,7 +325,12 @@ $script:PSRPMDeepInspectorScriptBlock = {
                         }
                     }
                 }
+            }
+        } # end if ($runCore)
 
+        # Section: CPU Cycles, GUI Handles & Detailed Performance / I/O Counters
+        if ($runPerformance) {
+            if ($hProc -ne [IntPtr]::Zero) {
                 [uint64]$cycles = 0
                 [void][PSRPM.NativeInspectorV2]::QueryProcessCycleTime($hProc, [ref]$cycles)
                 $gdiHandles  = [PSRPM.NativeInspectorV2]::GetGuiResources($hProc, 0)
@@ -384,7 +390,9 @@ $script:PSRPMDeepInspectorScriptBlock = {
             } finally {
                 [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysPtr)
             }
+        } # end if ($runPerformance)
 
+        if ($runCore) {
             # 6. Fast Native TCP/UDP Connections (iphlpapi!GetExtendedTcpTable - Zero CIM/WMI overhead)
             $tcpStates = @("Closed","Listen","SynSent","SynReceived","Established","FinWait1","FinWait2","CloseWait","Closing","LastAck","TimeWait","DeleteTcb")
             $tSize = 262144

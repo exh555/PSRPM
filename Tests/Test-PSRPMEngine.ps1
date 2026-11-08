@@ -139,7 +139,19 @@ if ([string]::IsNullOrWhiteSpace($modVm.Name) -or [string]::IsNullOrWhiteSpace($
     throw "InspectorModuleItem / InspectorHandleItem CLR ViewModel binding failed."
 }
 
+$swPerf = [System.Diagnostics.Stopwatch]::StartNew()
+$perfJson = & $script:PSRPMDeepInspectorScriptBlock $PID $false "Performance"
+$swPerf.Stop()
+$perfData = $jss.DeserializeObject($perfJson)
+if (-not $perfData['Performance'] -or -not $perfData['Performance']['Cycles']) {
+    throw "DeepInspector (Performance) failed to query CPU Cycles."
+}
+if ($perfData['Modules'].Count -ne 0 -or $perfData['Handles'].Count -ne 0 -or $perfData['Environment'].Count -ne 0) {
+    throw "DeepInspector (Performance) should skip Modules, Handles, and Environment for ultra-fast live polling."
+}
+
 Write-Host "  Core Inspector Latency (Dialog Open) : $($swCore.ElapsedMilliseconds) ms" -ForegroundColor Gray
+Write-Host "  Live Perf Latency (1s Timer Poll)    : $($swPerf.ElapsedMilliseconds) ms (Cycles: $($perfData['Performance']['Cycles']))" -ForegroundColor Gray
 Write-Host "  Lazy DLLs Tab Latency (On-Demand)    : $($swMod.ElapsedMilliseconds) ms ($($modData['Modules'].Count) modules, e.g. $($modVm.Name))" -ForegroundColor Gray
 Write-Host "  Lazy Handles Tab Latency (On-Demand) : $($swHnd.ElapsedMilliseconds) ms ($($hndData['Handles'].Count) named handles, e.g. $($hndVm.Type): $($hndVm.Name))" -ForegroundColor Gray
 Write-Host "  PEB CurrentDirectory                 : $($coreData['CurrentDirectory'])" -ForegroundColor Gray

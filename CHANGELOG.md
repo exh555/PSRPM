@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-07
+
+### Added
+- **Real-Time Performance Tab Telemetry Polling (`PSRPM.psm1`, `DeepInspector.ps1`)**:
+  - Added lightweight `"Performance"` inspect mode in `DeepInspector.ps1` that queries CPU cycles (`QueryProcessCycleTime`), GUI handles (`GetGuiResources`), detailed I/O (`IoCounters`), and memory pools without module/handle enumeration overhead.
+  - Integrated live 1-second background `DispatcherTimer` in `PSRPM.psm1` to poll performance counters and dynamically refresh CPU cycles, processor times, and I/O rates while the Performance tab is active.
+- **Comprehensive Automated Extended QA Suite (`Tests/Test-PSRPMExtendedQA.ps1`, `Tests/QA_Report.md`)**:
+  - Added deep 39-check automated QA stress suite validating AST guardrails, synthetic kernel edge cases, headless WPF UX/UI, zero-leak memory eviction, and Win32 resiliency (100% pass rate).
+
+### Optimized
+- **WinRM Remote Inspector Resiliency (`RunspaceEngine.ps1`)**:
+  - Added automatic fallback and transparent re-initialization of `$script:PSRPMInspectorInvoker` if a remote session is recycled or invalidates the invoker.
+
+### Fixed
+- **Idle CPU Formatting (`PSRPM.psm1`)**:
+  - Corrected CPU usage percentage formatting when idle to cleanly display `0.00%` rather than an empty string.
+
 ## [1.3.0] - 2026-11-07
 
 ### Optimized

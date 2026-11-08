@@ -1439,78 +1439,14 @@ function Start-PSRPM {
             $propTree.add_SizeChanged({ &$syncTreeHeaderSpacer })
         }
 
-        # Lightweight Realtime Performance Refresher (Zero Extra Wire Overhead)
-        $refreshLivePerformanceTab = {
-            if (-not $propWin.IsVisible) { return }
-            $selTab = $propTabControl.SelectedItem
-            if (-not $selTab -or [string]$selTab.Header -ne "Performance") { return }
-
-            if (-not $engineHandle.ProcessMap.ContainsKey($targetPid)) {
-                $txtCpu = $propWin.FindName("PropCpu")
-                if ($txtCpu) {
-                    $txtCpu.Text = "CPU Usage: Process Exited (PID $targetPid)"
-                    $txtCpu.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#DC2626")
-                }
-                return
-            }
-
-            $liveTargetVm = $engineHandle.ProcessMap[$targetPid]
-
-            # 1. Update CPU Counter
-            $txtCpu = $propWin.FindName("PropCpu")
-            if ($txtCpu) {
-                $txtCpu.Text = "CPU Usage: $($liveTargetVm.CPUFormatted)% (Base Priority: $($liveTargetVm.BasePriority))"
-                $txtCpu.Foreground = if ($liveTargetVm.CPU -gt 0) {
-                    [System.Windows.Media.BrushConverter]::new().ConvertFromString("#16A34A")
-                } else {
-                    [System.Windows.Media.BrushConverter]::new().ConvertFromString("#475569")
-                }
-            }
-
-            # 2. Update Memory Counters (Working Set & Private Bytes)
-            $txtPriv = $propWin.FindName("PropPrivateBytes")
-            if ($txtPriv) { $txtPriv.Text = "Private Bytes: $($liveTargetVm.PrivateBytesFormatted)" }
-
-            $txtRam = $propWin.FindName("PropRam")
-            if ($txtRam) {
-                $peakMatch = [regex]::Match($txtRam.Text, "\(Peak: [^)]+\)")
-                $peakSuffix = if ($peakMatch.Success) { " " + $peakMatch.Value } else { "" }
-                $txtRam.Text = "Working Set: $($liveTargetVm.MemoryFormatted)$peakSuffix"
-            }
-
-            # 3. Update Handles Counter
-            $txtHnd = $propWin.FindName("PropThreadsHandles")
-            if ($txtHnd) {
-                $gdiMatch = [regex]::Match($txtHnd.Text, "\(GDI: [^)]+\)")
-                $gdiSuffix = if ($gdiMatch.Success) { " " + $gdiMatch.Value } else { "" }
-                $txtHnd.Text = "Handles: $($liveTargetVm.HandlesFormatted)$gdiSuffix"
-            }
-
-            # 4. Update Process Ancestry Tree
-            $newTree = &$buildFullAncestryTree
-            if ($newTree) {
-                $propTree.ItemsSource = @($newTree)
-            }
-        }
-
-        # 1-second UI DispatcherTimer for Lightweight Realtime Performance Updates
-        $propTimer = [System.Windows.Threading.DispatcherTimer]::new(
-            [System.Windows.Threading.DispatcherPriority]::Background,
-            $propWin.Dispatcher
-        )
-        $propTimer.Interval = [TimeSpan]::FromMilliseconds(1000)
-        $propTimer.add_Tick({ &$refreshLivePerformanceTab })
-        $propTimer.Start()
-
-        $propWin.add_Closed({
-            if ($propTimer) { $propTimer.Stop() }
-        })
+        $propTabControl = $propWin.FindName("PropTabControl")
 
         # Lazy Tab Load State (Zero overhead for DLLs/Handles unless tab is selected)
         $tabLoadState = @{
             ModulesLoaded = $false
             HandlesLoaded = $false
         }
+        $perfQueryState = @{ InFlight = $false }
 
         # Async Deep Inspector Query Helper
         $runDeepInspect = {
@@ -1545,16 +1481,23 @@ function Start-PSRPM {
                 VerifySignature = $verifyAuthenticode
                 InspectMode     = $inspectMode
             }
-            $localPropWin     = $propWin
-            $localSelectedVm  = $selectedVm
-            $localJss         = $jssAction
-            $localInspectMode = $inspectMode
-            $localLog         = $writeAuditLog
+            $localPropWin        = $propWin
+            $localSelectedVm     = $selectedVm
+            $localJss            = $jssAction
+            $localInspectMode    = $inspectMode
+            $localLog            = $writeAuditLog
+            $localTargetPid      = $targetPid
+            $localProcessMap     = $engineHandle.ProcessMap
+            $localPerfQueryState = $perfQueryState
 
             & $engineHandle.SendCommand $cmd ({
                 param($res)
-                if (-not $localPropWin.IsVisible) { return }
+                if (-not $localPropWin.IsVisible) {
+                    if ($localPerfQueryState) { $localPerfQueryState.InFlight = $false }
+                    return
+                }
                 if (-not $res.Success -or -not $res.PayloadJson) {
+                    if ($localPerfQueryState) { $localPerfQueryState.InFlight = $false }
                     if ($localInspectMode -eq "Modules") {
                         $localPropWin.FindName("GridPropDlls").ItemsSource = @([PSCustomObject]@{
                             Name = "[Error]"; Description = "Error: $($res.Error)"; CompanyName = ""; Version = ""; Size = ""; BaseAddress = ""; Path = ""
@@ -1563,10 +1506,10 @@ function Start-PSRPM {
                         $localPropWin.FindName("GridPropHandles").ItemsSource = @([PSCustomObject]@{
                             Type = "[Error]"; Name = "Error: $($res.Error)"; Handle = ""; Access = ""
                         })
-                    } else {
+                    } elseif ($localInspectMode -ne "Performance") {
                         $localPropWin.FindName("PropWorkDir").Text = "Error: $($res.Error)"
+                        &$localLog "ERROR" "InspectPid ($localInspectMode) on PID $($localSelectedVm.PID) failed: $($res.Error)"
                     }
-                    &$localLog "ERROR" "InspectPid ($localInspectMode) on PID $($localSelectedVm.PID) failed: $($res.Error)"
                     return
                 }
                 try {
@@ -1593,21 +1536,6 @@ function Start-PSRPM {
                             $sigBlock = $localPropWin.FindName("PropSignature")
                             $sigBlock.Text = $sigTxt
                             $sigBlock.Foreground = if ($sig['Status'] -eq "Valid") { "#16A34A" } else { "#DC2626" }
-                        }
-
-                        # Performance Counters
-                        $perf = $d['Performance']
-                        if ($perf) {
-                            $localPropWin.FindName("PropCpu").Text                = "CPU Usage: $($localSelectedVm.CPUFormatted) (Base Priority: $($localSelectedVm.BasePriority))"
-                            $localPropWin.FindName("PropTotalCpuTime").Text       = "Total Processor Time: $($perf['TotalCpuTime'])"
-                            $localPropWin.FindName("PropKernelUserTime").Text     = "Kernel: $($perf['KernelTime']) | User: $($perf['UserTime'])"
-                            $localPropWin.FindName("PropCycles").Text             = "CPU Cycles: $($perf['Cycles'])"
-                            $localPropWin.FindName("PropThreadsHandles").Text     = "Handles: $($localSelectedVm.HandlesFormatted) (GDI: $($perf['GdiHandles']), USER: $($perf['UserHandles']))"
-                            $localPropWin.FindName("PropPrivateBytes").Text       = "Private Bytes: $($localSelectedVm.PrivateBytesFormatted)"
-                            $localPropWin.FindName("PropRam").Text                = "Working Set: $($localSelectedVm.MemoryFormatted) (Peak: $($perf['PeakWorkingSet']))"
-                            $localPropWin.FindName("PropVirtualPageFaults").Text  = "Virtual Size: $($perf['VirtualSize']) | Page Faults: $($perf['PageFaults'])"
-                            $localPropWin.FindName("PropPools").Text              = "Paged Pool: $($perf['PagedPool']) | Non-Paged Pool: $($perf['NonPagedPool'])"
-                            $localPropWin.FindName("PropIoCounters").Text         = "I/O Reads: $($perf['IoReadBytes']) ($($perf['IoReadOps']) ops) | Writes: $($perf['IoWriteBytes']) ($($perf['IoWriteOps']) ops)"
                         }
 
                         # Convert dictionary arrays to PSCustomObjects for closure-safe DataGrid binding & sorting
@@ -1650,6 +1578,25 @@ function Start-PSRPM {
                         $localPropWin.FindName("GridPropEnv").ItemsSource = $envList
 
                         &$localLog "INSPECT" "PID $($localSelectedVm.PID) ($($localSelectedVm.Name)) [Mode: Core] | RTT: $($res.ElapsedMs)ms | Payload: ${inspKB} KB (Sockets: $($connList.Count), Services: $($svcList.Count), Env: $($envList.Count))"
+                    }
+
+                    # Performance Counters (updated by Performance, Core, or All)
+                    if ($mode -eq "Performance" -or $mode -eq "Core" -or $mode -eq "All") {
+                        $perf = $d['Performance']
+                        if ($perf) {
+                            $curVm = if ($localProcessMap -and $localProcessMap.ContainsKey($localTargetPid)) { $localProcessMap[$localTargetPid] } else { $localSelectedVm }
+                            $cpuTxt = if ($curVm.CPUFormatted) { "$($curVm.CPUFormatted)%" } else { "0.00%" }
+                            $localPropWin.FindName("PropCpu").Text                = "CPU Usage: $cpuTxt (Base Priority: $($curVm.BasePriority))"
+                            $localPropWin.FindName("PropTotalCpuTime").Text       = "Total Processor Time: $($perf['TotalCpuTime'])"
+                            $localPropWin.FindName("PropKernelUserTime").Text     = "Kernel: $($perf['KernelTime']) | User: $($perf['UserTime'])"
+                            $localPropWin.FindName("PropCycles").Text             = "CPU Cycles: $($perf['Cycles'])"
+                            $localPropWin.FindName("PropThreadsHandles").Text     = "Handles: $($curVm.HandlesFormatted) (GDI: $($perf['GdiHandles']), USER: $($perf['UserHandles']))"
+                            $localPropWin.FindName("PropPrivateBytes").Text       = "Private Bytes: $($curVm.PrivateBytesFormatted)"
+                            $localPropWin.FindName("PropRam").Text                = "Working Set: $($curVm.MemoryFormatted) (Peak: $($perf['PeakWorkingSet']))"
+                            $localPropWin.FindName("PropVirtualPageFaults").Text  = "Virtual Size: $($perf['VirtualSize']) | Page Faults: $($perf['PageFaults'])"
+                            $localPropWin.FindName("PropPools").Text              = "Paged Pool: $($perf['PagedPool']) | Non-Paged Pool: $($perf['NonPagedPool'])"
+                            $localPropWin.FindName("PropIoCounters").Text         = "I/O Reads: $($perf['IoReadBytes']) ($($perf['IoReadOps']) ops) | Writes: $($perf['IoWriteBytes']) ($($perf['IoWriteOps']) ops)"
+                        }
                     }
 
                     if ($mode -eq "Modules" -or $mode -eq "All") {
@@ -1696,13 +1643,91 @@ function Start-PSRPM {
                         $localPropWin.FindName("GridPropHandles").ItemsSource = @([PSCustomObject]@{
                             Type = "[UI Error]"; Name = $errMsg; Handle = ""; Access = ""
                         })
+                    } else {
+                        &$localLog "ERROR" "InspectPid ($localInspectMode) UI error: $errMsg"
                     }
+                } finally {
+                    if ($localPerfQueryState) { $localPerfQueryState.InFlight = $false }
                 }
             }.GetNewClosure())
         }
 
+        # Lightweight Realtime Performance Refresher (Zero Extra Wire Overhead)
+        $refreshLivePerformanceTab = {
+            if (-not $propWin.IsVisible) { return }
+            $selTab = $propTabControl.SelectedItem
+            if (-not $selTab -or [string]$selTab.Header -ne "Performance") { return }
+
+            if (-not $engineHandle.ProcessMap.ContainsKey($targetPid)) {
+                $txtCpu = $propWin.FindName("PropCpu")
+                if ($txtCpu) {
+                    $txtCpu.Text = "CPU Usage: Process Exited (PID $targetPid)"
+                    $txtCpu.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#DC2626")
+                }
+                return
+            }
+
+            $liveTargetVm = $engineHandle.ProcessMap[$targetPid]
+
+            # 1. Update CPU Counter (fix 0.00% idle formatting)
+            $txtCpu = $propWin.FindName("PropCpu")
+            if ($txtCpu) {
+                $cpuDisplay = if ($liveTargetVm.CPUFormatted) { "$($liveTargetVm.CPUFormatted)%" } else { "0.00%" }
+                $txtCpu.Text = "CPU Usage: $cpuDisplay (Base Priority: $($liveTargetVm.BasePriority))"
+                $txtCpu.Foreground = if ($liveTargetVm.CPU -gt 0) {
+                    [System.Windows.Media.BrushConverter]::new().ConvertFromString("#16A34A")
+                } else {
+                    [System.Windows.Media.BrushConverter]::new().ConvertFromString("#475569")
+                }
+            }
+
+            # 2. Update Memory Counters (Working Set & Private Bytes)
+            $txtPriv = $propWin.FindName("PropPrivateBytes")
+            if ($txtPriv) { $txtPriv.Text = "Private Bytes: $($liveTargetVm.PrivateBytesFormatted)" }
+
+            $txtRam = $propWin.FindName("PropRam")
+            if ($txtRam) {
+                $peakMatch = [regex]::Match($txtRam.Text, "\(Peak: [^)]+\)")
+                $peakSuffix = if ($peakMatch.Success) { " " + $peakMatch.Value } else { "" }
+                $txtRam.Text = "Working Set: $($liveTargetVm.MemoryFormatted)$peakSuffix"
+            }
+
+            # 3. Update Handles Counter
+            $txtHnd = $propWin.FindName("PropThreadsHandles")
+            if ($txtHnd) {
+                $gdiMatch = [regex]::Match($txtHnd.Text, "\(GDI: [^)]+\)")
+                $gdiSuffix = if ($gdiMatch.Success) { " " + $gdiMatch.Value } else { "" }
+                $txtHnd.Text = "Handles: $($liveTargetVm.HandlesFormatted)$gdiSuffix"
+            }
+
+            # 4. Update Process Ancestry Tree
+            $newTree = &$buildFullAncestryTree
+            if ($newTree) {
+                $propTree.ItemsSource = @($newTree)
+            }
+
+            # 5. Live Query for CPU Cycles, Processor Times & I/O Counters
+            if (-not $perfQueryState.InFlight) {
+                $perfQueryState.InFlight = $true
+                &$runDeepInspect $false "Performance"
+            }
+        }
+
+        # 1-second UI DispatcherTimer for Lightweight Realtime Performance Updates
+        $propTimer = [System.Windows.Threading.DispatcherTimer]::new(
+            [System.Windows.Threading.DispatcherPriority]::Background,
+            $propWin.Dispatcher
+        )
+        $propTimer.Interval = [TimeSpan]::FromMilliseconds(1000)
+        $propTimer.add_Tick({ &$refreshLivePerformanceTab })
+        $propTimer.Start()
+
+        $propWin.add_Closed({
+            if ($propTimer) { $propTimer.Stop() }
+            $perfQueryState.InFlight = $false
+        })
+
         # Wire Lazy Tab Activation for DLLs and Handles
-        $propTabControl = $propWin.FindName("PropTabControl")
         $propTabControl.add_SelectionChanged({
             param($sender, $e)
             if ($e.OriginalSource -ne $propTabControl) { return }
