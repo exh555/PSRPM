@@ -81,7 +81,7 @@ Located at the top of the main window directly below the menu bar, the **Host Ta
 
 ```text
 +-----------------------------------------------------------------------------------------+
-| [● SRV-PROD-01 WINRM 42ms]  [● ERICHANSON872E LOCAL 18ms  x]                 [+ Add Host] |
+| [● SRV-PROD-01 WINRM 42ms]  [● WKSTN-LOCAL-01 LOCAL 18ms  x]                 [+ Add Host] |
 +-----------------------------------------------------------------------------------------+
 ```
 
