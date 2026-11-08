@@ -717,7 +717,7 @@ function Start-PSRPMEngine {
             $servicesMap.Clear()
             $pidServicesMap.Clear()
             $ProcessCollection.Clear()
-            if ($ServicesCollection) { $ServicesCollection.Clear() }
+            if ($null -ne $ServicesCollection) { $ServicesCollection.Clear() }
             if ($SummaryViewModel -and $SummaryViewModel.CoreGraphs) { $SummaryViewModel.CoreGraphs.Clear() }
             $telemStats.TotalWireBytes = 0L
             $telemStats.TotalRawBytes  = 0L
@@ -813,6 +813,10 @@ function Start-PSRPMEngine {
                     $sSt   = [string]$s['st']
                     $sSm   = [string]$s['sm']
                     $sUsr  = [string]$s['u']
+                    $sDep  = if ($s['dep']) { [string]$s['dep'] } else { "" }
+                    $sRev  = if ($s['rev']) { [string]$s['rev'] } else { "" }
+                    $sDesc = if ($s['dsc']) { [string]$s['dsc'] } else { "" }
+                    $sBin  = if ($s['bin']) { [string]$s['bin'] } else { "" }
 
                     if ($sPid -gt 0) {
                         if (-not $pidServicesMap.ContainsKey($sPid)) {
@@ -821,14 +825,36 @@ function Start-PSRPMEngine {
                         $pidServicesMap[$sPid].Add($sName)
                     }
 
-                    if ($ServicesCollection) {
-                        if ($servicesMap.ContainsKey($sName)) {
-                            $servicesMap[$sName].UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr)
-                        } else {
-                            $sVm = [ServiceItemViewModel]::new()
-                            $sVm.UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr)
-                            $servicesMap[$sName] = $sVm
+                    if ($servicesMap.ContainsKey($sName)) {
+                        $servicesMap[$sName].UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
+                    } else {
+                        $sVm = [ServiceItemViewModel]::new()
+                        $sVm.UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
+                        $servicesMap[$sName] = $sVm
+                        if ($null -ne $ServicesCollection) {
                             $ServicesCollection.Add($sVm)
+                        }
+                    }
+                }
+
+                if ($null -ne $ServicesCollection -and $Window) {
+                    $txtSvcSum = $Window.FindName("TxtSvcSummary")
+                    if ($txtSvcSum) {
+                        $totCount = $ServicesCollection.Count
+                        $runCount = 0
+                        foreach ($svm in $ServicesCollection) {
+                            if ($svm.Status -eq "Running") { $runCount++ }
+                        }
+                        $stopCount = $totCount - $runCount
+                        $txtSvcBox = $Window.FindName("TxtSearchServices")
+                        $sTerm = if ($txtSvcBox) { $txtSvcBox.Text.Trim() } else { "" }
+                        if ([string]::IsNullOrWhiteSpace($sTerm)) {
+                            $txtSvcSum.Text = "$totCount Services ($runCount Running, $stopCount Stopped)"
+                        } else {
+                            $cv = [System.Windows.Data.CollectionViewSource]::GetDefaultView($ServicesCollection)
+                            $visCount = 0
+                            if ($cv) { foreach ($ci in $cv) { $visCount++ } }
+                            $txtSvcSum.Text = "$visCount of $totCount Services ($runCount Running, $stopCount Stopped)"
                         }
                     }
                 }

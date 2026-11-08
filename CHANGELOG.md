@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-07
+
+### Added
+- **Interactive Windows Services Management Suite**:
+  - Full-featured **Services Tab** (`GridServices`) in `MainWindow.xaml` providing real-time inventory of all installed system services with `ServiceName`, `DisplayName`, `HostPID`, `Status`, `StartupType`, `LogOnAs`, and inline dependency previews.
+  - Process Explorer-style action toolbar with **Start Service** (`BtnSvcStart`), **Stop Service** (`BtnSvcStop`), **Restart Service** (`BtnSvcRestart`), **Properties & Dependencies...** (`BtnSvcProperties`), and **Select Process in Tree** (`BtnSvcGoToProcess`).
+  - Context menu on services grid for quick actions (`Start`, `Stop`, `Restart`, `Properties & Dependencies...`, `Go to Host Process in Tree`).
+  - Real-time search filter (`TxtSearchServices` / `BtnClearSearchServices`) with live summary count badge (`TxtSvcSummary`: e.g. `"Showing 42 of 285 Services"`).
+  - Bidirectional navigation: Double-clicking or pressing Enter on a service with a running `HostPID` automatically switches to the Processes tab and selects the host process (`svchost.exe`, etc.) in the hierarchical tree-grid.
+  - Smart action button enablement: Start button enabled only when service is Stopped; Stop and Restart buttons enabled only when service is Running.
+- **Two-Way Service Dependencies Inspector (`ServiceDetailWindow.xaml`)**:
+  - Deep inspection modal opened via double-click, Enter, context menu, or toolbar button.
+  - **General Tab**: Displays Service Name, Display Name, Current Status, Startup Type, Binary Path, Account / Log On As, Host PID, and Description.
+  - **Dependencies Tab**: Two-way relational dependency tree:
+    - **Services this service depends on** (Prerequisites / `ServicesDependedOn`).
+    - **Services that depend on this service** (Dependents / `DependentServices`).
+  - Interactive grid rows with live status badges (`Running`, `Stopped`, etc.) and direct Start / Stop / Restart actions inside the inspector dialog.
+- **Multi-Tier Robust Service Data Collection**:
+  - Enhanced `Collect-PSRPMSystemTelemetry` with 3-tier fallback architecture:
+    1. Fast in-memory Registry query (`HKLM:\SYSTEM\CurrentControlSet\Services`) reading `DisplayName`, `Start`, `ImagePath`, `ObjectName`, `Description`, and `DependOnService`.
+    2. CIM query (`Win32_Service`) fallback for active runtime status and PID mapping.
+    3. Direct Win32 Service Controller fallback (`[System.ServiceProcess.ServiceController]`) ensuring 100% telemetry capture even in constrained or non-elevated remoting contexts.
+  - Cached dependency tree mapping for fast two-way resolution without round-trip penalties.
+
+### Fixed
+- **Dark Mode Menu Text Visibility Overhaul**:
+  - Replaced system default WPF menu rendering with custom high-contrast dark mode `ControlTemplate` for `MenuItem`, top-level headers, and popup menus.
+  - Fixed white-on-white text washing and unreadable submenu items in dark theme; menu items now render with `BrushTextPrimary` (`#F8FAFC`) on dark surface with smooth accent hover styling.
+- **PowerShell 5.1 Collection Truthiness Bug**:
+  - Fixed issue where empty `ObservableCollection[ServiceItemViewModel]` evaluated to `$false` in `if ($ServicesCollection)`, preventing service rows from populating after background collection ticks. Replaced with `$null -ne $ServicesCollection`.
+- **ASCII Character Compliance**:
+  - Cleaned non-ASCII characters (bullets, em-dashes) in XAML and script resources ensuring 100% 7-bit ASCII compatibility on Windows-1252 PowerShell hosts.
+
 ## [1.1.1] - 2026-11-07
 
 ### Added

@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.1.1'
+    ModuleVersion     = '1.2.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -75,12 +75,12 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.1.1 - Visual Pause State Indication & UX Enhancements
-- Visual Pause State Indication: Added clear, unambiguous visual indicators across the toolbar, status bar, and active host session tab when telemetry polling is paused.
-- Toolbar Pause/Resume Toggle: BtnToolbarPause transforms into an amber Play/Resume vector icon with a bold "PAUSED" indicator and accented background when polling is paused.
-- Status Bar Paused Badge: Integrated an amber [PAUSED] pill badge and informative status message notifying operators that telemetry is suspended.
-- Host Tab Session Indicator: The active session tab dot turns amber and latency displays "Paused" while collection is paused, synchronizing instantly.
-- Fast Keyboard & Refresh Recovery: Seamless unpausing via Spacebar, F5, or Toolbar Refresh with audit trail logging for pause/resume lifecycle transitions.
+PSRPM v1.2.0 - Windows Services Management Suite, Two-Way Dependencies Inspector & Dark Mode Menu Overhaul
+- Services Management Suite: Complete multi-tier Windows Services tab featuring start, stop, and restart controls with real-time status updates and Process Explorer-style action bar.
+- Interactive Two-Way Dependencies Inspector: Dedicated ServiceDetailWindow with live prerequisite and dependent service trees, start/stop actions, and instant status indicators.
+- SCM Fallback & Registry Ingestion: Multi-tier service data collection combining registry fast-path, CIM fallback, and direct Win32 Service Controller enumeration for complete service visibility.
+- Contextual Navigation & Filtering: Real-time search filter with matched/total counters and bidirectional jump-to-host-process navigation in tree grid.
+- Dark Mode Menu Fix: Custom ControlTemplate for menu popups and submenus ensuring crisp text visibility and accent highlighting across all theme states.
 '@
         }
     }

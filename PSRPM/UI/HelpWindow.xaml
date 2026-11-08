@@ -240,7 +240,7 @@
                         <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
                                 <TextBlock Text="100% Fileless &amp; EDR-Safe Security Posture" FontWeight="Bold" FontSize="13" Foreground="#16A34A"/>
-                                <TextBlock Text="• Zero csc.exe compiler child processes and zero temporary .dll or .cs files written to %TEMP% on local or remote endpoints.&#x0a;• Win32 / NTAPI P/Invoke signatures emitted directly into memory via in-memory .NET Reflection.Emit (AssemblyBuilderAccess.Run).&#x0a;• ViewModels implemented as pure Windows PowerShell 5.1 AST classes (INotifyPropertyChanged)."
+                                <TextBlock Text="- Zero csc.exe compiler child processes and zero temporary .dll or .cs files written to %TEMP% on local or remote endpoints.&#x0a;- Win32 / NTAPI P/Invoke signatures emitted directly into memory via in-memory .NET Reflection.Emit (AssemblyBuilderAccess.Run).&#x0a;- ViewModels implemented as pure Windows PowerShell 5.1 AST classes (INotifyPropertyChanged)."
                                            TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
@@ -248,8 +248,8 @@
                         <!-- Card 2: Ultra-Low Remote Target Overhead -->
                         <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
-                                <TextBlock Text="Ultra-Low Target Impact (&lt; 0.25% CPU, 2–10 ms Collection)" FontWeight="Bold" FontSize="13" Foreground="#0284C7"/>
-                                <TextBlock Text="• Queries ntdll!NtQuerySystemInformation(5) and kernel32!GlobalMemoryStatusEx in a single kernel transition into persistent 512 KB unmanaged memory.&#x0a;• Zero WmiPrvSE.exe CPU spikes, zero N+1 CIM GetOwner() roundtrips, and zero 5-second UI hangs from $p.Responding.&#x0a;• Dead process tokens, CPU baselines, and state maps are synchronously evicted every tick to eliminate memory growth."
+                                <TextBlock Text="Ultra-Low Target Impact (&lt; 0.25% CPU, 2-10 ms Collection)" FontWeight="Bold" FontSize="13" Foreground="#0284C7"/>
+                                <TextBlock Text="- Queries ntdll!NtQuerySystemInformation(5) and kernel32!GlobalMemoryStatusEx in a single kernel transition into persistent 512 KB unmanaged memory.&#x0a;- Zero WmiPrvSE.exe CPU spikes, zero N+1 CIM GetOwner() roundtrips, and zero 5-second UI hangs from $p.Responding.&#x0a;- Dead process tokens, CPU baselines, and state maps are synchronously evicted every tick to eliminate memory growth."
                                            TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
@@ -257,8 +257,8 @@
                         <!-- Card 3: Differential Network Wire Protocol -->
                         <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
-                                <TextBlock Text="Differential GZIP Wire Streaming (~1.1 – 1.8 KB/s)" FontWeight="Bold" FontSize="13" Foreground="#CA8A04"/>
-                                <TextBlock Text="• Static metadata (Path, CommandLine, User, Description, Company, Architecture) transmitted only once per process upon spawn (keyed by PID + CreateTime).&#x0a;• Subsequent ticks transmit only changed dynamic metrics ([PID, CPU, WorkingSet, PrivateBytes, Threads, Handles, Status]) compressed with in-memory GZIP.&#x0a;• 80%+ network bandwidth reduction compared to standard WinRM CLIXML object serialization."
+                                <TextBlock Text="Differential GZIP Wire Streaming (~1.1 - 1.8 KB/s)" FontWeight="Bold" FontSize="13" Foreground="#CA8A04"/>
+                                <TextBlock Text="- Static metadata (Path, CommandLine, User, Description, Company, Architecture) transmitted only once per process upon spawn (keyed by PID + CreateTime).&#x0a;- Subsequent ticks transmit only changed dynamic metrics ([PID, CPU, WorkingSet, PrivateBytes, Threads, Handles, Status]) compressed with in-memory GZIP.&#x0a;- 80%+ network bandwidth reduction compared to standard WinRM CLIXML object serialization."
                                            TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
@@ -267,7 +267,7 @@
                         <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
                                 <TextBlock Text="Zero-Leak Memory Architecture &amp; In-Place Reconciler" FontWeight="Bold" FontSize="13" Foreground="#7C3AED"/>
-                                <TextBlock Text="• Telemetry sparkline and system information histories stored in strictly bounded Queue[double] circular ring buffers (120 samples = &lt; 12 KB per session).&#x0a;• Live UI DataGrids reconcile in-place via dirty-checked INotifyPropertyChanged. The collection is never cleared, ensuring scroll position, selected rows, and expanders remain solid.&#x0a;• Inactive tabs in the Multi-Host session bar drop to 0 KB/s wire and 0% CPU in standby."
+                                <TextBlock Text="- Telemetry sparkline and system information histories stored in strictly bounded Queue[double] circular ring buffers (120 samples = &lt; 12 KB per session).&#x0a;- Live UI DataGrids reconcile in-place via dirty-checked INotifyPropertyChanged. The collection is never cleared, ensuring scroll position, selected rows, and expanders remain solid.&#x0a;- Inactive tabs in the Multi-Host session bar drop to 0 KB/s wire and 0% CPU in standby."
                                            TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
@@ -276,7 +276,7 @@
                         <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10">
                             <StackPanel>
                                 <TextBlock Text="Kernel Named-Pipe Deadlock Prevention" FontWeight="Bold" FontSize="13" Foreground="#DC2626"/>
-                                <TextBlock Text="• When inspecting open kernel handles, synchronous File and Named-Pipe objects are bypassed during NtQueryObject(ObjectNameInformation) calls.&#x0a;• Completely prevents kernel deadlocks and frozen runspaces on Chromium / msedgewebview2.exe Mojo IPC pipes."
+                                <TextBlock Text="- When inspecting open kernel handles, synchronous File and Named-Pipe objects are bypassed during NtQueryObject(ObjectNameInformation) calls.&#x0a;- Completely prevents kernel deadlocks and frozen runspaces on Chromium / msedgewebview2.exe Mojo IPC pipes."
                                            TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>

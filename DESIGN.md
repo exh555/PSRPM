@@ -44,6 +44,9 @@
 | `BrushTextPrimary` | `#0F172A` | `#F8FAFC` | Primary data, process names, headings |
 | `BrushTextSecondary` | `#334155` | `#CBD5E1` | Descriptions, company names, secondary values |
 | `BrushTextMuted` | `#64748B` | `#94A3B8` | Watermarks, zero values, dimmed filter ancestors |
+| `BrushMenuBg` | `#FFFFFF` | `#161F30` | Dropdown menu and context menu popup background |
+| `BrushMenuBorder` | `#CBD5E1` | `#334155` | Menu popup 1px perimeter border |
+| `BrushMenuHover` | `#F1F5F9` | `#26354D` | Menu and context item interactive hover background |
 
 ### B. Process Explorer Semantic Row Categories
 Semantic row coloring matches Sysinternals Process Explorer conventions, ordered by strict precedence:

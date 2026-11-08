@@ -192,26 +192,155 @@ $script:PSRPMCollectorScriptBlock = {
     $nowUtc = [DateTime]::UtcNow
     if (($nowUtc - $script:LastSvcRefresh).TotalSeconds -ge 30.0) {
         $svcArr = [System.Collections.Generic.List[Object]]::new()
+        $script:ServicePidSet.Clear()
+
+        # Extract service dependencies, descriptions, and binary paths from registry (fast ~25-45ms, 100% non-elevated)
+        $depMap  = @{}
+        $revMap  = @{}
+        $descMap = @{}
+        $binMap  = @{}
         try {
-            $svcs = Get-CimInstance Win32_Service -Property Name, DisplayName, ProcessId, State, StartMode, StartName -ErrorAction SilentlyContinue
-            if ($svcs) {
-                $script:ServicePidSet.Clear()
-                foreach ($s in $svcs) {
-                    $sPid = try { [int]$s.ProcessId } catch { 0 }
-                    if ($sPid -gt 0) {
-                        [void]$script:ServicePidSet.Add($sPid)
-                    }
-                    $svcArr.Add(@{
-                        n  = [string]$s.Name
-                        d  = [string]$s.DisplayName
-                        p  = $sPid
-                        st = [string]$s.State
-                        sm = [string]$s.StartMode
-                        u  = if ($s.StartName) { [string]$s.StartName } else { "LocalSystem" }
-                    })
+            $regServices = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services")
+            if ($regServices) {
+                foreach ($subName in $regServices.GetSubKeyNames()) {
+                    try {
+                        $sKey = $regServices.OpenSubKey($subName)
+                        if ($sKey) {
+                            $rawDeps = $sKey.GetValue("DependOnService")
+                            if ($rawDeps) {
+                                $dList = [System.Collections.Generic.List[string]]::new()
+                                foreach ($d in $rawDeps) {
+                                    $dClean = [string]$d
+                                    if ($dClean.StartsWith("+")) { $dClean = $dClean.Substring(1) }
+                                    if (-not [string]::IsNullOrWhiteSpace($dClean)) {
+                                        $dList.Add($dClean)
+                                        if (-not $revMap.ContainsKey($dClean)) {
+                                            $revMap[$dClean] = [System.Collections.Generic.List[string]]::new()
+                                        }
+                                        $revMap[$dClean].Add($subName)
+                                    }
+                                }
+                                if ($dList.Count -gt 0) {
+                                    $depMap[$subName] = ($dList -join ", ")
+                                }
+                            }
+                            $descVal = $sKey.GetValue("Description")
+                            if ($descVal -and -not [string]::IsNullOrWhiteSpace($descVal)) {
+                                $descMap[$subName] = [string]$descVal
+                            }
+                            $imgPath = $sKey.GetValue("ImagePath")
+                            if ($imgPath -and -not [string]::IsNullOrWhiteSpace($imgPath)) {
+                                $binMap[$subName] = [string]$imgPath
+                            }
+                            $sKey.Close()
+                        }
+                    } catch {}
                 }
+                $regServices.Close()
             }
         } catch {}
+
+        # Tier 1: Query Win32_Service (ProcessId, State, StartMode, StartName)
+        $svcs = $null
+        try {
+            $svcs = Get-CimInstance Win32_Service -Property Name, DisplayName, ProcessId, State, StartMode, StartName, Description, PathName -ErrorAction Stop
+        } catch {}
+
+        # Tier 2: Fallback to Get-Service if CIM fails
+        if (-not $svcs -or $svcs.Count -eq 0) {
+            try {
+                $svcs = Get-Service -ErrorAction SilentlyContinue
+            } catch {}
+        }
+
+        if ($svcs -and $svcs.Count -gt 0) {
+            foreach ($s in $svcs) {
+                $sName = [string]$s.Name
+                if ([string]::IsNullOrWhiteSpace($sName)) { $sName = [string]$s.ServiceName }
+                $sDisp = [string]$s.DisplayName
+                if ([string]::IsNullOrWhiteSpace($sDisp)) { $sDisp = $sName }
+
+                $sPid = 0
+                if ($s.ProcessId) {
+                    $sPid = try { [int]$s.ProcessId } catch { 0 }
+                }
+                if ($sPid -gt 0) {
+                    [void]$script:ServicePidSet.Add($sPid)
+                }
+
+                $sState = if ($s.State) { [string]$s.State } elseif ($s.Status) { [string]$s.Status } else { "Stopped" }
+                $sStart = if ($s.StartMode) { [string]$s.StartMode } elseif ($s.StartType) { [string]$s.StartType } else { "Manual" }
+                $sUser  = if ($s.StartName) { [string]$s.StartName } else { "LocalSystem" }
+                $sDesc  = if ($s.Description) { [string]$s.Description } elseif ($descMap.ContainsKey($sName)) { $descMap[$sName] } else { "" }
+                $sBin   = if ($s.PathName) { [string]$s.PathName } elseif ($binMap.ContainsKey($sName)) { $binMap[$sName] } else { "" }
+
+                $sDep = if ($depMap.ContainsKey($sName)) { $depMap[$sName] } else { "" }
+                if (-not $sDep -and $s.ServicesDependedOn) {
+                    $sDep = (($s.ServicesDependedOn | Select-Object -ExpandProperty Name -ErrorAction SilentlyContinue) -join ", ")
+                }
+                $sRev = if ($revMap.ContainsKey($sName)) { ($revMap[$sName] -join ", ") } else { "" }
+
+                $svcArr.Add(@{
+                    n   = $sName
+                    d   = $sDisp
+                    p   = $sPid
+                    st  = $sState
+                    sm  = $sStart
+                    u   = $sUser
+                    dep = $sDep
+                    rev = $sRev
+                    dsc = $sDesc
+                    bin = $sBin
+                })
+            }
+        } elseif ($depMap.Count -gt 0 -or $binMap.Count -gt 0) {
+            # Tier 3: Registry fallback when both CIM and SCM are restricted
+            try {
+                $regServices = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services")
+                if ($regServices) {
+                    foreach ($subName in $regServices.GetSubKeyNames()) {
+                        try {
+                            $sKey = $regServices.OpenSubKey($subName)
+                            if ($sKey) {
+                                $disp = [string]$sKey.GetValue("DisplayName")
+                                if (-not $disp) { $disp = $subName }
+                                $startVal = $sKey.GetValue("Start")
+                                $sm = switch ($startVal) {
+                                    2 { "Auto" }
+                                    3 { "Manual" }
+                                    4 { "Disabled" }
+                                    0 { "Boot" }
+                                    1 { "System" }
+                                    default { "Manual" }
+                                }
+                                $usr = [string]$sKey.GetValue("ObjectName")
+                                if (-not $usr) { $usr = "LocalSystem" }
+                                $sDep = if ($depMap.ContainsKey($subName)) { $depMap[$subName] } else { "" }
+                                $sRev = if ($revMap.ContainsKey($subName)) { ($revMap[$subName] -join ", ") } else { "" }
+                                $sDesc = if ($descMap.ContainsKey($subName)) { $descMap[$subName] } else { "" }
+                                $sBin = if ($binMap.ContainsKey($subName)) { $binMap[$subName] } else { "" }
+
+                                $svcArr.Add(@{
+                                    n   = $subName
+                                    d   = $disp
+                                    p   = 0
+                                    st  = "Stopped"
+                                    sm  = $sm
+                                    u   = $usr
+                                    dep = $sDep
+                                    rev = $sRev
+                                    dsc = $sDesc
+                                    bin = $sBin
+                                })
+                                $sKey.Close()
+                            }
+                        } catch {}
+                    }
+                    $regServices.Close()
+                }
+            } catch {}
+        }
+
         $script:CachedServices = $svcArr
         $servicesPayload = $svcArr
         $script:LastSvcRefresh = $nowUtc

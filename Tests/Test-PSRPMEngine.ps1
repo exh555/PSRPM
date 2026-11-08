@@ -164,11 +164,12 @@ Write-Host "  [PASS] ProcessActions verified: $($actRes['Message'])" -Foreground
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
     @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
+    @{ File = "ServiceDetailWindow.xaml"; RequiredControls = @("TxtDlgDisplayName", "TxtDlgServiceName", "TxtDlgPid", "BadgeDlgStatus", "TxtDlgStatus", "SvcTabControl", "TxtDlgDescription", "TxtDlgPath", "TxtDlgStartup", "TxtDlgAccount", "TxtDlgDepSummary", "GridDlgPrereqs", "GridDlgDependents", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
 )
 
 foreach ($xf in $xamlFiles) {
@@ -221,6 +222,18 @@ if ($tabVm.StatusDotFill -ne "#F59E0B" -or $tabVm.LatencyText -ne "Paused") {
     throw "HostTabItemViewModel paused state verification failed."
 }
 Write-Host "  Verified HostTabItemViewModel: Active/Standby visual styling, isolated state maps and theme switching." -ForegroundColor Gray
+
+# Verify ServiceItemViewModel
+$svcVmTest = [ServiceItemViewModel]::new()
+$svcVmTest.UpdateService("Spooler", "Print Spooler", 1234, "Running", "Auto", "LocalSystem", "RPCSS, HTTP", "Fax", "Spools print jobs", "C:\Windows\System32\spoolsv.exe")
+if ($svcVmTest.Name -ne "Spooler" -or $svcVmTest.Status -ne "Running" -or -not $svcVmTest.CanStop -or -not $svcVmTest.CanRestart -or $svcVmTest.CanStart -or $svcVmTest.DependenciesFormatted -ne "RPCSS, HTTP" -or $svcVmTest.DependentServicesFormatted -ne "Fax" -or $svcVmTest.BinaryPath -ne "C:\Windows\System32\spoolsv.exe") {
+    throw "ServiceItemViewModel verification failed for running service with dependencies."
+}
+$svcVmTest.UpdateService("Spooler", "Print Spooler", 0, "Stopped", "Auto", "LocalSystem", "", "", "Spools print jobs", "C:\Windows\System32\spoolsv.exe")
+if ($svcVmTest.Status -ne "Stopped" -or $svcVmTest.CanStop -or $svcVmTest.CanRestart -or -not $svcVmTest.CanStart -or $svcVmTest.DependenciesFormatted -ne "None") {
+    throw "ServiceItemViewModel verification failed for stopped service."
+}
+Write-Host "  Verified ServiceItemViewModel: Lifecycle status, dependencies formatting and action controls." -ForegroundColor Gray
 
 Write-Host "  [PASS] All XAML templates and ViewModel classes verified." -ForegroundColor Green
 

@@ -326,19 +326,39 @@ class ServiceItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$Name
     [string]$DisplayName
     [int]$PID
+    [string]$PIDFormatted
     [string]$Status
     [string]$StartType
     [string]$User
     [string]$StatusBrush
+    [string]$Dependencies
+    [string]$DependentServices
+    [string]$DependenciesFormatted
+    [string]$DependentServicesFormatted
+    [string]$Description
+    [string]$BinaryPath
+    [bool]$CanStart
+    [bool]$CanStop
+    [bool]$CanRestart
 
     hidden [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]] $Handlers
 
     ServiceItemViewModel() {
-        $this.Handlers    = [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]]::new()
-        $this.Status      = "Stopped"
-        $this.StatusBrush = "#64748B"
-        $this.StartType   = "Manual"
-        $this.User        = "LocalSystem"
+        $this.Handlers                   = [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]]::new()
+        $this.Status                     = "Stopped"
+        $this.StatusBrush                = "#94A3B8"
+        $this.StartType                  = "Manual"
+        $this.User                       = "LocalSystem"
+        $this.PIDFormatted               = ""
+        $this.Dependencies               = ""
+        $this.DependentServices          = ""
+        $this.DependenciesFormatted      = "None"
+        $this.DependentServicesFormatted = "None"
+        $this.Description                = ""
+        $this.BinaryPath                 = ""
+        $this.CanStart                   = $true
+        $this.CanStop                    = $false
+        $this.CanRestart                 = $false
     }
 
     [void] add_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {
@@ -358,16 +378,60 @@ class ServiceItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] UpdateService([string]$name, [string]$disp, [int]$pidVal, [string]$status, [string]$startType, [string]$user) {
+        $this.UpdateService($name, $disp, $pidVal, $status, $startType, $user, "", "", "", "")
+    }
+
+    [void] UpdateService([string]$name, [string]$disp, [int]$pidVal, [string]$status, [string]$startType, [string]$user, [string]$dep, [string]$rev, [string]$desc, [string]$bin) {
         if ($this.Name -ne $name)           { $this.Name = $name; $this.OnPropertyChanged('Name') }
         if ($this.DisplayName -ne $disp)    { $this.DisplayName = $disp; $this.OnPropertyChanged('DisplayName') }
-        if ($this.PID -ne $pidVal)          { $this.PID = $pidVal; $this.OnPropertyChanged('PID') }
+        if ($this.PID -ne $pidVal) {
+            $this.PID = $pidVal
+            $this.PIDFormatted = if ($pidVal -gt 0) { [string]$pidVal } else { "" }
+            $this.OnPropertyChanged('PID')
+            $this.OnPropertyChanged('PIDFormatted')
+        }
         if ($this.StartType -ne $startType) { $this.StartType = $startType; $this.OnPropertyChanged('StartType') }
         if ($this.User -ne $user)           { $this.User = $user; $this.OnPropertyChanged('User') }
+        if ($this.Description -ne $desc)    { $this.Description = $desc; $this.OnPropertyChanged('Description') }
+        if ($this.BinaryPath -ne $bin)      { $this.BinaryPath = $bin; $this.OnPropertyChanged('BinaryPath') }
+
+        if ($this.Dependencies -ne $dep) {
+            $this.Dependencies = $dep
+            $this.DependenciesFormatted = if ([string]::IsNullOrWhiteSpace($dep)) { "None" } else { $dep }
+            $this.OnPropertyChanged('Dependencies')
+            $this.OnPropertyChanged('DependenciesFormatted')
+        }
+
+        if ($this.DependentServices -ne $rev) {
+            $this.DependentServices = $rev
+            $this.DependentServicesFormatted = if ([string]::IsNullOrWhiteSpace($rev)) { "None" } else { $rev }
+            $this.OnPropertyChanged('DependentServices')
+            $this.OnPropertyChanged('DependentServicesFormatted')
+        }
+
         if ($this.Status -ne $status) {
             $this.Status = $status
-            $this.StatusBrush = if ($status -eq "Running") { "#16A34A" } else { "#64748B" }
+            if ($status -eq "Running") {
+                $this.StatusBrush = "#22C55E"
+                $this.CanStart    = $false
+                $this.CanStop     = $true
+                $this.CanRestart  = $true
+            } elseif ($status -eq "Paused") {
+                $this.StatusBrush = "#F59E0B"
+                $this.CanStart    = $true
+                $this.CanStop     = $true
+                $this.CanRestart  = $true
+            } else {
+                $this.StatusBrush = "#94A3B8"
+                $this.CanStart    = $true
+                $this.CanStop     = $false
+                $this.CanRestart  = $false
+            }
             $this.OnPropertyChanged('Status')
             $this.OnPropertyChanged('StatusBrush')
+            $this.OnPropertyChanged('CanStart')
+            $this.OnPropertyChanged('CanStop')
+            $this.OnPropertyChanged('CanRestart')
         }
     }
 }

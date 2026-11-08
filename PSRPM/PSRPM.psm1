@@ -187,11 +187,12 @@ function Start-PSRPM {
 
     # 2. Load MainWindow.xaml
     $uiDir = Join-Path $PSScriptRoot "UI"
-    $mainXamlPath    = Join-Path $uiDir "MainWindow.xaml"
-    $propXamlPath    = Join-Path $uiDir "PropertiesWindow.xaml"
-    $connXamlPath    = Join-Path $uiDir "ConnectDialog.xaml"
-    $sysInfoXamlPath = Join-Path $uiDir "SystemInfoWindow.xaml"
-    $helpXamlPath    = Join-Path $uiDir "HelpWindow.xaml"
+    $mainXamlPath      = Join-Path $uiDir "MainWindow.xaml"
+    $propXamlPath      = Join-Path $uiDir "PropertiesWindow.xaml"
+    $connXamlPath      = Join-Path $uiDir "ConnectDialog.xaml"
+    $sysInfoXamlPath   = Join-Path $uiDir "SystemInfoWindow.xaml"
+    $helpXamlPath      = Join-Path $uiDir "HelpWindow.xaml"
+    $svcDetailXamlPath = Join-Path $uiDir "ServiceDetailWindow.xaml"
 
     $xamlBytes = [System.IO.File]::ReadAllBytes($mainXamlPath)
     $msXaml = [System.IO.MemoryStream]::new($xamlBytes)
@@ -272,6 +273,9 @@ function Start-PSRPM {
         -LogConsole $txtLogConsole
 
     $stateContainer = $engineHandle.StateContainer
+    $initialTabVm.ProcessMap     = $engineHandle.ProcessMap
+    $initialTabVm.ServicesMap    = $engineHandle.ServicesMap
+    $initialTabVm.PidServicesMap = $engineHandle.PidServicesMap
 
     # 5. Theme Engine (Clean Light Sysinternals Default vs Precision Dark Mode)
     $menuThemeLight = $window.FindName("MenuThemeLight")
@@ -307,6 +311,9 @@ function Start-PSRPM {
             &$setResourceBrush "ColTint_CPU"          "#1422C55E"
             &$setResourceBrush "ColTint_PrivateBytes" "#14EAB308"
             &$setResourceBrush "ColTint_WorkingSet"   "#14F97316"
+            &$setResourceBrush "BrushMenuBg"         "#161F30"
+            &$setResourceBrush "BrushMenuBorder"     "#334155"
+            &$setResourceBrush "BrushMenuHover"      "#26354D"
             if ($menuThemeLight) { $menuThemeLight.IsChecked = $false }
             if ($menuThemeDark)  { $menuThemeDark.IsChecked  = $true }
             if ($txtThemeToggle) { $txtThemeToggle.Text      = "Light Mode" }
@@ -328,6 +335,9 @@ function Start-PSRPM {
             &$setResourceBrush "ColTint_CPU"          "#2222C55E"
             &$setResourceBrush "ColTint_PrivateBytes" "#28EAB308"
             &$setResourceBrush "ColTint_WorkingSet"   "#22F97316"
+            &$setResourceBrush "BrushMenuBg"         "#FFFFFF"
+            &$setResourceBrush "BrushMenuBorder"     "#CBD5E1"
+            &$setResourceBrush "BrushMenuHover"      "#F1F5F9"
             if ($menuThemeLight) { $menuThemeLight.IsChecked = $true }
             if ($menuThemeDark)  { $menuThemeDark.IsChecked  = $false }
             if ($txtThemeToggle) { $txtThemeToggle.Text      = "Dark Mode" }
@@ -932,10 +942,10 @@ function Start-PSRPM {
         }
     })
 
-    # Wire Service ContextMenu Actions
+    # Wire Service Toolbar & ContextMenu Actions
     $invokeServiceAction = {
-        param([string]$svcOp)
-        $selSvc = $gridServices.SelectedItem
+        param([string]$svcOp, [Object]$targetSvc = $null)
+        $selSvc = if ($targetSvc) { $targetSvc } else { $gridServices.SelectedItem }
         if (-not $selSvc) { return }
         $sName = [string]$selSvc.Name
         &$writeAuditLog "SERVICE" "Requesting '$svcOp' on service '$sName'..."
@@ -967,10 +977,63 @@ function Start-PSRPM {
         }.GetNewClosure())
     }
 
-    $window.FindName("CtxStartService").add_Click({ &$invokeServiceAction "Start" })
-    $window.FindName("CtxStopService").add_Click({ &$invokeServiceAction "Stop" })
-    $window.FindName("CtxRestartService").add_Click({ &$invokeServiceAction "Restart" })
-    $window.FindName("CtxGoToServiceProcess").add_Click({
+    $btnSvcStart            = $window.FindName("BtnSvcStart")
+    $btnSvcStop             = $window.FindName("BtnSvcStop")
+    $btnSvcRestart          = $window.FindName("BtnSvcRestart")
+    $btnSvcProperties       = $window.FindName("BtnSvcProperties")
+    $btnSvcGoToProcess      = $window.FindName("BtnSvcGoToProcess")
+    $txtSvcSummary          = $window.FindName("TxtSvcSummary")
+    $txtSearchServices      = $window.FindName("TxtSearchServices")
+    $btnClearSearchServices = $window.FindName("BtnClearSearchServices")
+
+    $ctxStartService        = $window.FindName("CtxStartService")
+    $ctxStopService         = $window.FindName("CtxStopService")
+    $ctxRestartService      = $window.FindName("CtxRestartService")
+    $ctxServiceProperties   = $window.FindName("CtxServiceProperties")
+    $ctxGoToServiceProcess  = $window.FindName("CtxGoToServiceProcess")
+    $ctxCopyServiceName    = $window.FindName("CtxCopyServiceName")
+
+    $updateSvcToolbarButtons = {
+        $sel = $gridServices.SelectedItem
+        if ($sel) {
+            $isRun = ($sel.Status -eq "Running")
+            $isPaused = ($sel.Status -eq "Paused")
+            $canStart = (-not $isRun)
+            $canStop = ($isRun -or $isPaused)
+            $canRestart = ($isRun -or $isPaused)
+            $hasPid = ($sel.PID -gt 0)
+
+            if ($btnSvcStart)       { $btnSvcStart.IsEnabled = $canStart }
+            if ($btnSvcStop)        { $btnSvcStop.IsEnabled = $canStop }
+            if ($btnSvcRestart)     { $btnSvcRestart.IsEnabled = $canRestart }
+            if ($btnSvcProperties)  { $btnSvcProperties.IsEnabled = $true }
+            if ($btnSvcGoToProcess) { $btnSvcGoToProcess.IsEnabled = $hasPid }
+
+            if ($ctxStartService)       { $ctxStartService.IsEnabled = $canStart }
+            if ($ctxStopService)        { $ctxStopService.IsEnabled = $canStop }
+            if ($ctxRestartService)     { $ctxRestartService.IsEnabled = $canRestart }
+            if ($ctxServiceProperties)  { $ctxServiceProperties.IsEnabled = $true }
+            if ($ctxGoToServiceProcess) { $ctxGoToServiceProcess.IsEnabled = $hasPid }
+            if ($ctxCopyServiceName)    { $ctxCopyServiceName.IsEnabled = $true }
+        } else {
+            if ($btnSvcStart)       { $btnSvcStart.IsEnabled = $false }
+            if ($btnSvcStop)        { $btnSvcStop.IsEnabled = $false }
+            if ($btnSvcRestart)     { $btnSvcRestart.IsEnabled = $false }
+            if ($btnSvcProperties)  { $btnSvcProperties.IsEnabled = $false }
+            if ($btnSvcGoToProcess) { $btnSvcGoToProcess.IsEnabled = $false }
+
+            if ($ctxStartService)       { $ctxStartService.IsEnabled = $false }
+            if ($ctxStopService)        { $ctxStopService.IsEnabled = $false }
+            if ($ctxRestartService)     { $ctxRestartService.IsEnabled = $false }
+            if ($ctxServiceProperties)  { $ctxServiceProperties.IsEnabled = $false }
+            if ($ctxGoToServiceProcess) { $ctxGoToServiceProcess.IsEnabled = $false }
+            if ($ctxCopyServiceName)    { $ctxCopyServiceName.IsEnabled = $false }
+        }
+    }
+    $gridServices.add_SelectionChanged({ &$updateSvcToolbarButtons })
+    &$updateSvcToolbarButtons
+
+    $actionGoToServiceProcess = {
         $selSvc = $gridServices.SelectedItem
         if ($selSvc -and $selSvc.PID -gt 0 -and $engineHandle.ProcessMap.ContainsKey($selSvc.PID)) {
             $targetVm = $engineHandle.ProcessMap[$selSvc.PID]
@@ -979,7 +1042,264 @@ function Start-PSRPM {
             $gridProcesses.SelectedItem = $targetVm
             $gridProcesses.ScrollIntoView($targetVm)
         }
+    }
+
+    $actionShowServiceProperties = {
+        $selSvc = $gridServices.SelectedItem
+        if (-not $selSvc) { return }
+
+        $sBytes = [System.IO.File]::ReadAllBytes($svcDetailXamlPath)
+        $msSvc = [System.IO.MemoryStream]::new($sBytes)
+        $svcWin = [System.Windows.Markup.XamlReader]::Load($msSvc)
+        $msSvc.Close()
+        $svcWin.Owner = $window
+        if ($appIconFrame) { $svcWin.Icon = $appIconFrame }
+
+        if ($stateContainer.IsDarkTheme) {
+            foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+                if ($window.Resources.Contains($key)) {
+                    $svcWin.Resources[$key] = $window.Resources[$key]
+                }
+            }
+        }
+
+        $svcWin.Title = "$($selSvc.DisplayName) ($($selSvc.Name)) Details & Dependencies [$($stateContainer.TargetDisplayName)]"
+
+        $svcWin.FindName("TxtDlgDisplayName").Text = $selSvc.DisplayName
+        $svcWin.FindName("TxtDlgServiceName").Text = $selSvc.Name
+        $svcWin.FindName("TxtDlgPid").Text = if ($selSvc.PID -gt 0) { [string]$selSvc.PID } else { "None" }
+
+        $badgeStatus = $svcWin.FindName("BadgeDlgStatus")
+        $txtStatus   = $svcWin.FindName("TxtDlgStatus")
+        $txtStatus.Text = $selSvc.Status.ToUpper()
+        $bc = [System.Windows.Media.BrushConverter]::new()
+        if ($selSvc.Status -eq "Running") {
+            $badgeStatus.Background = $bc.ConvertFromString("#16A34A")
+        } elseif ($selSvc.Status -eq "Paused") {
+            $badgeStatus.Background = $bc.ConvertFromString("#D97706")
+        } else {
+            $badgeStatus.Background = $bc.ConvertFromString("#64748B")
+        }
+
+        $txtDesc = $svcWin.FindName("TxtDlgDescription")
+        if ($txtDesc) {
+            $txtDesc.Text = if ($selSvc.Description) { $selSvc.Description } else { "No description available for this service." }
+        }
+        $txtPath = $svcWin.FindName("TxtDlgPath")
+        if ($txtPath) {
+            $txtPath.Text = if ($selSvc.BinaryPath) { $selSvc.BinaryPath } else { "N/A" }
+        }
+        $txtStartup = $svcWin.FindName("TxtDlgStartup")
+        if ($txtStartup) {
+            $txtStartup.Text = $selSvc.StartType
+        }
+        $txtAccount = $svcWin.FindName("TxtDlgAccount")
+        if ($txtAccount) {
+            $txtAccount.Text = $selSvc.User
+        }
+        $txtDepSummary = $svcWin.FindName("TxtDlgDepSummary")
+        if ($txtDepSummary) {
+            $txtDepSummary.Text = if ($selSvc.DependenciesFormatted) { $selSvc.DependenciesFormatted } else { "None" }
+        }
+
+        # Prerequisites List
+        $gridPrereqs = $svcWin.FindName("GridDlgPrereqs")
+        $prereqList = [System.Collections.Generic.List[Object]]::new()
+        if ($selSvc.Dependencies) {
+            $rawDeps = $selSvc.Dependencies -split "[,;/]"
+            foreach ($rawD in $rawDeps) {
+                $dTrim = $rawD.Trim()
+                if (-not $dTrim) { continue }
+                $cleanD = $dTrim.TrimStart('+')
+                $pDisp = $cleanD
+                $pStat = "Unknown"
+                if ($engineHandle.ServicesMap.ContainsKey($cleanD)) {
+                    $matchVm = $engineHandle.ServicesMap[$cleanD]
+                    $pDisp = $matchVm.DisplayName
+                    $pStat = $matchVm.Status
+                } elseif ($cleanD -match "^(Tcpip|RpcSs|HTTP|Afd|NetBT|DxgKrnl|MountMgr|AFD|BFE)$") {
+                    $pStat = "Running (Kernel/Core)"
+                }
+                $prereqList.Add([PSCustomObject]@{
+                    Name        = $cleanD
+                    DisplayName = $pDisp
+                    Status      = $pStat
+                })
+            }
+        }
+        if ($gridPrereqs) {
+            $gridPrereqs.ItemsSource = $prereqList
+        }
+
+        # Dependents List
+        $gridDependents = $svcWin.FindName("GridDlgDependents")
+        $dependentList = [System.Collections.Generic.List[Object]]::new()
+        if ($selSvc.DependentServices) {
+            $rawRev = $selSvc.DependentServices -split "[,;/]"
+            foreach ($rawR in $rawRev) {
+                $rTrim = $rawR.Trim()
+                if (-not $rTrim) { continue }
+                $rDisp = $rTrim
+                $rStat = "Unknown"
+                if ($engineHandle.ServicesMap.ContainsKey($rTrim)) {
+                    $matchVm = $engineHandle.ServicesMap[$rTrim]
+                    $rDisp = $matchVm.DisplayName
+                    $rStat = $matchVm.Status
+                }
+                $dependentList.Add([PSCustomObject]@{
+                    Name        = $rTrim
+                    DisplayName = $rDisp
+                    Status      = $rStat
+                })
+            }
+        }
+        if ($gridDependents) {
+            $gridDependents.ItemsSource = $dependentList
+        }
+
+        # Wire Dialog Action Buttons
+        $btnDlgStart   = $svcWin.FindName("BtnDlgStart")
+        $btnDlgStop    = $svcWin.FindName("BtnDlgStop")
+        $btnDlgRestart = $svcWin.FindName("BtnDlgRestart")
+        $btnDlgClose   = $svcWin.FindName("BtnDlgClose")
+
+        $canStart = ($selSvc.Status -ne "Running")
+        $canStop = ($selSvc.Status -eq "Running" -or $selSvc.Status -eq "Paused")
+        $canRestart = ($selSvc.Status -eq "Running" -or $selSvc.Status -eq "Paused")
+
+        $localSvcWin = $svcWin
+        $localInvoke = $invokeServiceAction
+        $targetSvc   = $selSvc
+
+        if ($btnDlgStart) {
+            $btnDlgStart.IsEnabled = $canStart
+            $btnDlgStart.add_Click({
+                &$localInvoke "Start" $targetSvc
+                $localSvcWin.Close()
+            }.GetNewClosure())
+        }
+        if ($btnDlgStop) {
+            $btnDlgStop.IsEnabled = $canStop
+            $btnDlgStop.add_Click({
+                &$localInvoke "Stop" $targetSvc
+                $localSvcWin.Close()
+            }.GetNewClosure())
+        }
+        if ($btnDlgRestart) {
+            $btnDlgRestart.IsEnabled = $canRestart
+            $btnDlgRestart.add_Click({
+                &$localInvoke "Restart" $targetSvc
+                $localSvcWin.Close()
+            }.GetNewClosure())
+        }
+        if ($btnDlgClose) {
+            $btnDlgClose.add_Click({
+                $localSvcWin.Close()
+            }.GetNewClosure())
+        }
+
+        [void]$svcWin.ShowDialog()
+    }
+
+    if ($btnSvcStart)          { $btnSvcStart.add_Click({ &$invokeServiceAction "Start" }) }
+    if ($btnSvcStop)           { $btnSvcStop.add_Click({ &$invokeServiceAction "Stop" }) }
+    if ($btnSvcRestart)        { $btnSvcRestart.add_Click({ &$invokeServiceAction "Restart" }) }
+    if ($btnSvcProperties)     { $btnSvcProperties.add_Click({ &$actionShowServiceProperties }) }
+    if ($btnSvcGoToProcess)    { $btnSvcGoToProcess.add_Click($actionGoToServiceProcess) }
+
+    if ($ctxStartService)      { $ctxStartService.add_Click({ &$invokeServiceAction "Start" }) }
+    if ($ctxStopService)       { $ctxStopService.add_Click({ &$invokeServiceAction "Stop" }) }
+    if ($ctxRestartService)    { $ctxRestartService.add_Click({ &$invokeServiceAction "Restart" }) }
+    if ($ctxServiceProperties) { $ctxServiceProperties.add_Click({ &$actionShowServiceProperties }) }
+    if ($ctxGoToServiceProcess) { $ctxGoToServiceProcess.add_Click($actionGoToServiceProcess) }
+    if ($ctxCopyServiceName) {
+        $ctxCopyServiceName.add_Click({
+            $sel = $gridServices.SelectedItem
+            if ($sel -and $sel.Name) {
+                [System.Windows.Clipboard]::SetText($sel.Name)
+                &$writeAuditLog "CLIPBOARD" "Copied service name '$($sel.Name)'."
+            }
+        })
+    }
+
+    $gridServices.add_MouseDoubleClick({
+        param($sender, $e)
+        if ($gridServices.SelectedItem) {
+            &$actionShowServiceProperties
+        }
     })
+    $gridServices.add_KeyDown({
+        param($sender, $e)
+        if ($e.Key -eq [System.Windows.Input.Key]::Enter -and $gridServices.SelectedItem) {
+            &$actionShowServiceProperties
+            $e.Handled = $true
+        }
+    })
+
+    $updateSvcSummaryText = {
+        if (-not $txtSvcSummary -or $null -eq $servicesCollection) { return }
+        $totCount = $servicesCollection.Count
+        if ($totCount -eq 0) {
+            $txtSvcSummary.Text = "0 Services"
+            return
+        }
+        $runCount = 0
+        foreach ($svm in $servicesCollection) {
+            if ($svm.Status -eq "Running") { $runCount++ }
+        }
+        $stopCount = $totCount - $runCount
+        $sTerm = if ($txtSearchServices) { $txtSearchServices.Text.Trim() } else { "" }
+        if ([string]::IsNullOrWhiteSpace($sTerm)) {
+            $txtSvcSummary.Text = "$totCount Services ($runCount Running, $stopCount Stopped)"
+        } else {
+            $cv = [System.Windows.Data.CollectionViewSource]::GetDefaultView($servicesCollection)
+            $visCount = 0
+            if ($cv) { foreach ($ci in $cv) { $visCount++ } }
+            $txtSvcSummary.Text = "$visCount of $totCount Services ($runCount Running, $stopCount Stopped)"
+        }
+    }
+
+    $updateServicesFilter = {
+        if ($null -eq $servicesCollection) { return }
+        $filterText = if ($txtSearchServices) { $txtSearchServices.Text.Trim() } else { "" }
+        $svcView = [System.Windows.Data.CollectionViewSource]::GetDefaultView($servicesCollection)
+        if (-not $svcView) { return }
+
+        if ([string]::IsNullOrWhiteSpace($filterText)) {
+            $svcView.Filter = $null
+        } else {
+            $fLower = $filterText.ToLowerInvariant()
+            $svcView.Filter = [Predicate[Object]]{
+                param($item)
+                if (-not $item) { return $false }
+                $n = [string]$item.Name
+                $d = [string]$item.DisplayName
+                $p = [string]$item.PIDFormatted
+                $s = [string]$item.Status
+                $t = [string]$item.StartType
+                $u = [string]$item.User
+                $dp = [string]$item.Dependencies
+                return ($n.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $d.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $p.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $s.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $t.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $u.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $dp.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)
+            }
+        }
+        &$updateSvcSummaryText
+    }
+
+    if ($txtSearchServices) {
+        $txtSearchServices.add_TextChanged({ &$updateServicesFilter })
+    }
+    if ($btnClearSearchServices) {
+        $btnClearSearchServices.add_Click({
+            if ($txtSearchServices) { $txtSearchServices.Text = "" }
+            &$updateServicesFilter
+        })
+    }
 
     # 13. Deep Process Properties Inspector Modal (6-Tab Sysinternals Process Explorer Layout)
     $actionShowProperties = {
@@ -1521,13 +1841,15 @@ function Start-PSRPM {
 
         # 4. Swap SummaryBar & ServicesCollection
         if ($summaryBar) { $summaryBar.DataContext = $targetTabVm.SummaryVm }
-        if ($servicesCollection) {
+        if ($null -ne $servicesCollection) {
             $servicesCollection.Clear()
-            if ($targetTabVm.ServicesMap) {
+            if ($null -ne $targetTabVm.ServicesMap) {
                 foreach ($sItem in $targetTabVm.ServicesMap.Values) {
                     $servicesCollection.Add($sItem)
                 }
             }
+            if ($updateSvcSummaryText) { &$updateSvcSummaryText }
+            if ($updateSvcToolbarButtons) { &$updateSvcToolbarButtons }
         }
 
         # 5. Update Tab visual highlights
@@ -2121,17 +2443,26 @@ function Start-PSRPM {
         } elseif ($e.Key -eq [System.Windows.Input.Key]::F5) {
             &$triggerImmediateRefresh
             $e.Handled = $true
-        } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $txtSearch.IsKeyboardFocusWithin) {
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin)) {
             &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused)
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::F) {
-            if ($txtSearch) {
+            $mainTabs = $window.FindName("MainTabControl")
+            if ($mainTabs -and $mainTabs.SelectedIndex -eq 1 -and $txtSearchServices) {
+                $txtSearchServices.Focus()
+                $txtSearchServices.SelectAll()
+            } elseif ($txtSearch) {
                 $txtSearch.Focus()
                 $txtSearch.SelectAll()
             }
             $e.Handled = $true
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Escape) {
-            if ($txtSearch -and ($txtSearch.Text.Length -gt 0 -or $txtSearch.IsKeyboardFocusWithin)) {
+            if ($txtSearchServices -and ($txtSearchServices.Text.Length -gt 0 -or $txtSearchServices.IsKeyboardFocusWithin)) {
+                $txtSearchServices.Text = ""
+                &$updateServicesFilter
+                $gridServices.Focus()
+                $e.Handled = $true
+            } elseif ($txtSearch -and ($txtSearch.Text.Length -gt 0 -or $txtSearch.IsKeyboardFocusWithin)) {
                 $txtSearch.Text = ""
                 $stateContainer.FilterText = ""
                 & $engineHandle.RefreshTree
@@ -2170,7 +2501,7 @@ function Start-PSRPM {
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::S) {
             &$exportSnapshot "CSV"
             $e.Handled = $true
-        } elseif ($e.Key -eq [System.Windows.Input.Key]::Left -and -not $txtSearch.IsKeyboardFocusWithin -and $stateContainer.IsTreeMode) {
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Left -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin) -and $stateContainer.IsTreeMode) {
             $sel = $gridProcesses.SelectedItem
             if ($sel) {
                 if (($sel.HasChildren -or $sel.Children.Count -gt 0) -and $sel.IsExpanded) {
@@ -2185,7 +2516,7 @@ function Start-PSRPM {
                     $e.Handled = $true
                 }
             }
-        } elseif ($e.Key -eq [System.Windows.Input.Key]::Right -and -not $txtSearch.IsKeyboardFocusWithin -and $stateContainer.IsTreeMode) {
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Right -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin) -and $stateContainer.IsTreeMode) {
             $sel = $gridProcesses.SelectedItem
             if ($sel -and ($sel.HasChildren -or $sel.Children.Count -gt 0)) {
                 if (-not $sel.IsExpanded) {
@@ -2200,7 +2531,7 @@ function Start-PSRPM {
                     $e.Handled = $true
                 }
             }
-        } elseif ($e.Key -eq [System.Windows.Input.Key]::Delete -and -not $txtSearch.IsKeyboardFocusWithin) {
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Delete -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin)) {
             if ($isShift) {
                 &$invokeProcessAction "KillTree" $null
             } else {

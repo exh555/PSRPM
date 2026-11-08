@@ -26,6 +26,11 @@
         <SolidColorBrush x:Key="BrushSparkBg" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="BrushSparkBorder" Color="#94A3B8"/>
 
+        <!-- Menu Theme Brushes (Clean Light Default vs Precision Dark) -->
+        <SolidColorBrush x:Key="BrushMenuBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushMenuBorder" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BrushMenuHover" Color="#F1F5F9"/>
+
         <!-- Subtle Column Metric Tints (Process Explorer Classic Column Tints) -->
         <SolidColorBrush x:Key="ColTint_CPU" Color="#2222C55E"/>
         <SolidColorBrush x:Key="ColTint_PrivateBytes" Color="#28EAB308"/>
@@ -80,6 +85,231 @@
             <Setter Property="Padding" Value="6,0,4,0"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
+
+        <!-- Menu &amp; ContextMenu Separator Style -->
+        <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Background="{TemplateBinding Background}" Margin="24,3,4,3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Top-Level Menu Header Template (File, Options, View, Process, Help) -->
+        <ControlTemplate x:Key="TopLevelHeaderTemplate" TargetType="MenuItem">
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="2" Padding="7,3" Margin="1,0">
+                <Grid>
+                    <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                    <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                           IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                           Placement="Bottom" PopupAnimation="Fade" VerticalOffset="1">
+                        <Border Background="{DynamicResource BrushMenuBg}"
+                                BorderBrush="{DynamicResource BrushMenuBorder}"
+                                BorderThickness="1" CornerRadius="3" Padding="2">
+                            <ItemsPresenter Grid.IsSharedSizeScope="True" SnapsToDevicePixels="True"
+                                            KeyboardNavigation.TabNavigation="Cycle"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </Popup>
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsHighlighted" Value="True"/>
+                        <Condition Property="IsEnabled" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushMenuHover}"/>
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                </MultiTrigger>
+                <Trigger Property="IsSubmenuOpen" Value="True">
+                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushMenuHover}"/>
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- Top-Level Menu Item Template (Standalone Action on Menu Bar) -->
+        <ControlTemplate x:Key="TopLevelItemTemplate" TargetType="MenuItem">
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="2" Padding="7,3" Margin="1,0">
+                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsHighlighted" Value="True"/>
+                        <Condition Property="IsEnabled" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushMenuHover}"/>
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                </MultiTrigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- Dropdown &amp; Context Submenu Item Template -->
+        <ControlTemplate x:Key="SubmenuItemTemplate" TargetType="MenuItem">
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="2" Padding="2,4" Margin="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22" SharedSizeGroup="MenuItemIconColumnGroup"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGestureColumnGroup"/>
+                        <ColumnDefinition Width="16"/>
+                    </Grid.ColumnDefinitions>
+                    <Path x:Name="Checkmark" Grid.Column="0"
+                          Data="M 2.5,6.5 L 5.5,9.5 L 11.5,3.5"
+                          Stroke="{DynamicResource BrushTextPrimary}"
+                          StrokeThickness="1.8"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round"
+                          Width="14" Height="14"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Visibility="Collapsed"/>
+                    <ContentPresenter x:Name="IconHost" Grid.Column="0" ContentSource="Icon" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <ContentPresenter Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" Margin="6,0,16,0"/>
+                    <TextBlock x:Name="GestureText" Grid.Column="2" Text="{TemplateBinding InputGestureText}" FontWeight="Normal" FontSize="11" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0,4,0"/>
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="Checkmark" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="IconHost" Property="Visibility" Value="Collapsed"/>
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsHighlighted" Value="True"/>
+                        <Condition Property="IsEnabled" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushMenuHover}"/>
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                    <Setter TargetName="GestureText" Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+                </MultiTrigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
+                    <Setter TargetName="Checkmark" Property="Stroke" Value="{DynamicResource BrushTextMuted}"/>
+                    <Setter TargetName="GestureText" Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- Nested Dropdown Submenu Header Template (Update Speed, Set Priority) -->
+        <ControlTemplate x:Key="SubmenuHeaderTemplate" TargetType="MenuItem">
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="2" Padding="2,4" Margin="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22" SharedSizeGroup="MenuItemIconColumnGroup"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGestureColumnGroup"/>
+                        <ColumnDefinition Width="16"/>
+                    </Grid.ColumnDefinitions>
+                    <Path x:Name="Checkmark" Grid.Column="0"
+                          Data="M 2.5,6.5 L 5.5,9.5 L 11.5,3.5"
+                          Stroke="{DynamicResource BrushTextPrimary}"
+                          StrokeThickness="1.8"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round"
+                          Width="14" Height="14"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Visibility="Collapsed"/>
+                    <ContentPresenter x:Name="IconHost" Grid.Column="0" ContentSource="Icon" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <ContentPresenter Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" Margin="6,0,16,0"/>
+                    <TextBlock x:Name="GestureText" Grid.Column="2" Text="{TemplateBinding InputGestureText}" FontWeight="Normal" FontSize="11" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0,4,0"/>
+                    <Path x:Name="Arrow" Grid.Column="3" Data="M 0,0 L 4,3.5 L 0,7 Z" Fill="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                           IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                           Placement="Right" HorizontalOffset="-2" VerticalOffset="-2" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource BrushMenuBg}"
+                                BorderBrush="{DynamicResource BrushMenuBorder}"
+                                BorderThickness="1" CornerRadius="3" Padding="2">
+                            <ItemsPresenter Grid.IsSharedSizeScope="True" SnapsToDevicePixels="True"
+                                            KeyboardNavigation.TabNavigation="Cycle"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </Popup>
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="Checkmark" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="IconHost" Property="Visibility" Value="Collapsed"/>
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsHighlighted" Value="True"/>
+                        <Condition Property="IsEnabled" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushMenuHover}"/>
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                    <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource BrushTextPrimary}"/>
+                    <Setter TargetName="GestureText" Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+                </MultiTrigger>
+                <Trigger Property="IsSubmenuOpen" Value="True">
+                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushMenuHover}"/>
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                    <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource BrushTextPrimary}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
+                    <Setter TargetName="Arrow" Property="Fill" Value="{DynamicResource BrushTextMuted}"/>
+                    <Setter TargetName="GestureText" Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- Unified MenuItem Style routing by Role -->
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Style.Triggers>
+                <Trigger Property="Role" Value="TopLevelHeader">
+                    <Setter Property="Template" Value="{StaticResource TopLevelHeaderTemplate}"/>
+                </Trigger>
+                <Trigger Property="Role" Value="TopLevelItem">
+                    <Setter Property="Template" Value="{StaticResource TopLevelItemTemplate}"/>
+                </Trigger>
+                <Trigger Property="Role" Value="SubmenuItem">
+                    <Setter Property="Template" Value="{StaticResource SubmenuItemTemplate}"/>
+                </Trigger>
+                <Trigger Property="Role" Value="SubmenuHeader">
+                    <Setter Property="Template" Value="{StaticResource SubmenuHeaderTemplate}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Clean ContextMenu Flyout Style -->
+        <Style x:Key="ContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="Background" Value="{DynamicResource BrushMenuBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushMenuBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="Grid.IsSharedSizeScope" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ItemsPresenter SnapsToDevicePixels="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ContextMenu" BasedOn="{StaticResource ContextMenuStyle}"/>
     </Window.Resources>
 
     <DockPanel>
@@ -554,7 +784,7 @@
                     </DataGrid.Columns>
 
                     <DataGrid.ContextMenu>
-                        <ContextMenu>
+                        <ContextMenu Style="{StaticResource ContextMenuStyle}">
                             <MenuItem x:Name="CtxProperties" Header="Properties..." InputGestureText="Enter" FontWeight="Bold"/>
                             <Separator/>
                             <MenuItem x:Name="CtxSuspend" Header="Suspend Process"/>
@@ -572,35 +802,133 @@
 
             <!-- Tab 2: Windows Services -->
             <TabItem Header="Services">
-                <DataGrid x:Name="GridServices"
-                          AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
-                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                          HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
-                          Background="{DynamicResource BrushSurfaceBg}" RowHeaderWidth="0" RowHeight="22">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" SortMemberPath="Name" Width="170" ElementStyle="{StaticResource EllipsisCellText}"/>
-                        <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" SortMemberPath="DisplayName" Width="300" ElementStyle="{StaticResource EllipsisCellText}"/>
-                        <DataGridTextColumn Header="Host PID" Binding="{Binding PID}" SortMemberPath="PID" Width="75" ElementStyle="{StaticResource RightTabularText}"/>
-                        <DataGridTemplateColumn Header="Status" SortMemberPath="Status" Width="100">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" Padding="6,0"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Startup Type" Binding="{Binding StartType}" SortMemberPath="StartType" Width="115" ElementStyle="{StaticResource EllipsisCellText}"/>
-                        <DataGridTextColumn Header="Log On As" Binding="{Binding User}" SortMemberPath="User" Width="*" ElementStyle="{StaticResource EllipsisCellText}"/>
-                    </DataGrid.Columns>
-                    <DataGrid.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem x:Name="CtxStartService" Header="Start Service"/>
-                            <MenuItem x:Name="CtxStopService" Header="Stop Service"/>
-                            <MenuItem x:Name="CtxRestartService" Header="Restart Service"/>
-                            <Separator/>
-                            <MenuItem x:Name="CtxGoToServiceProcess" Header="Select Host Process in Tree"/>
-                        </ContextMenu>
-                    </DataGrid.ContextMenu>
-                </DataGrid>
+                <DockPanel Background="{DynamicResource BrushSurfaceBg}">
+                    <!-- Services Action &amp; Filter Toolbar -->
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,0,0,1" Padding="6,3">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="BtnSvcStart" Content="Start Service" Style="{StaticResource ToolbarButtonStyle}" FontWeight="SemiBold" ToolTip="Start selected service"/>
+                                <Button x:Name="BtnSvcStop" Content="Stop Service" Style="{StaticResource ToolbarButtonStyle}" FontWeight="SemiBold" ToolTip="Stop selected service"/>
+                                <Button x:Name="BtnSvcRestart" Content="Restart Service" Style="{StaticResource ToolbarButtonStyle}" FontWeight="SemiBold" ToolTip="Restart selected service"/>
+                                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="4,2"/>
+                                <Button x:Name="BtnSvcProperties" Content="Properties &amp; Dependencies..." Style="{StaticResource ToolbarButtonStyle}" FontWeight="SemiBold" ToolTip="View service details, description and two-way dependencies (Enter / Double-Click)"/>
+                                <Button x:Name="BtnSvcGoToProcess" Content="Select Process in Tree" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Select host process (svchost.exe) in Process Tree"/>
+                                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="4,2"/>
+                                <TextBlock x:Name="TxtSvcSummary" Text="0 Services" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" Margin="6,0"/>
+                            </StackPanel>
+
+                            <!-- Services Filter Box -->
+                            <Border Grid.Column="1" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="2" VerticalAlignment="Center" Height="24">
+                                <DockPanel>
+                                    <Path DockPanel.Dock="Left" Data="M15.5,14h-0.79l-0.28-0.27C15.41,12.59,16,11.11,16,9.5C16,5.91,13.09,3,9.5,3S3,5.91,3,9.5S5.91,16,9.5,16c1.61,0,3.09-0.59,4.23-1.57l0.27,0.28v0.79l5,4.99L20.49,19L15.5,14z M9.5,14C7.01,14,5,11.99,5,9.5S7.01,5,9.5,5S14,7.01,14,9.5S11.99,14,9.5,14z"
+                                          Fill="{DynamicResource BrushTextMuted}" Width="11" Height="11" Stretch="Uniform" Margin="6,0,2,0" VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnClearSearchServices" DockPanel.Dock="Right" Content="X" Width="18" Background="Transparent" BorderThickness="0" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Cursor="Hand" ToolTip="Clear Filter (Esc)"/>
+                                    <TextBox x:Name="TxtSearchServices" Width="180" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}" VerticalContentAlignment="Center" Padding="4,0" ToolTip="Filter services by Name, Display Name, PID, Status, or Account"/>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Services DataGrid -->
+                    <DataGrid x:Name="GridServices"
+                              AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
+                              Background="{DynamicResource BrushSurfaceBg}"
+                              Foreground="{DynamicResource BrushTextPrimary}"
+                              RowHeaderWidth="0" RowHeight="22" BorderThickness="0">
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{DynamicResource BrushHeaderBg}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="Padding" Value="6,3"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
+
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                <Setter Property="Height" Value="22"/>
+                                <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.CellStyle>
+
+                        <DataGrid.Columns>
+                            <!-- Column 1: Service Name -->
+                            <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" SortMemberPath="Name" Width="160" ElementStyle="{StaticResource EllipsisCellText}"/>
+
+                            <!-- Column 2: Display Name -->
+                            <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" SortMemberPath="DisplayName" Width="260" ElementStyle="{StaticResource EllipsisCellText}"/>
+
+                            <!-- Column 3: Host PID -->
+                            <DataGridTextColumn Header="Host PID" Binding="{Binding PIDFormatted}" SortMemberPath="PID" Width="75" ElementStyle="{StaticResource RightTabularText}"/>
+
+                            <!-- Column 4: Status -->
+                            <DataGridTemplateColumn Header="Status" SortMemberPath="Status" Width="95">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" Padding="6,0"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- Column 5: Startup Type -->
+                            <DataGridTextColumn Header="Startup Type" Binding="{Binding StartType}" SortMemberPath="StartType" Width="100" ElementStyle="{StaticResource EllipsisCellText}"/>
+
+                            <!-- Column 6: Log On As -->
+                            <DataGridTextColumn Header="Log On As" Binding="{Binding User}" SortMemberPath="User" Width="140" ElementStyle="{StaticResource EllipsisCellText}"/>
+
+                            <!-- Column 7: Dependencies -->
+                            <DataGridTextColumn Header="Dependencies" Binding="{Binding DependenciesFormatted}" SortMemberPath="Dependencies" Width="*" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        </DataGrid.Columns>
+
+                        <DataGrid.ContextMenu>
+                            <ContextMenu Style="{StaticResource ContextMenuStyle}">
+                                <MenuItem x:Name="CtxStartService" Header="Start Service"/>
+                                <MenuItem x:Name="CtxStopService" Header="Stop Service"/>
+                                <MenuItem x:Name="CtxRestartService" Header="Restart Service"/>
+                                <Separator/>
+                                <MenuItem x:Name="CtxServiceProperties" Header="Properties &amp; Dependencies..." InputGestureText="Enter" FontWeight="Bold"/>
+                                <MenuItem x:Name="CtxGoToServiceProcess" Header="Select Host Process in Tree"/>
+                                <Separator/>
+                                <MenuItem x:Name="CtxCopyServiceName" Header="Copy Service Name"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                    </DataGrid>
+                </DockPanel>
             </TabItem>
         </TabControl>
     </DockPanel>
