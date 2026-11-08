@@ -134,7 +134,12 @@ $script:PSRPMCollectorScriptBlock = {
         $script:ScratchBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8192)
         $script:ExePathSb      = [System.Text.StringBuilder]::new(1024)
 
-        # mscorlib GlobalMemoryStatusEx Reflection Binding
+        # Pre-allocated JSON Serializer (Zero Per-Tick Allocation Churn)
+        Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
+        $script:Jss            = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+        $script:Jss.MaxJsonLength = 10485760
+
+        # mscorlib GlobalMemoryStatusEx Reflection Binding (Fallback)
         $wnType = [int].Assembly.GetType("Microsoft.Win32.Win32Native")
         $script:GmsMethod      = $wnType.GetMethod("GlobalMemoryStatusEx", [System.Reflection.BindingFlags]"Public,NonPublic,Static")
         $msType                = $wnType.GetNestedType("MEMORYSTATUSEX", [System.Reflection.BindingFlags]"Public,NonPublic")
@@ -624,28 +629,84 @@ $script:PSRPMCollectorScriptBlock = {
 
     # 5. Reclaim Dead Process Keys & Build Dead PIDs List
     $deadPids = [System.Collections.Generic.List[int]]::new()
-    $staleKeys = @($script:ProcCpuCache.Keys | Where-Object { -not $currKeys.Contains($_) })
+    $staleKeys = [System.Collections.Generic.List[string]]::new()
+    foreach ($sk in $script:ProcCpuCache.Keys) {
+        if (-not $currKeys.Contains($sk)) { $staleKeys.Add($sk) }
+    }
     foreach ($sk in $staleKeys) {
         $script:ProcCpuCache.Remove($sk)
         $script:ProcMetaCache.Remove($sk)
         $script:LastDynState.Remove($sk)
         [void]$script:SentMetaKeys.Remove($sk)
     }
-    $stalePids = @($script:ActivePidToKey.Keys | Where-Object { -not $currPids.Contains($_) })
+    $stalePids = [System.Collections.Generic.List[int]]::new()
+    foreach ($sp in $script:ActivePidToKey.Keys) {
+        if (-not $currPids.Contains($sp)) { $stalePids.Add($sp) }
+    }
     foreach ($sp in $stalePids) {
         $script:ActivePidToKey.Remove($sp)
         $deadPids.Add($sp)
     }
 
     # 6. Zero-WMI System Memory, Kernel Performance & Per-Core CPU Calculation (< 0.02 ms)
-    $gmsArgs = [object[]]@($script:MemStatInst)
-    [void]$script:GmsMethod.Invoke($null, $gmsArgs)
-    $msOut         = $gmsArgs[0]
-    $ramTotalMB    = [Math]::Round([long]$script:F_TotalPhys.GetValue($msOut) / 1MB)
-    $ramAvailMB    = [Math]::Round([long]$script:F_AvailPhys.GetValue($msOut) / 1MB)
-    $ramUsedMB     = $ramTotalMB - $ramAvailMB
-    $commitLimitMB = [Math]::Round([long]$script:F_TotalPage.GetValue($msOut) / 1MB)
-    $commitUsedMB  = $commitLimitMB - [Math]::Round([long]$script:F_AvailPage.GetValue($msOut) / 1MB)
+    # psapi.dll!GetPerformanceInfo (Exact KB Commit Charge, Physical Cache & Kernel Pool Counters)
+    $commitCurKB      = 0L
+    $commitLimKB      = 0L
+    $commitPeakKB     = 0L
+    $physTotalKB      = 0L
+    $physAvailKB      = 0L
+    $sysCacheKB       = 0L
+    $kernelPagedKB    = 0L
+    $kernelNonPagedKB = 0L
+
+    $perfCb = if ($is64) { 104 } else { 56 }
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($script:ScratchBufPtr, 0, $perfCb)
+    $perfSuccess = ([PSRPM.NativeCollectorV2]::GetPerformanceInfo($script:ScratchBufPtr, [uint32]$perfCb) -ne 0)
+
+    if ($perfSuccess) {
+        if ($is64) {
+            $pageSz    = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 80)
+            $pageMulKB = if ($pageSz -gt 0L) { [long]($pageSz / 1024L) } else { 4L }
+            $commitCurKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 8)  * $pageMulKB
+            $commitLimKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 16) * $pageMulKB
+            $commitPeakKB     = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 24) * $pageMulKB
+            $physTotalKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 32) * $pageMulKB
+            $physAvailKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 40) * $pageMulKB
+            $sysCacheKB       = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 48) * $pageMulKB
+            $kernelPagedKB    = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 64) * $pageMulKB
+            $kernelNonPagedKB = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 72) * $pageMulKB
+        } else {
+            $pageSz    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 40) -band 0xFFFFFFFFL)
+            $pageMulKB = if ($pageSz -gt 0L) { [long]($pageSz / 1024L) } else { 4L }
+            $commitCurKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 4)  -band 0xFFFFFFFFL) * $pageMulKB
+            $commitLimKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 8)  -band 0xFFFFFFFFL) * $pageMulKB
+            $commitPeakKB     = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 12) -band 0xFFFFFFFFL) * $pageMulKB
+            $physTotalKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 16) -band 0xFFFFFFFFL) * $pageMulKB
+            $physAvailKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 20) -band 0xFFFFFFFFL) * $pageMulKB
+            $sysCacheKB       = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 24) -band 0xFFFFFFFFL) * $pageMulKB
+            $kernelPagedKB    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 32) -band 0xFFFFFFFFL) * $pageMulKB
+            $kernelNonPagedKB = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 36) -band 0xFFFFFFFFL) * $pageMulKB
+        }
+        $ramTotalMB    = [Math]::Round($physTotalKB / 1024L)
+        $ramAvailMB    = [Math]::Round($physAvailKB / 1024L)
+        $ramUsedMB     = [Math]::Max(0L, $ramTotalMB - $ramAvailMB)
+        $commitLimitMB = [Math]::Round($commitLimKB / 1024L)
+        $commitUsedMB  = [Math]::Round($commitCurKB / 1024L)
+    } else {
+        $gmsArgs = [object[]]@($script:MemStatInst)
+        [void]$script:GmsMethod.Invoke($null, $gmsArgs)
+        $msOut         = $gmsArgs[0]
+        $ramTotalMB    = [Math]::Round([long]$script:F_TotalPhys.GetValue($msOut) / 1MB)
+        $ramAvailMB    = [Math]::Round([long]$script:F_AvailPhys.GetValue($msOut) / 1MB)
+        $ramUsedMB     = [Math]::Max(0L, $ramTotalMB - $ramAvailMB)
+        $commitLimitMB = [Math]::Round([long]$script:F_TotalPage.GetValue($msOut) / 1MB)
+        $commitUsedMB  = $commitLimitMB - [Math]::Round([long]$script:F_AvailPage.GetValue($msOut) / 1MB)
+        $commitCurKB   = $commitUsedMB * 1024L
+        $commitLimKB   = $commitLimitMB * 1024L
+        $commitPeakKB  = $commitCurKB
+        $physTotalKB   = $ramTotalMB * 1024L
+        $physAvailKB   = $ramAvailMB * 1024L
+    }
 
     $systemCpu = if ($idleCpuDelta -gt 0L -and $totalCapacityTicks -gt 0) {
         $busyPct = 100.0 - (($idleCpuDelta / $totalCapacityTicks) * 100.0)
@@ -762,55 +823,22 @@ $script:PSRPMCollectorScriptBlock = {
     }
     $script:HasKernelBaseline = $true
 
-    # C. psapi.dll!GetPerformanceInfo (Exact KB Commit Charge, Physical Cache & Kernel Pool Counters)
-    $commitCurKB      = $commitUsedMB * 1024L
-    $commitLimKB      = $commitLimitMB * 1024L
-    $commitPeakKB     = $commitCurKB
-    $physTotalKB      = $ramTotalMB * 1024L
-    $physAvailKB      = $ramAvailMB * 1024L
-    $sysCacheKB       = 0L
-    $kernelPagedKB    = 0L
-    $kernelNonPagedKB = 0L
-
-    $perfCb = if ($is64) { 104 } else { 56 }
-    [System.Runtime.InteropServices.Marshal]::WriteInt32($script:ScratchBufPtr, 0, $perfCb)
-    if ([PSRPM.NativeCollectorV2]::GetPerformanceInfo($script:ScratchBufPtr, [uint32]$perfCb) -ne 0) {
-        if ($is64) {
-            $pageSz    = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 80)
-            $pageMulKB = if ($pageSz -gt 0L) { [long]($pageSz / 1024L) } else { 4L }
-            $commitCurKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 8)  * $pageMulKB
-            $commitLimKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 16) * $pageMulKB
-            $commitPeakKB     = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 24) * $pageMulKB
-            $physTotalKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 32) * $pageMulKB
-            $physAvailKB      = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 40) * $pageMulKB
-            $sysCacheKB       = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 48) * $pageMulKB
-            $kernelPagedKB    = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 64) * $pageMulKB
-            $kernelNonPagedKB = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 72) * $pageMulKB
-        } else {
-            $pageSz    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 40) -band 0xFFFFFFFFL)
-            $pageMulKB = if ($pageSz -gt 0L) { [long]($pageSz / 1024L) } else { 4L }
-            $commitCurKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 4)  -band 0xFFFFFFFFL) * $pageMulKB
-            $commitLimKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 8)  -band 0xFFFFFFFFL) * $pageMulKB
-            $commitPeakKB     = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 12) -band 0xFFFFFFFFL) * $pageMulKB
-            $physTotalKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 16) -band 0xFFFFFFFFL) * $pageMulKB
-            $physAvailKB      = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 20) -band 0xFFFFFFFFL) * $pageMulKB
-            $sysCacheKB       = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 24) -band 0xFFFFFFFFL) * $pageMulKB
-            $kernelPagedKB    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 32) -band 0xFFFFFFFFL) * $pageMulKB
-            $kernelNonPagedKB = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 36) -band 0xFFFFFFFFL) * $pageMulKB
-        }
-    }
+    # C. psapi.dll!GetPerformanceInfo counters already computed natively in Section 6
 
     $script:LastSnapTicks = $nowTicks
 
     # 7. Fast Compact JSON Construction + GZip Compression
-    Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
-    $jss = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
-    $jss.MaxJsonLength = 10485760
+    $jss = if ($script:Jss) { $script:Jss } else {
+        Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
+        [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+    }
 
     $sysCpuStr  = $systemCpu.ToString($inv)
     $kernCpuStr = $kernelCpu.ToString($inv)
     $isFullNum  = if ($script:SeqNumber -eq 1 -or $ForceFullSync) { 1 } else { 0 }
     $hwJson     = if ($isFullNum -eq 1) { $jss.Serialize($script:CachedHwInfo) } else { 'null' }
+    $metaJson   = if ($newMetaList.Count -gt 0) { $jss.Serialize($newMetaList) } else { '[]' }
+    $svcJson    = if ($null -ne $servicesPayload) { $jss.Serialize($servicesPayload) } else { 'null' }
 
     $sb = [System.Text.StringBuilder]::new(8192)
     [void]$sb.Append('{"seq":').Append($script:SeqNumber)
@@ -819,8 +847,8 @@ $script:PSRPMCollectorScriptBlock = {
     [void]$sb.Append(',"cores":[').Append(($coreTuples -join ',')).Append(']')
     [void]$sb.Append(',"hw":').Append($hwJson)
     [void]$sb.Append(',"dead":[').Append(($deadPids -join ',')).Append(']')
-    [void]$sb.Append(',"meta":').Append($jss.Serialize($newMetaList))
-    [void]$sb.Append(',"svc":').Append($(if ($null -ne $servicesPayload) { $jss.Serialize($servicesPayload) } else { 'null' }))
+    [void]$sb.Append(',"meta":').Append($metaJson)
+    [void]$sb.Append(',"svc":').Append($svcJson)
     [void]$sb.Append(',"dyn":[').Append(($dynDeltaList -join ',')).Append(']}')
 
     $rawBytes = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())

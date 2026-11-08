@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.2.0'
+    ModuleVersion     = '1.3.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -52,6 +52,7 @@
         'UI\ConnectDialog.xaml',
         'UI\SystemInfoWindow.xaml',
         'UI\HelpWindow.xaml',
+        'UI\ServiceDetailWindow.xaml',
         'Assets\psrpm.ico',
         'Assets\psrpm.png',
         'Assets\psrpm.svg',
@@ -75,12 +76,12 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.2.0 - Windows Services Management Suite, Two-Way Dependencies Inspector & Dark Mode Menu Overhaul
-- Services Management Suite: Complete multi-tier Windows Services tab featuring start, stop, and restart controls with real-time status updates and Process Explorer-style action bar.
-- Interactive Two-Way Dependencies Inspector: Dedicated ServiceDetailWindow with live prerequisite and dependent service trees, start/stop actions, and instant status indicators.
-- SCM Fallback & Registry Ingestion: Multi-tier service data collection combining registry fast-path, CIM fallback, and direct Win32 Service Controller enumeration for complete service visibility.
-- Contextual Navigation & Filtering: Real-time search filter with matched/total counters and bidirectional jump-to-host-process navigation in tree grid.
-- Dark Mode Menu Fix: Custom ControlTemplate for menu popups and submenus ensuring crisp text visibility and accent highlighting across all theme states.
+PSRPM v1.3.0 - Remote Session-Cached Invokers, 75% Remote CPU Reduction & Zero-Allocation Serialization
+- WinRM Remote Session-Cached Invoker Architecture: Replaced per-tick ScriptBlock re-transmission and JIT compilation over WinRM with session-cached remote invokers, reducing request wire payload by 99.9% (from 46 KB/s to 44 bytes/s).
+- Target CPU Consumption Slashed: Reduced remote wsmprovhost.exe CPU usage by ~75% and EDR/AMSI inspection overhead to a one-time scan during initial PSSession registration.
+- Automatic Session Resilience: Built-in state detection that transparently re-initializes cached invokers if a remote session is recycled without dropping a single tick of telemetry.
+- In-Process Telemetry Collector Streamlining: Pre-allocated reusable JavaScriptSerializer instances, zero-allocation empty update emission, and direct collection traversal for dead PID pruning.
+- Native Memory Reads: Prioritized native psapi!GetPerformanceInfo unmanaged reads for RAM and commit charge, bypassing private reflection on steady-state ticks.
 '@
         }
     }

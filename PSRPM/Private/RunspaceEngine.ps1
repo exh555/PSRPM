@@ -111,15 +111,18 @@ function Start-PSRPMEngine {
         $inspectorSb = [scriptblock]::Create($inspectorCode)
         $actionSb    = [scriptblock]::Create($actionCode)
 
-        # Multi-Host Session Dictionary (TabId -> @{ Session, IsLocal, Target, Badge, CollectorSb })
+        # Multi-Host Session Dictionary (TabId -> @{ Session, IsLocal, Target, Badge, CollectorSb, ... })
         $sessions = @{}
         $initBadge = if ($isLocalMode) { "LOCAL" } else { "WINRM" }
         $sessions[$initTabId] = @{
-            Session     = $session
-            IsLocal     = $isLocalMode
-            Target      = $stateContainer.TargetDisplayName
-            Badge       = $initBadge
-            CollectorSb = $collectorSb
+            Session              = $session
+            IsLocal              = $isLocalMode
+            Target               = $stateContainer.TargetDisplayName
+            Badge                = $initBadge
+            CollectorSb          = $collectorSb
+            CollectorInitialized = $false
+            InspectorInitialized = $false
+            ActionInitialized    = $false
         }
         $activeTabId = $initTabId
 
@@ -143,7 +146,21 @@ function Start-PSRPMEngine {
                             $jsonRes = if ($useLocal) {
                                 & $inspectorSb $targetPid $verifySig $inspectMode
                             } else {
-                                Invoke-Command -Session $useSess -ScriptBlock $inspectorSb -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
+                                if ($activeSessObj -and -not $activeSessObj.InspectorInitialized) {
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($code)
+                                        $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
+                                    } -ArgumentList @($inspectorCode) -ErrorAction Stop
+                                    $activeSessObj.InspectorInitialized = $true
+                                }
+                                Invoke-Command -Session $useSess -ScriptBlock {
+                                    param($p, $v, $m)
+                                    if ($script:PSRPMInspectorInvoker) {
+                                        & $script:PSRPMInspectorInvoker $p $v $m
+                                    } else {
+                                        $null
+                                    }
+                                } -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -169,7 +186,21 @@ function Start-PSRPMEngine {
                             $jsonRes = if ($useLocal) {
                                 & $actionSb $actName $tPid $expName $svcName $prio
                             } else {
-                                Invoke-Command -Session $useSess -ScriptBlock $actionSb -ArgumentList @($actName, $tPid, $expName, $svcName, $prio) -ErrorAction Stop
+                                if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($code)
+                                        $script:PSRPMActionInvoker = [scriptblock]::Create($code)
+                                    } -ArgumentList @($actionCode) -ErrorAction Stop
+                                    $activeSessObj.ActionInitialized = $true
+                                }
+                                Invoke-Command -Session $useSess -ScriptBlock {
+                                    param($a, $p, $e, $s, $pr)
+                                    if ($script:PSRPMActionInvoker) {
+                                        & $script:PSRPMActionInvoker $a $p $e $s $pr
+                                    } else {
+                                        $null
+                                    }
+                                } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio) -ErrorAction Stop
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -210,11 +241,14 @@ function Start-PSRPMEngine {
                             }
 
                             $sessions[$newTabId] = @{
-                                Session     = $newSess
-                                IsLocal     = $newLocal
-                                Target      = $targetName
-                                Badge       = $badge
-                                CollectorSb = [scriptblock]::Create($collectorCode)
+                                Session              = $newSess
+                                IsLocal              = $newLocal
+                                Target               = $targetName
+                                Badge                = $badge
+                                CollectorSb          = [scriptblock]::Create($collectorCode)
+                                CollectorInitialized = $false
+                                InspectorInitialized = $false
+                                ActionInitialized    = $false
                             }
 
                             $activeTabId = $newTabId
@@ -328,11 +362,14 @@ function Start-PSRPMEngine {
                             }
 
                             $sessions[$activeTabId] = @{
-                                Session     = $newSess
-                                IsLocal     = $newLocal
-                                Target      = $targetName
-                                Badge       = $badge
-                                CollectorSb = [scriptblock]::Create($collectorCode)
+                                Session              = $newSess
+                                IsLocal              = $newLocal
+                                Target               = $targetName
+                                Badge                = $badge
+                                CollectorSb          = [scriptblock]::Create($collectorCode)
+                                CollectorInitialized = $false
+                                InspectorInitialized = $false
+                                ActionInitialized    = $false
                             }
 
                             $stateContainer.ClearHostMaps = $true
@@ -374,7 +411,28 @@ function Start-PSRPMEngine {
                         if (-not $sRef -or $sRef.State -ne 'Opened') {
                             throw "WinRM session is not open (State: $(if ($sRef) { $sRef.State } else { 'Null' }))."
                         }
-                        Invoke-Command -Session $sRef -ScriptBlock $collectorSb -ArgumentList @($forceFull) -ErrorAction Stop
+                        if (-not $activeSessObj.CollectorInitialized) {
+                            Invoke-Command -Session $sRef -ScriptBlock {
+                                param($code)
+                                $script:PSRPMCollectorInvoker = [scriptblock]::Create($code)
+                            } -ArgumentList @($collectorCode) -ErrorAction Stop
+                            $activeSessObj.CollectorInitialized = $true
+                        }
+
+                        $resTick = Invoke-Command -Session $sRef -ScriptBlock {
+                            param($f)
+                            if ($script:PSRPMCollectorInvoker) {
+                                & $script:PSRPMCollectorInvoker $f
+                            } else {
+                                $null
+                            }
+                        } -ArgumentList @($forceFull) -ErrorAction Stop
+
+                        if (-not $resTick) {
+                            $activeSessObj.CollectorInitialized = $false
+                            throw "Collector invoker uninitialized on target host."
+                        }
+                        $resTick
                     }
 
                     $swPoll.Stop()

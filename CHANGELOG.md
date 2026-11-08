@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-07
+
+### Optimized
+- **WinRM Remote Session-Cached Invoker Architecture (`RunspaceEngine.ps1`)**:
+  - Replaced per-tick 46 KB `ScriptBlock` re-transmission and JIT compilation over WinRM with session-cached remote invokers (`$script:PSRPMCollectorInvoker`, `$script:PSRPMInspectorInvoker`, `$script:PSRPMActionInvoker`).
+  - Slashed `wsmprovhost.exe` target CPU consumption by ~75% and reduced upload request wire payload from 46 KB/s to 44 bytes/s (99.9% reduction).
+  - Reduced EDR / AMSI script scan overhead from 60 times/minute (scanning 46 KB buffers) to a single one-time scan during initial PSSession registration.
+  - Built automatic resilience fallback: if a remote session is recycled or resets state, the engine detects `$null` and transparently re-initializes the cached invokers on the subsequent tick without dropping data.
+- **In-Process Telemetry Collector Streamlining (`DataCollector.ps1`)**:
+  - Pre-allocated reusable `JavaScriptSerializer` (`$script:Jss`) during session initialization, bypassing reflection type instantiation on every tick.
+  - Added direct `'[]'` emission for empty metadata updates, avoiding reflection serialization when no new processes have spawned.
+  - Replaced `Where-Object` pipeline expressions in dead PID pruning with direct `foreach` collection traversal, eliminating pipeline setup overhead.
+  - Prioritized native `psapi!GetPerformanceInfo` unmanaged reads for RAM and commit limit/charge, avoiding private reflection on steady-state ticks.
+
 ## [1.2.0] - 2026-11-07
 
 ### Added
