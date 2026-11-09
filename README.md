@@ -4,7 +4,7 @@
 
 # PSRPM -- PowerShell Remote Process Manager
 
-[![Version: 1.6.0](https://img.shields.io/badge/version-1.6.0-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.6.1](https://img.shields.io/badge/version-1.6.1-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 
@@ -53,7 +53,7 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
   - **Instant Core Open (`< 20 ms`, `< 2 KB`)**: Opening Process Properties (`Double-Click` or `Enter`) queries only **Image** metadata (Version, PE Linker Build Timestamp, Path, Command Line, Remote PEB Current Directory, Autostart Location, On-Demand Authenticode Signature Verification), **Performance** counters & live ancestry tree, **TCP/IP** endpoints, hosted **Services**, and remote PEB **Environment** variables.
   - **Lazy Tab-Activated `DLLs` & `Handles`**: Loaded **DLLs** (`psapi!EnumProcessModulesEx`) and open kernel **Handles** (`ntdll!NtQueryInformationProcess(51)` + pipe-safe `NtQueryObject`) are queried **only when you click the `DLLs` or `Handles` tab**, ensuring zero unnecessary CPU or network load.
 - **Sysinternals System Information Graphs (`Ctrl+I` or Double-Click Mini Graphs)**:
-  - Double-clicking any toolbar mini-graph (`CPU`, `Commit`, `Phys RAM`) or pressing **`Ctrl+I`** opens a live 4-tab **System Information** window (`Summary`, `CPU`, `Memory`, `I/O`) with 2-minute (`120`-sample) circular ring buffers (`< 12 KB` total RAM), Kernel vs. Total CPU curves, per-CPU graph grid toggle (`Show one graph per CPU`), exact KB Commit/Physical/Kernel/Paging counters (`psapi!GetPerformanceInfo` + `NtQuerySystemInformation(2, 8)`), and zero UI rendering overhead while closed.
+  - Double-clicking any toolbar mini-graph (`CPU`, `Commit`, `Phys RAM`) or pressing **`Ctrl+I`** opens a live 4-tab **System Information** window (`Summary`, `CPU`, `Memory`, `I/O`) with 4-minute (`240`-sample) circular ring buffers (`< 20 KB` total RAM), Kernel vs. Total CPU curves, per-CPU graph grid toggle (`Show one graph per CPU`), exact KB Commit/Physical/Kernel/Paging counters (`psapi!GetPerformanceInfo` + `NtQuerySystemInformation(2, 8)`), and zero UI rendering overhead while closed.
 - **Multi-Host Tabbed Session Bar (Instant `< 5 ms` Switching, `0 KB/s` Standby)**:
   - Keep multiple remote targets (`-ComputerName` via WinRM) and local systems (`-LocalOnly`) open concurrently in header tabs (`Ctrl+Shift+K` or `[+] Add Host`).
   - Standby host sessions pause background polling entirely, consuming **0 KB/s wire bandwidth** and **0% remote CPU** while keeping persistent WinRM sessions warm and authenticated.
@@ -113,7 +113,7 @@ PSRPM is engineered for continuous multi-hour and multi-day monitoring sessions 
 - **0.00% CPU & 0 KB/s in Standby**: Inactive host tabs are completely excluded from the polling loop. Remote machines consume zero CPU and generate zero network traffic while their tab is not actively viewed.
 
 ### Local Administrator Client (WPF & Runspace)
-- **Fixed-Capacity Circular Ring Buffers**: Historical metrics (CPU, Kernel, Commit, RAM, I/O rates, per-core metrics) use fixed-size `Queue[double]` ring buffers: **30 samples** for toolbar sparklines and **120 samples** (2 minutes) for System Information graphs. Historical telemetry memory is **hard-capped at < 12 KB per host session**.
+- **Fixed-Capacity Circular Ring Buffers**: Historical metrics (CPU, Kernel, Commit, RAM, I/O rates, per-core metrics) use fixed-size `Queue[double]` ring buffers: **30 samples** for toolbar sparklines and **240 samples** (4 minutes) for System Information graphs. Historical telemetry memory is **hard-capped at < 20 KB per host session**.
 - **Lazy Graph Execution**: Complex 360x120 vector path strings (`SysCpuPoints`, `SysCommitPoints`, per-core graphs) are calculated **only when the System Information window is open**. Closed modals generate zero background string allocations.
 - **In-Place UI Diff Reconciliation**: Never calls `$ObservableCollection.Clear()`. Existing `ProcessItemViewModel` instances are updated in-place via dirty-checked `INotifyPropertyChanged`, avoiding visual tree churn and WPF Garbage Collection Gen 2 pauses.
 - **Two-Stage Dead-Process Reaping**: Exited processes flash red for 1 tick, then are immediately purged from `ProcessMap` and the UI `ObservableCollection`, allowing the .NET runtime to reclaim memory immediately.

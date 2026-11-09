@@ -782,7 +782,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Peak I/O Rate (2m Window)" Style="{StaticResource ValText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Peak I/O Rate (4m Window)" Style="{StaticResource ValText}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding IoPeakRateFormatted}" Style="{StaticResource ValNum}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Session Cumulative I/O" Style="{StaticResource ValText}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding IoSessionTotalFormatted}" Style="{StaticResource ValNum}"/>

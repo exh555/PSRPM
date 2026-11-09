@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.6.0'
+    ModuleVersion     = '1.6.1'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,16 +77,13 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.6.0 - Process Safety, WinRM Resilience, Honest Kernel I/O, RBAC & Hardened Security
-- Process Safety & PID Reuse Guard: Validated process identity in KillProcess using dual StartTime FILETIME ticks and QueryFullProcessImageNameW, preventing accidental termination of reused PIDs.
-- Atomic Pinned Tree Termination: Refactored KillTree to use sub-millisecond NtQuerySystemInformation(5), pinning process handles across top-down suspension and bottom-up termination with guaranteed survivor cleanup.
-- WinRM 4-State Lifecycle Machine: Implemented Connected, Degraded, Reconnecting, and Disconnected states with 2-stage transparent auto-recovery (Connect-PSSession -> New-PSSession) and bounded exponential backoff.
-- Drift-Compensating Scheduler & Freshness Tracking: Replaced Thread.Sleep with wall-clock anchored timer ticks and real-time Fresh, Stale, Frozen telemetry freshness indicators.
-- Honest Kernel System I/O Throughput: Upgraded Class 2 SYSTEM_PERFORMANCE_INFORMATION to compute genuine System Read/Write KB/s and System IOPS, replacing simulated queue depth.
-- 64-Bit Network Telemetry: Upgraded network interface throughput calculation to 64-bit iphlpapi!GetIfTable2 and FreeMibTable, eliminating persistent unmanaged scratch buffers.
-- Hardened Memory Dump Security: Enforced atomic non-inherited FileSecurity ACLs restricting process memory dump access strictly to SYSTEM, Administrators, and the executing user.
-- Interactive Handle Closure: Added Close Handle context menu (Del) directly in the 7-Tab Process Properties Handles grid with in-place UI row removal.
-- Expanded 11-Suite Engine Verification: Added automated benchmark gates and unit suites covering PID reuse, dump ACLs, tree termination, and freshness transitions.
+PSRPM v1.6.1 - 4-Minute Telemetry History, Dynamic Version Resolution & Handle Dispatch Hardening
+- Extended Telemetry History Depth: Expanded circular ring buffer capacity from 120 samples (2 minutes) to 240 samples (4 minutes) across all 8 system telemetry streams (CPU, Kernel, Commit, RAM, I/O Total, I/O Write, Net Rx, Net Tx) with backward-compatibility aliases.
+- Chart Geometry & UI Window: Dynamically scaled SVG area curve coordinate interpolation for 240 samples on standard 360x120 canvases; updated System Information peak rate label to a 4-minute observation window.
+- Forensic Snapshot Export: Extended JSON forensic export (Ctrl+S) to include full 240-second time series under both History240 and History120 packages.
+- Handle Closure Dispatch & Multi-Threading Hardening: Dispatched handle row removal via WPF Dispatcher to prevent cross-thread collection modification exceptions; guarded bracketed entries against wildcard interpretation errors.
+- Dynamic Module Versioning: Implemented single-source-of-truth version resolution in PSRPM.psm1 loaded directly from PSRPM.psd1; dynamically bound Help & About version badges at runtime.
+- Verification & Test Enhancements: Added automated HelpWindow version synchronization gate in Test-ReleaseReadiness.ps1 and 240-sample buffer cap verification in Test-PSRPMEngine.ps1.
 '@
         }
     }

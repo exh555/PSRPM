@@ -330,15 +330,15 @@ $spRam = $sumVm.BuildSparkline($sumVm.RamHistory.ToArray(), 96.0, 26.0)
 $sumVm.RamPoints     = $spRam[0]
 $sumVm.RamFillPoints = $spRam[1]
 
-# 2. System Information Charts (120 Samples) for 4-Quadrant Dashboard
-$sumVm.CpuHistory120.Clear()
-$sumVm.KernelHistory120.Clear()
-$sumVm.CommitHistory120.Clear()
-$sumVm.RamHistory120.Clear()
-$sumVm.IoTotalHistory120.Clear()
-$sumVm.IoWriteHistory120.Clear()
+# 2. System Information Charts (240 Samples) for 4-Quadrant Dashboard
+$sumVm.CpuHistory240.Clear()
+$sumVm.KernelHistory240.Clear()
+$sumVm.CommitHistory240.Clear()
+$sumVm.RamHistory240.Clear()
+$sumVm.IoTotalHistory240.Clear()
+$sumVm.IoWriteHistory240.Clear()
 
-for ($i = 0; $i -lt 120; $i++) {
+for ($i = 0; $i -lt 240; $i++) {
     $cVal   = [Math]::Sin($i * 0.12) * 28.0 + [Math]::Cos($i * 0.28) * 12.0 + 45.0
     $cVal   = [Math]::Max(6.0, [Math]::Min(94.0, $cVal))
     $kVal   = $cVal * 0.26
@@ -347,12 +347,12 @@ for ($i = 0; $i -lt 120; $i++) {
     $ioTot  = ([Math]::Abs([Math]::Sin($i * 0.14)) * 28.0 + [Math]::Cos($i * 0.3) * 8.0 + 12.0) * 1048576.0
     $ioWrt  = $ioTot * 0.42
 
-    $sumVm.CpuHistory120.Enqueue($cVal)
-    $sumVm.KernelHistory120.Enqueue($kVal)
-    $sumVm.CommitHistory120.Enqueue($comVal)
-    $sumVm.RamHistory120.Enqueue($ramVal)
-    $sumVm.IoTotalHistory120.Enqueue($ioTot)
-    $sumVm.IoWriteHistory120.Enqueue($ioWrt)
+    $sumVm.CpuHistory240.Enqueue($cVal)
+    $sumVm.KernelHistory240.Enqueue($kVal)
+    $sumVm.CommitHistory240.Enqueue($comVal)
+    $sumVm.RamHistory240.Enqueue($ramVal)
+    $sumVm.IoTotalHistory240.Enqueue($ioTot)
+    $sumVm.IoWriteHistory240.Enqueue($ioWrt)
 }
 
 # 3. Multi-Core CPU ViewModels (16 Cores) for CPU Tab
@@ -426,7 +426,7 @@ $sysExtended = @(
 
 $sumVm.UpdateExtendedTelemetry($sysExtended, $null)
 
-# Generate large 120-point chart geometry and gauge heights
+# Generate large 240-point chart geometry and gauge heights
 $sumVm.IsSysInfoOpen = $true
 $sumVm.RefreshSysInfoGraphs()
 
@@ -1036,7 +1036,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ### 3. System Information Dashboard - Summary & Hardware
 **File**: [`03_system_information_dashboard.png`](03_system_information_dashboard.png) (1840 x 1400 @ 2x DPI)
 - Hardware metadata: `Dell PowerEdge R750 Enterprise Cloud Node` (16 Cores, 32 Threads, 64 GB RAM)
-- 120-sample real-time CPU chart with kernel time red overlay and green grid
+- 240-sample real-time CPU chart with kernel time red overlay and green grid
 - Memory commit charge gauge, physical memory meters, and I/O delta charts
 - Kernel performance counters: Context switches/s, Interrupts/s, System calls/s, DPCs/s, Page faults/s
 

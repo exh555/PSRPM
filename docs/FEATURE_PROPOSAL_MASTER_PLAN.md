@@ -13,7 +13,7 @@ This specification details the technical architecture, user experience design, a
 1. **Zero Remote Target Impact**: Remote background CPU remains strictly **`< 0.25%`** (`2-8 ms` per tick); steady-state differential network wire traffic remains **`~1.1-1.8 KB/s`**.
 2. **100% Fileless & EDR-Safe Security Posture**: Zero `csc.exe` invocations, zero `Add-Type -TypeDefinition`, and zero temporary `.dll`/`.cs` files dropped to disk on either the local workstation or the remote machine. All Win32/NTAPI P/Invoke signatures use in-memory `.NET Reflection.Emit` (`AssemblyBuilderAccess.Run`).
 3. **Operate Mode UX**: High information density, pixel-snapped vector geometry (`<Path>`, `<Polygon>`), full keyboard accelerator coverage, right-aligned tabular numerals (`Typography.NumeralAlignment="Tabular"`), and in-place UI diff reconciliation with zero scroll or selection jumps.
-4. **Bounded Memory Eviction**: Zero memory growth over multi-day monitoring sessions. Historical telemetry is capped at **120 samples** (`< 12 KB` RAM per host session) backed by circular `Queue[double]` ring buffers.
+4. **Bounded Memory Eviction**: Zero memory growth over multi-day monitoring sessions. Historical telemetry is capped at **240 samples** (`< 20 KB` RAM per host session) backed by circular `Queue[double]` ring buffers.
 
 ---
 
@@ -26,7 +26,7 @@ flowchart TD
         F2UI["Feature 2: Find Handle or DLL (Ctrl+Shift+F)<br/>* Dedicated search dialog<br/>* Double-click jump to tree"]
         F3UI["Feature 3: Create Dump Action<br/>* Context menu & toolbar action<br/>* Instant remote path reporting"]
         F4UI["Feature 4: Extended Telemetry Strip<br/>* Net Rx/Tx & Disk Queue pills<br/>* SysInfo Network Area Graphs"]
-        F5UI["Feature 5: Forensic Snapshot Export<br/>* Full 120-sample ring buffer dump<br/>* Atomic IR evidence package"]
+        F5UI["Feature 5: Forensic Snapshot Export<br/>* Full 240-sample ring buffer dump<br/>* Atomic IR evidence package"]
         F6UI["Feature 6: Retro & High-Contrast Themes<br/>* Sysinternals Classic (0xECE9D8)<br/>* High-Contrast WCAG AAA"]
     end
 
@@ -193,7 +193,7 @@ Allows incident responders and engineers to capture crash dumps of hung, crashin
 Replaces the flat file picker with an incident response export selector:
 1. **Complete Forensic Evidence Package (JSON)**:
    - Full process & hosted service snapshot.
-   - 120-second circular history ring buffers (`CpuHistory120`, `KernelHistory120`, `CommitHistory120`, `RamHistory120`, `IoTotalHistory120`, `CoreGraphs`).
+   - 240-second circular history ring buffers (`CpuHistory240`, `KernelHistory240`, `CommitHistory240`, `RamHistory240`, `IoTotalHistory240`, `CoreGraphs`).
    - Recent process lifecycle audit trail (`[PROC+]`, `[PROC-]`).
 2. **Flat Process List (CSV)**:
    - Standard tabular snapshot for spreadsheet analysis.
@@ -225,7 +225,7 @@ All additions will be tested across both test harnesses:
 | **Engine** | `TC-DUMP-01` | Process Minidump Creation | `dbghelp!MiniDumpWriteDump` creates valid `.dmp` file in `C:\temp\` with expected headers. |
 | **Engine** | `TC-DUMP-02` | Dump Filename & Directory Validation | Directory `C:\temp\` is auto-created; filename matches `PSRPM_Dump_<Name>_PID<ID>_...dmp`. |
 | **Engine** | `TC-TELEM-01` | Wire Backward-Compatibility | Parsing 27-element vs. 31-element `sys` array works without exceptions. |
-| **Engine** | `TC-SNAP-01` | Forensic Time-Series Serialization | JSON export parses cleanly and contains complete 120-sample history arrays. |
+| **Engine** | `TC-SNAP-01` | Forensic Time-Series Serialization | JSON export parses cleanly and contains complete 240-sample history arrays. |
 | **Extended QA**| `TC-QA-HANDLE-04` | Named Pipe Deadlock Bypass | Handle sweep on active named pipes returns in `< 50 ms` without thread hang. |
 | **Extended QA**| `TC-QA-HANDLE-05` | System Process Shield | `CloseHandle` is rejected against PID 0, PID 4, and critical system binaries. |
 | **Extended QA**| `TC-QA-DUMP-03` | Disk Space Exhaustion Guard | Dump fails gracefully with user warning if target volume free space is insufficient. |

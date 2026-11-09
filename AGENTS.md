@@ -4,7 +4,7 @@ Before modifying any code in this repository, read **[`docs/ENGINEERING_PLAYBOOK
 
 ## Core Mission & Priority Order
 1. **Connectivity**: Connect to remote PCs via `-ComputerName` over a single persistent WinRM `PSSession`, plus `-LocalOnly` (`-Local`) for local execution without WinRM.
-2. **Performance**: Keep remote CPU `< 0.25%` (`2-10 ms` per tick via `NtQuerySystemInformation`), steady-state network wire size `< 1.8 KB/s` (differential GZIP JSON), and local history memory `< 12 KB` (120-sample circular ring buffers).
+2. **Performance**: Keep remote CPU `< 0.25%` (`2-10 ms` per tick via `NtQuerySystemInformation`), steady-state network wire size `< 1.8 KB/s` (differential GZIP JSON), and local history memory `< 20 KB` (240-sample circular ring buffers).
 3. **UX & Visuals**: Sysinternals Process Explorer-inspired hierarchical Tree-Grid, semantic row colors, lazy-loaded 7-tab Process Properties Inspector, 4-tab System Information graphs (`Ctrl+I` / double-click mini graphs), and live Audit & Network Telemetry Console (`Ctrl+L`).
 4. **100% Fileless Security**: Zero `Add-Type -TypeDefinition` / `MemberDefinition`, zero `csc.exe`, and zero temporary `.dll`/`.cs` files on disk.
 
@@ -18,7 +18,7 @@ Before modifying any code in this repository, read **[`docs/ENGINEERING_PLAYBOOK
 - **NEVER** eagerly load `DLLs` or `Handles` when opening Process Properties (keep dialog startup in `"Core"` mode and lazy-load `"Modules"` and `"Handles"` on tab selection).
 - **NEVER** call `$ObservableCollection.Clear()` on live DataGrids (always use in-place diff reconciliation).
 - **NEVER** instantiate module-scoped custom PowerShell classes inside `.GetNewClosure()` blocks (route through module-scoped factory scriptblocks captured by reference to avoid dynamic module type-resolution failures).
-- **NEVER** use unbounded telemetry history arrays (always use fixed-capacity circular `Queue[double]` ring buffers capped at 120 samples).
+- **NEVER** use unbounded telemetry history arrays (always use fixed-capacity circular `Queue[double]` ring buffers capped at 240 samples).
 - **NEVER** use `IsCancel="True"` on buttons in modeless (`.Show()`) WPF windows (setting `DialogResult` on modeless windows throws `InvalidOperationException`).
 - **NEVER** reference function-local variables inside event handlers on modeless (`.Show()`) windows (the opening function returns immediately, destroying local scope; route through module-scoped control registries or capture via `.GetNewClosure()`).
 - **NEVER** use `ObservableCollection.Remove($sel)` with `[PSCustomObject]` instances across closures or runspaces (always scan in reverse by index and use `.RemoveAt($i)` matching unique keys like `PID` and `Handle`).

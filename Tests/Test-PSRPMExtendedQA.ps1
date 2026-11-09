@@ -648,18 +648,18 @@ for ($c = 0; $c -lt [Environment]::ProcessorCount; $c++) { [void]$cores.Add(@(5.
 $fakeSys = [System.Collections.ArrayList]::new()
 for ($s = 0; $s -lt 27; $s++) { [void]$fakeSys.Add(100L) }
 
-# Feed 200 telemetry samples into the summary view model (buffer cap is 120 samples)
-for ($f = 0; $f -lt 200; $f++) {
+# Feed 300 telemetry samples into the summary view model (buffer cap is 240 samples)
+for ($f = 0; $f -lt 300; $f++) {
     $sumTest.UpdateExtendedTelemetry($fakeSys, $cores)
 }
 
-# Verify ring buffers are hard-capped at 120 items
-$cpuHistCount = $sumTest.CpuHistory120.Count
+# Verify ring buffers are hard-capped at 240 items
+$cpuHistCount = $sumTest.CpuHistory240.Count
 $coreHistCount = if ($sumTest.CoreGraphs.Count -gt 0) { $sumTest.CoreGraphs[0].History.Count } else { 0 }
-$queueBounded = ($cpuHistCount -eq 120 -and $coreHistCount -le 120)
-Assert-QACheck "Zero-Leak Architecture" "Local Telemetry Circular Ring Buffer Hard Cap (<= 120 samples)" `
+$queueBounded = ($cpuHistCount -eq 240 -and $coreHistCount -le 240)
+Assert-QACheck "Zero-Leak Architecture" "Local Telemetry Circular Ring Buffer Hard Cap (<= 240 samples)" `
     $queueBounded `
-    "CpuHistory120 capped at $cpuHistCount samples | CoreGraphs[0] capped at $coreHistCount samples across 200 pushes (< 12 KB local memory)."
+    "CpuHistory240 capped at $cpuHistCount samples | CoreGraphs[0] capped at $coreHistCount samples across 300 pushes (< 20 KB local memory)."
 
 # 4.5 Console Log Buffer Truncation (Capped at 24,000 characters)
 $fakeLogBox = [System.Windows.Controls.TextBox]::new()

@@ -681,7 +681,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$HwFileSystem
     [string]$HwReadOnly
 
-    # System Information 120-Sample Chart Point Collections (360x120 Viewbox Canvas)
+    # System Information 240-Sample (4-Minute) Chart Point Collections (360x120 Viewbox Canvas)
     [string]$SysCpuPoints
     [string]$SysCpuFillPoints
     [string]$SysKernelPoints
@@ -760,7 +760,17 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     hidden [System.Collections.Generic.Queue[double]] $CommitHistory
     hidden [System.Collections.Generic.Queue[double]] $RamHistory
 
-    # 120-Sample (2-Minute) Circular Ring Buffers (< 8 KB Total Memory)
+    # 240-Sample (4-Minute) Circular Ring Buffers (< 16 KB Total Memory)
+    hidden [System.Collections.Generic.Queue[double]] $CpuHistory240
+    hidden [System.Collections.Generic.Queue[double]] $KernelHistory240
+    hidden [System.Collections.Generic.Queue[double]] $CommitHistory240
+    hidden [System.Collections.Generic.Queue[double]] $RamHistory240
+    hidden [System.Collections.Generic.Queue[double]] $IoTotalHistory240
+    hidden [System.Collections.Generic.Queue[double]] $IoWriteHistory240
+    hidden [System.Collections.Generic.Queue[double]] $NetRxHistory240
+    hidden [System.Collections.Generic.Queue[double]] $NetTxHistory240
+
+    # Backward-compatibility aliases
     hidden [System.Collections.Generic.Queue[double]] $CpuHistory120
     hidden [System.Collections.Generic.Queue[double]] $KernelHistory120
     hidden [System.Collections.Generic.Queue[double]] $CommitHistory120
@@ -779,14 +789,24 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CpuHistory             = [System.Collections.Generic.Queue[double]]::new()
         $this.CommitHistory          = [System.Collections.Generic.Queue[double]]::new()
         $this.RamHistory             = [System.Collections.Generic.Queue[double]]::new()
-        $this.CpuHistory120          = [System.Collections.Generic.Queue[double]]::new()
-        $this.KernelHistory120       = [System.Collections.Generic.Queue[double]]::new()
-        $this.CommitHistory120       = [System.Collections.Generic.Queue[double]]::new()
-        $this.RamHistory120          = [System.Collections.Generic.Queue[double]]::new()
-        $this.IoTotalHistory120      = [System.Collections.Generic.Queue[double]]::new()
-        $this.IoWriteHistory120      = [System.Collections.Generic.Queue[double]]::new()
-        $this.NetRxHistory120        = [System.Collections.Generic.Queue[double]]::new()
-        $this.NetTxHistory120        = [System.Collections.Generic.Queue[double]]::new()
+        $this.CpuHistory240          = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.KernelHistory240       = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.CommitHistory240       = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.RamHistory240          = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.IoTotalHistory240      = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.IoWriteHistory240      = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.NetRxHistory240        = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.NetTxHistory240        = [System.Collections.Generic.Queue[double]]::new(240)
+
+        # Backward-compatibility aliases
+        $this.CpuHistory120          = $this.CpuHistory240
+        $this.KernelHistory120       = $this.KernelHistory240
+        $this.CommitHistory120       = $this.CommitHistory240
+        $this.RamHistory120          = $this.RamHistory240
+        $this.IoTotalHistory120      = $this.IoTotalHistory240
+        $this.IoWriteHistory120      = $this.IoWriteHistory240
+        $this.NetRxHistory120        = $this.NetRxHistory240
+        $this.NetTxHistory120        = $this.NetTxHistory240
         $this.CoreGraphs             = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
 
         $this.IsSysInfoOpen            = $false
@@ -911,26 +931,36 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.CommitHistory.Enqueue(0.0)
             $this.RamHistory.Enqueue(0.0)
         }
-        for ($i = 0; $i -lt 120; $i++) {
-            $this.CpuHistory120.Enqueue(0.0)
-            $this.KernelHistory120.Enqueue(0.0)
-            $this.CommitHistory120.Enqueue(0.0)
-            $this.RamHistory120.Enqueue(0.0)
-            $this.IoTotalHistory120.Enqueue(0.0)
-            $this.IoWriteHistory120.Enqueue(0.0)
-            $this.NetRxHistory120.Enqueue(0.0)
-            $this.NetTxHistory120.Enqueue(0.0)
+        for ($i = 0; $i -lt 240; $i++) {
+            $this.CpuHistory240.Enqueue(0.0)
+            $this.KernelHistory240.Enqueue(0.0)
+            $this.CommitHistory240.Enqueue(0.0)
+            $this.RamHistory240.Enqueue(0.0)
+            $this.IoTotalHistory240.Enqueue(0.0)
+            $this.IoWriteHistory240.Enqueue(0.0)
+            $this.NetRxHistory240.Enqueue(0.0)
+            $this.NetTxHistory240.Enqueue(0.0)
         }
     }
 
-    [double[]] GetCpuHistory120()     { return $this.CpuHistory120.ToArray() }
-    [double[]] GetKernelHistory120()  { return $this.KernelHistory120.ToArray() }
-    [double[]] GetCommitHistory120()  { return $this.CommitHistory120.ToArray() }
-    [double[]] GetRamHistory120()     { return $this.RamHistory120.ToArray() }
-    [double[]] GetIoTotalHistory120() { return $this.IoTotalHistory120.ToArray() }
-    [double[]] GetIoWriteHistory120() { return $this.IoWriteHistory120.ToArray() }
-    [double[]] GetNetRxHistory120()   { return $this.NetRxHistory120.ToArray() }
-    [double[]] GetNetTxHistory120()   { return $this.NetTxHistory120.ToArray() }
+    [double[]] GetCpuHistory240()     { return $this.CpuHistory240.ToArray() }
+    [double[]] GetKernelHistory240()  { return $this.KernelHistory240.ToArray() }
+    [double[]] GetCommitHistory240()  { return $this.CommitHistory240.ToArray() }
+    [double[]] GetRamHistory240()     { return $this.RamHistory240.ToArray() }
+    [double[]] GetIoTotalHistory240() { return $this.IoTotalHistory240.ToArray() }
+    [double[]] GetIoWriteHistory240() { return $this.IoWriteHistory240.ToArray() }
+    [double[]] GetNetRxHistory240()   { return $this.NetRxHistory240.ToArray() }
+    [double[]] GetNetTxHistory240()   { return $this.NetTxHistory240.ToArray() }
+
+    # Backward-compatibility aliases
+    [double[]] GetCpuHistory120()     { return $this.CpuHistory240.ToArray() }
+    [double[]] GetKernelHistory120()  { return $this.KernelHistory240.ToArray() }
+    [double[]] GetCommitHistory120()  { return $this.CommitHistory240.ToArray() }
+    [double[]] GetRamHistory120()     { return $this.RamHistory240.ToArray() }
+    [double[]] GetIoTotalHistory120() { return $this.IoTotalHistory240.ToArray() }
+    [double[]] GetIoWriteHistory120() { return $this.IoWriteHistory240.ToArray() }
+    [double[]] GetNetRxHistory120()   { return $this.NetRxHistory240.ToArray() }
+    [double[]] GetNetTxHistory120()   { return $this.NetTxHistory240.ToArray() }
 
     [void] add_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {
         if ($handler) { $this.Handlers.Add($handler) }
@@ -992,8 +1022,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     hidden [string[]] BuildLargeChart([double[]]$arr, [double]$maxScale, [double]$width, [double]$height) {
-        $lineSb = [System.Text.StringBuilder]::new(1024)
-        $fillSb = [System.Text.StringBuilder]::new(1060)
+        $lineSb = [System.Text.StringBuilder]::new(2800)
+        $fillSb = [System.Text.StringBuilder]::new(3072)
         $inv = [System.Globalization.CultureInfo]::InvariantCulture
         $wStr = $width.ToString("F1", $inv)
         $hStr = $height.ToString("F1", $inv)
@@ -1145,23 +1175,23 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $ioWriteAllD = $ioWriteD + $ioOtherD
         $this.SessionIoBytesTotal += $ioTotalD
 
-        # 1. Enqueue 120-Sample Circular Ring Buffers (< 6 KB Total RAM)
-        if ($this.CpuHistory120.Count -ge 120)     { [void]$this.CpuHistory120.Dequeue() }
-        if ($this.KernelHistory120.Count -ge 120)  { [void]$this.KernelHistory120.Dequeue() }
-        if ($this.CommitHistory120.Count -ge 120)  { [void]$this.CommitHistory120.Dequeue() }
-        if ($this.RamHistory120.Count -ge 120)     { [void]$this.RamHistory120.Dequeue() }
-        if ($this.IoTotalHistory120.Count -ge 120) { [void]$this.IoTotalHistory120.Dequeue() }
-        if ($this.IoWriteHistory120.Count -ge 120) { [void]$this.IoWriteHistory120.Dequeue() }
+        # 1. Enqueue 240-Sample Circular Ring Buffers (< 12 KB Total RAM)
+        if ($this.CpuHistory240.Count -ge 240)     { [void]$this.CpuHistory240.Dequeue() }
+        if ($this.KernelHistory240.Count -ge 240)  { [void]$this.KernelHistory240.Dequeue() }
+        if ($this.CommitHistory240.Count -ge 240)  { [void]$this.CommitHistory240.Dequeue() }
+        if ($this.RamHistory240.Count -ge 240)     { [void]$this.RamHistory240.Dequeue() }
+        if ($this.IoTotalHistory240.Count -ge 240) { [void]$this.IoTotalHistory240.Dequeue() }
+        if ($this.IoWriteHistory240.Count -ge 240) { [void]$this.IoWriteHistory240.Dequeue() }
 
         $comPctExact = if ($commitLimKB -gt 0L) { ($commitCurKB / [double]$commitLimKB) * 100.0 } else { $this.CommitPct }
         $ramPctExact = if ($physTotKB -gt 0L)   { ($physUsedKB  / [double]$physTotKB)   * 100.0 } else { $this.RamPct }
 
-        $this.CpuHistory120.Enqueue($cpuTot)
-        $this.KernelHistory120.Enqueue($kernCpu)
-        $this.CommitHistory120.Enqueue($comPctExact)
-        $this.RamHistory120.Enqueue($ramPctExact)
-        $this.IoTotalHistory120.Enqueue([double]$ioTotalD)
-        $this.IoWriteHistory120.Enqueue([double]$ioWriteAllD)
+        $this.CpuHistory240.Enqueue($cpuTot)
+        $this.KernelHistory240.Enqueue($kernCpu)
+        $this.CommitHistory240.Enqueue($comPctExact)
+        $this.RamHistory240.Enqueue($ramPctExact)
+        $this.IoTotalHistory240.Enqueue([double]$ioTotalD)
+        $this.IoWriteHistory240.Enqueue([double]$ioWriteAllD)
 
         # 2. Enqueue Per-Core CPU Ring Buffers
         if ($coresArr -and $coresArr.Count -gt 0) {
@@ -1232,10 +1262,10 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $dStr = if ($dTotKB -ge 1024.0) { "$(([Math]::Round($dTotKB / 1024.0, 1)).ToString('F1')) MB/s" } else { "$(([Math]::Round($dTotKB, 1)).ToString('F1')) KB/s" }
             $this.DiskActivityFormatted = "I/O: $dStr | $([int]$this.DiskQueueDepth) IOPS"
 
-            if ($this.NetRxHistory120.Count -ge 120) { [void]$this.NetRxHistory120.Dequeue() }
-            if ($this.NetTxHistory120.Count -ge 120) { [void]$this.NetTxHistory120.Dequeue() }
-            $this.NetRxHistory120.Enqueue($this.NetRxKBs)
-            $this.NetTxHistory120.Enqueue($this.NetTxKBs)
+            if ($this.NetRxHistory240.Count -ge 240) { [void]$this.NetRxHistory240.Dequeue() }
+            if ($this.NetTxHistory240.Count -ge 240) { [void]$this.NetTxHistory240.Dequeue() }
+            $this.NetRxHistory240.Enqueue($this.NetRxKBs)
+            $this.NetTxHistory240.Enqueue($this.NetTxKBs)
 
             $this.OnPropertyChanged('NetRxKBs')
             $this.OnPropertyChanged('NetTxKBs')
@@ -1246,19 +1276,19 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.OnPropertyChanged('DiskActivityFormatted')
         }
 
-        # Only build the 120-point UI strings and notify System Info properties when the System Info window is open!
+        # Only build the 240-point UI strings and notify System Info properties when the System Info window is open!
         if ($this.IsSysInfoOpen) {
             $this.RefreshSysInfoGraphs()
         }
     }
 
     [void] RefreshSysInfoGraphs() {
-        $cpuArr   = $this.CpuHistory120.ToArray()
-        $kernArr  = $this.KernelHistory120.ToArray()
-        $comArr   = $this.CommitHistory120.ToArray()
-        $ramArr   = $this.RamHistory120.ToArray()
-        $ioTotArr = $this.IoTotalHistory120.ToArray()
-        $ioWrtArr = $this.IoWriteHistory120.ToArray()
+        $cpuArr   = $this.CpuHistory240.ToArray()
+        $kernArr  = $this.KernelHistory240.ToArray()
+        $comArr   = $this.CommitHistory240.ToArray()
+        $ramArr   = $this.RamHistory240.ToArray()
+        $ioTotArr = $this.IoTotalHistory240.ToArray()
+        $ioWrtArr = $this.IoWriteHistory240.ToArray()
 
         $maxIo = 65536.0 # 64 KB/s minimum full-scale so idle noise stays flat at bottom
         for ($i = 0; $i -lt $ioTotArr.Count; $i++) {

@@ -48,8 +48,20 @@ if ($readmeContent -notmatch "badge/version-$modVer") {
 }
 Write-Host "  [PASS] README.md version badge matches version $modVer." -ForegroundColor Green
 
-# 5. Run Automated Engine Verification Suite
-Write-Host "[CHECK 5] Running Automated 11-Suite Verification..." -ForegroundColor Yellow
+# 5. Validate HelpWindow.xaml and Help/About Version Synchronization
+Write-Host "[CHECK 5] Validating HelpWindow.xaml and dynamic version synchronization..." -ForegroundColor Yellow
+$helpXamlPath = Join-Path $root "PSRPM\UI\HelpWindow.xaml"
+$helpXamlContent = Get-Content -Path $helpXamlPath -Raw
+if ($helpXamlContent -notmatch "x:Name=`"TxtHeaderBadge`"\s+Text=`"v$modVer`"") {
+    throw "HelpWindow.xaml TxtHeaderBadge does not match manifest version v$modVer"
+}
+if ($helpXamlContent -notmatch "x:Name=`"TxtAboutVersion`"\s+Text=`"$modVer`"") {
+    throw "HelpWindow.xaml TxtAboutVersion does not match manifest version $modVer"
+}
+Write-Host "  [PASS] HelpWindow.xaml version tags match manifest version $modVer." -ForegroundColor Green
+
+# 6. Run Automated Engine Verification Suite
+Write-Host "[CHECK 6] Running Automated 11-Suite Verification..." -ForegroundColor Yellow
 & powershell -NoProfile -ExecutionPolicy Bypass -File $testScript
 if ($LASTEXITCODE -ne 0) {
     throw "Automated verification suite failed with exit code $LASTEXITCODE"

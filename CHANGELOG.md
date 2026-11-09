@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-08
+
+### Added
+- **4-Minute System Telemetry History Depth (`ViewModelClasses.ps1`, `SystemInfoWindow.xaml`)**:
+  - Expanded circular ring buffer capacities from 120 samples (2 minutes) to 240 samples (4 minutes) across all 8 telemetry queues (`CpuHistory240`, `KernelHistory240`, `CommitHistory240`, `RamHistory240`, `IoTotalHistory240`, `IoWriteHistory240`, `NetRxHistory240`, `NetTxHistory240`).
+  - Added backward-compatible aliases and getter methods (`GetCpuHistory240()`, `GetKernelHistory240()`, etc.) ensuring full compatibility with existing consumers.
+  - Dynamically rescaled SVG area curve coordinate interpolation across the 240-sample window ($step = 360.0 / 239.0 \approx 1.506$ px/pt) on the standardized 360x120 canvas.
+  - Updated System Information dashboard UI to reflect 4-minute window peak I/O throughput (`Peak I/O Rate (4m Window)`).
+- **Forensic Snapshot Serialization (`PSRPM.psm1`)**:
+  - Extended JSON forensic evidence export (`Ctrl+S`) to serialize the complete 240-sample historical ring buffer package under `History240` (and `History120`).
+- **Dynamic Module Versioning Single Source of Truth (`PSRPM.psm1`, `HelpWindow.xaml`)**:
+  - Dynamically resolved `$script:AppVersion` at module initialization from `PSRPM.psd1` (`Import-PowerShellDataFile`), eliminating hardcoded version numbers.
+  - Dynamically bound Help & About window version badges (`TxtHeaderBadge`, `TxtAboutVersion`) on dialog load.
+- **Release Readiness Version Synchronization Check (`Test-ReleaseReadiness.ps1`)**:
+  - Added Check 5 to validate that `HelpWindow.xaml` version tags strictly synchronize with `PSRPM.psd1`.
+
+### Changed
+- **Memory Footprint Documentation (`AGENTS.md`, `DESIGN.md`, `PRODUCT.md`, `README.md`, `ENGINEERING_PLAYBOOK.md`)**:
+  - Updated architectural documentation and memory budget from < 12 KB to < 20 KB local memory per host session to account for 240 samples.
+- **Protocol Version Header (`DataCollector.ps1`)**:
+  - Synchronized collector protocol version `colVer` string in differential JSON stream from `"1.5.0"` to `"1.6.1"`.
+
+### Fixed
+- **Handle Closure Multi-Threading UI Dispatch (`PSRPM.psm1`)**:
+  - Dispatched observable collection item removal in `closeCallback` via `$win.Dispatcher.Invoke(...)`, preventing cross-thread collection modification exceptions when handle actions complete on a background runspace thread.
+- **Bracketed Type Wildcard Pattern Safeguard (`PSRPM.psm1`)**:
+  - Replaced wildcard string matching (`-like "[*"`) with `$tVal.StartsWith("[")`, eliminating wildcard parsing errors when handling bracketed module and pseudo-handle entries.
+
 ## [1.6.0] - 2026-11-08
 
 ### Added

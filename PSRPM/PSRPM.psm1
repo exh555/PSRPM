@@ -41,6 +41,18 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
     } catch {}
 }
 
+# Resolve dynamic module version from single source of truth (PSRPM.psd1)
+$script:AppVersion = "1.6.1"
+try {
+    $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
+    if (Test-Path $manifestPath) {
+        $m = Import-PowerShellDataFile -Path $manifestPath -ErrorAction SilentlyContinue
+        if ($m -and $m['ModuleVersion']) {
+            $script:AppVersion = [string]$m['ModuleVersion']
+        }
+    }
+} catch {}
+
 function Start-PSRPM {
     <#
     .SYNOPSIS
@@ -1993,7 +2005,7 @@ function Start-PSRPM {
             $pName = [string]$selectedVm.Name
             $pidVal = [int]$selectedVm.PID
 
-            if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or $tVal -like "[*") {
+            if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or ($tVal -and $tVal.StartsWith("["))) {
                 [System.Windows.MessageBox]::Show(
                     "Cannot close this handle entry ($($tVal): $nVal).",
                     "PSRPM - Close Handle",
@@ -2015,26 +2027,32 @@ function Start-PSRPM {
             $localGrid = $gridPropHandles
             $localSel = $sel
             $localHVal = $hVal
+            $localWin = $propWin
             $closeCallback = {
                 param($actionSuccess)
                 if ($actionSuccess -eq $false) { return }
-                if ($localGrid -and $localGrid.ItemsSource) {
-                    $items = $localGrid.ItemsSource
-                    $removeIdx = -1
-                    for ($i = $items.Count - 1; $i -ge 0; $i--) {
-                        if ($items[$i] -eq $localSel -or ($items[$i].Handle -eq $localHVal)) {
-                            $removeIdx = $i
-                            break
+                $win = $localWin
+                if ($win -and $win.IsLoaded) {
+                    $win.Dispatcher.Invoke([Action]({
+                        if ($localGrid -and $localGrid.ItemsSource) {
+                            $items = $localGrid.ItemsSource
+                            $removeIdx = -1
+                            for ($i = $items.Count - 1; $i -ge 0; $i--) {
+                                if ($items[$i] -eq $localSel -or ($items[$i].Handle -eq $localHVal)) {
+                                    $removeIdx = $i
+                                    break
+                                }
+                            }
+                            if ($removeIdx -ge 0) {
+                                [void]$items.RemoveAt($removeIdx)
+                            }
                         }
-                    }
-                    if ($removeIdx -ge 0) {
-                        $items.RemoveAt($removeIdx)
-                    }
+                    }))
                 }
             }.GetNewClosure()
 
             &$invokeProcessAction "CloseHandle" $selectedVm "Normal" $closeCallback $hVal
-        }.GetNewClosure()
+        }
 
         if ($ctxPropClose) {
             $ctxPropClose.add_Click({ & $closePropSelectedHandle })
@@ -2543,6 +2561,16 @@ function Start-PSRPM {
                 }
                 if ($format -eq "JSON") {
                     $activeSumm = if ($script:ActiveHostTab -and $script:ActiveHostTab.SummaryVm) { $script:ActiveHostTab.SummaryVm } else { $summaryVm }
+                    $histObj = [PSCustomObject]@{
+                        Cpu          = $activeSumm.GetCpuHistory240()
+                        Kernel       = $activeSumm.GetKernelHistory240()
+                        CommitCharge = $activeSumm.GetCommitHistory240()
+                        RamPhysical  = $activeSumm.GetRamHistory240()
+                        IoTotal      = $activeSumm.GetIoTotalHistory240()
+                        IoWrite      = $activeSumm.GetIoWriteHistory240()
+                        NetRx        = $activeSumm.GetNetRxHistory240()
+                        NetTx        = $activeSumm.GetNetTxHistory240()
+                    }
                     $exportPkg = [PSCustomObject]@{
                         Target        = $stateContainer.TargetDisplayName
                         ExportTimeUtc = [System.DateTime]::UtcNow.ToString("o")
@@ -2557,16 +2585,8 @@ function Start-PSRPM {
                             ProcessCount    = $activeSumm.ProcessCount
                             ThreadCount     = $activeSumm.ThreadCount
                             HandleCount     = $activeSumm.HandleCount
-                            History120      = [PSCustomObject]@{
-                                Cpu          = $activeSumm.GetCpuHistory120()
-                                Kernel       = $activeSumm.GetKernelHistory120()
-                                CommitCharge = $activeSumm.GetCommitHistory120()
-                                RamPhysical  = $activeSumm.GetRamHistory120()
-                                IoTotal      = $activeSumm.GetIoTotalHistory120()
-                                IoWrite      = $activeSumm.GetIoWriteHistory120()
-                                NetRx        = $activeSumm.GetNetRxHistory120()
-                                NetTx        = $activeSumm.GetNetTxHistory120()
-                            }
+                            History240      = $histObj
+                            History120      = $histObj
                         }
                         Processes     = $rows
                     }
@@ -2721,8 +2741,16 @@ function Start-PSRPM {
             $txtAboutUser = $helpWin.FindName("TxtAboutUser")
             if ($txtAboutUser) { $txtAboutUser.Text = "$env:USERDOMAIN\$env:USERNAME" }
 
+            # Update Help & About Window Version Badges dynamically from single source of truth
+            $txtHeaderBadge = $helpWin.FindName("TxtHeaderBadge")
+            if ($txtHeaderBadge) {
+                $txtHeaderBadge.Text = "v$($script:AppVersion)"
+            }
+
             $txtAboutVer = $helpWin.FindName("TxtAboutVersion")
-            if ($txtAboutVer) { $txtAboutVer.Text = "1.4.0" }
+            if ($txtAboutVer) {
+                $txtAboutVer.Text = "$($script:AppVersion)"
+            }
 
             $txtAboutTarget = $helpWin.FindName("TxtAboutTarget")
             if ($txtAboutTarget) { $txtAboutTarget.Text = "$($stateContainer.TargetDisplayName)" }
@@ -2847,9 +2875,9 @@ function Start-PSRPM {
         $pidVal = [int]$sel.PID
         $nVal   = [string]$sel.Name
 
-        if ($tVal -eq "DLL") {
+        if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or ($tVal -and $tVal.StartsWith("["))) {
             [System.Windows.MessageBox]::Show(
-                "Cannot close a loaded DLL module handle directly. To unload a DLL, terminate or restart '$pName' (PID $pidVal).",
+                "Cannot close this handle entry ($($tVal): $nVal).",
                 "PSRPM - Close Handle",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Information

@@ -149,7 +149,7 @@ The System Information window faithfully reproduces Sysinternals Process Explore
 
 ### Chart Coordinate System & Curves
 - **Canvas Size**: Standardized `360 x 120` coordinate space (`Viewbox`).
-- **History Depth**: Exactly `120` points (2 minutes of 1-second telemetry ticks).
+- **History Depth**: Exactly `240` points (4 minutes of 1-second telemetry ticks).
 - **Dual-Layer Area Curves**:
   - **CPU Graph**: Green total line (`#22C55E`, fill `#3322C55E`) overlaying Red kernel line (`#EF4444`, fill `#44EF4444`).
   - **Commit Graph**: Olive/gold total line (`#84CC16`, fill `#3384CC16`).

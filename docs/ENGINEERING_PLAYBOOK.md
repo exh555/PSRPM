@@ -19,7 +19,7 @@ Every design decision is governed by four pillars, in strict priority order:
 2. **Performance Budget (`< 0.25%` Remote CPU, `< 1.5 KB/s` Steady-State Network)**:
    - Remote per-tick collection must complete in **`2 - 10 ms`** using a single kernel transition (`NtQuerySystemInformation`).
    - Steady-state network payloads must remain **`~1.1 - 1.8 KB/s`** by transmitting only differential changes compressed with GZIP.
-   - Local workstation memory for historical graphs must remain strictly bounded (`< 12 KB` via fixed-size circular ring buffers).
+   - Local workstation memory for historical graphs must remain strictly bounded (`< 20 KB` via fixed-size circular ring buffers).
 3. **UX & Visual Fidelity (Process Explorer Ergonomics)**:
    - Single-surface hierarchical **Tree-Grid** with pixel-snapped vector connectors (`|`, `+-`, `\-`), semantic row colors, instant ancestor-preserving search, auto-flat column sorting, a lazy-loaded **7-tab Process Properties Inspector**, a live **4-tab System Information** window, and a real-time **Audit & Network Telemetry Console**.
 4. **100% Fileless In-Memory Architecture**:
@@ -94,7 +94,7 @@ Every rule below was learned from real-world failure modes during PSRPM's develo
 ### 10. NEVER use unbounded history arrays or build hidden chart strings every tick
 - **Why**: Unbounded metric lists leak memory over multi-hour sessions, and building large `PointCollection` strings when a modal is closed wastes UI thread CPU.
 - **Do This Instead**:
-  - Store history in fixed-capacity circular `Queue[double]` ring buffers (`120` samples = `< 12 KB` total RAM) and only execute `RefreshSysInfoGraphs()` when `$summaryVm.IsSysInfoOpen -eq $true`.
+  - Store history in fixed-capacity circular `Queue[double]` ring buffers (`240` samples = `< 20 KB` total RAM) and only execute `RefreshSysInfoGraphs()` when `$summaryVm.IsSysInfoOpen -eq $true`.
 
 ### 11. NEVER use `IsCancel="True"` on buttons in modeless (`.Show()`) WPF windows
 - **Why**: In WPF, `IsCancel="True"` automatically assigns `Window.DialogResult = false` when the button is clicked or Escape is pressed. On modeless windows displayed with `.Show()` (instead of `.ShowDialog()`), setting `DialogResult` throws an unhandled `InvalidOperationException: DialogResult can be set only after Window is created and shown as Dialog.`
@@ -139,7 +139,7 @@ PSRPM is designed for multi-day uninterrupted operations. Any persistent monitor
 4. **0.00% Remote CPU & 0 KB/s Wire in Standby**: Inactive tabs in the Multi-Host Session Bar are skipped by the polling coordinator. Standby sessions maintain an idle TCP connection without executing any remote collector code.
 
 ### B. Local Workstation Memory Boundaries
-1. **Fixed Ring Buffers**: Metric histories (CPU, Kernel, Commit, RAM, I/O rates, per-core CPU) are backed by `Queue[double]` ring buffers strictly capped at **30 samples** (toolbar sparklines) and **120 samples** (2 minutes for System Information). Total historical telemetry memory is hard-capped at **< 12 KB per host session**.
+1. **Fixed Ring Buffers**: Metric histories (CPU, Kernel, Commit, RAM, I/O rates, per-core CPU) are backed by `Queue[double]` ring buffers strictly capped at **30 samples** (toolbar sparklines) and **240 samples** (4 minutes for System Information). Total historical telemetry memory is hard-capped at **< 20 KB per host session**.
 2. **Lazy UI Rendering**: Vector path strings and geometry calculations (`SysCpuPoints`, `SysCommitPoints`, per-core charts) are evaluated only when the System Information modal is open (`$summaryVm.IsSysInfoOpen -eq $true`).
 3. **In-Place Diff Reconciliation**: Never call `.Clear()` on live `ObservableCollection` bindings. Update existing nodes in-place via dirty-checked `INotifyPropertyChanged`.
 4. **Two-Stage Process Node Reaping**: Exited processes flash red for 1 tick (`LifecycleState = 2`) and are purged from `ProcessMap` and the UI `ObservableCollection` on the subsequent tick, freeing them for immediate Garbage Collection.

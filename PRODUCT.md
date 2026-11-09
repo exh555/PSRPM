@@ -26,7 +26,7 @@ Traditional remote administration on Windows forced operators into severe trade-
 | **Windows Systems & Domain Admins** | Multi-server triage, hung service diagnostics, runaway resource troubleshooting. | Multi-Host Tabbed Session Bar, Service Process mapping, Windows Service control (Start/Stop/Restart), CPU Priority adjustment. |
 | **Incident Responders & Threat Hunters** | Live incident response, anomalous process tree detection, unauthorized persistence verification. | Parent-child Tree-Grid, Authenticode signature verification, PEB CurrentDirectory/Environment inspection, TCP/IP socket tables, Two-Phase Atomic `KillTree`. |
 | **Desktop Support & Fleet Engineers** | End-user workstation troubleshooting without interrupting user sessions or screen sharing. | WinRM remoting (`-ComputerName`), `-LocalOnly` zero-privilege mode, `-NoWait` background terminal execution, Packaged/WebView2 semantic grouping. |
-| **DevOps & Windows SREs** | Diagnosing production microservices, CI/CD runner bottlenecks, memory leakage verification. | 4-Tab System Information graphs, 120-sample circular ring buffers, GZIP wire telemetry monitoring, CSV/JSON forensic snapshots. |
+| **DevOps & Windows SREs** | Diagnosing production microservices, CI/CD runner bottlenecks, memory leakage verification. | 4-Tab System Information graphs, 240-sample circular ring buffers, GZIP wire telemetry monitoring, CSV/JSON forensic snapshots. |
 
 ---
 
@@ -37,7 +37,7 @@ Every capability in PSRPM is governed by four strict architectural non-negotiabl
 ```mermaid
 flowchart TD
     P1["1. Seamless Connectivity<br/>* Persistent WinRM PSSession (-ComputerName)<br/>* Zero-privilege local mode (-LocalOnly)<br/>* Unlocked background runspaces (-NoWait)"]
-    P2["2. Ultra-Low Overhead<br/>* < 0.25% Remote CPU (2-8ms NtQuerySystemInformation)<br/>* ~1.1-1.8 KB/s Steady-State GZIP Wire<br/>* < 12 KB Ring Buffer RAM per Host"]
+    P2["2. Ultra-Low Overhead<br/>* < 0.25% Remote CPU (2-8ms NtQuerySystemInformation)<br/>* ~1.1-1.8 KB/s Steady-State GZIP Wire<br/>* < 20 KB Ring Buffer RAM per Host"]
     P3["3. Process Explorer UX<br/>* Single-surface Hierarchical Tree-Grid<br/>* Semantic Row Colors & Column Tints<br/>* 7-Tab Inspector & 4-Tab System Graphs<br/>* Multi-Host Warm Standby Tabs"]
     P4["4. 100% Fileless Architecture<br/>* Zero Add-Type -TypeDefinition / csc.exe<br/>* Zero disk writes to %TEMP%<br/>* Pure In-Memory Reflection.Emit & PS 5.1 Classes"]
 
@@ -50,8 +50,8 @@ flowchart TD
 2. **Differential Wire Compression (`~1.1 - 1.8 KB/s`)**:
    - Static metadata (`Path`, `CommandLine`, `User`, `Description`, `Company`, `Architecture`) is sent **only once** upon process spawn.
    - Subsequent ticks transmit only 7-element numeric delta tuples for processes whose metrics changed, compressed in-memory with GZIP.
-3. **Zero-Leak Memory Architecture (`< 12 KB` RAM per Session)**:
-   - Historical metrics use fixed-capacity circular `Queue[double]` ring buffers (30 samples for sparklines, 120 samples for System Information).
+3. **Zero-Leak Memory Architecture (`< 20 KB` RAM per Session)**:
+   - Historical metrics use fixed-capacity circular `Queue[double]` ring buffers (30 samples for sparklines, 240 samples for System Information).
    - Dead processes are evicted synchronously from tracking hashtables on every tick.
    - Closed modals generate zero background string or geometry allocations.
 4. **100% Fileless In-Memory Architecture**:

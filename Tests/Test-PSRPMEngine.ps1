@@ -4,6 +4,8 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $repoRoot "PSRPM\PSRPM.psd1"
+$manifestData = Import-PowerShellDataFile -Path $manifestPath
+$modVer = [string]$manifestData['ModuleVersion']
 
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host " PSRPM Automated Architecture, Telemetry & UI Verification Suite" -ForegroundColor Cyan
@@ -258,6 +260,24 @@ if (-not $fileUnlocked) {
 }
 Write-Host "  [PASS] CloseHandle verified: Atomic handle invalidation released locked file." -ForegroundColor Green
 
+# Verify Process Properties / FindHandle Handle Closing Safeguard predicate
+$testHandles = @(
+    @{ Type = "DLL";        Handle = "0x100"; Name = "kernel32.dll"; Expected = $false }
+    @{ Type = "[Error]";    Handle = "";      Name = "Access Denied"; Expected = $false }
+    @{ Type = "[UI Error]"; Handle = "0x200"; Name = "UI Failure";   Expected = $false }
+    @{ Type = "File";       Handle = "N/A";   Name = "\Device\HarddiskVolume3"; Expected = $false }
+    @{ Type = "File";       Handle = "";      Name = ""; Expected = $false }
+    @{ Type = "File";       Handle = "0x1A4"; Name = "C:\Windows\notepad.exe"; Expected = $true }
+    @{ Type = "Key";        Handle = "0x2B8"; Name = "\REGISTRY\MACHINE"; Expected = $true }
+)
+foreach ($th in $testHandles) {
+    $canClose = -not ($th.Type -eq "DLL" -or [string]::IsNullOrWhiteSpace($th.Handle) -or $th.Handle -eq "N/A" -or ($th.Type -and $th.Type.StartsWith("[")))
+    if ($canClose -ne $th.Expected) {
+        throw "Handle closing guard failed for Type='$($th.Type)', Handle='$($th.Handle)' (Expected: $($th.Expected), Got: $canClose)."
+    }
+}
+Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard syntax errors on bracketed types)." -ForegroundColor Green
+
 # ------------------------------------------------------------------
 # TEST 6: ViewModel Classes & WPF XAML Integrity Verification
 # ------------------------------------------------------------------
@@ -268,7 +288,7 @@ $xamlFiles = @(
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
-    @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
+    @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtHeaderBadge", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
     @{ File = "ServiceDetailWindow.xaml"; RequiredControls = @("TxtDlgDisplayName", "TxtDlgServiceName", "TxtDlgPid", "BadgeDlgStatus", "TxtDlgStatus", "SvcTabControl", "TxtDlgDescription", "TxtDlgPath", "TxtDlgStartup", "TxtDlgAccount", "TxtDlgDepSummary", "GridDlgPrereqs", "GridDlgDependents", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
     @{ File = "FindHandleWindow.xaml"; RequiredControls = @("TxtSearchHandle", "BtnSearchHandle", "TxtHandleStatus", "GridHandleResults", "CtxCloseHandle", "CtxGoToProcess", "CtxCopyPath", "BtnCloseHandle", "BtnGoToProcess", "BtnCopyPath", "BtnCloseDlg") }
 )
@@ -286,6 +306,19 @@ foreach ($xf in $xamlFiles) {
             throw "XAML Verification Failed: Control '$ctrlName' not found in $($xf.File)."
         }
     }
+
+    if ($xf.File -eq "HelpWindow.xaml") {
+        $badgeText = [string]$winObj.FindName("TxtHeaderBadge").Text
+        $aboutText = [string]$winObj.FindName("TxtAboutVersion").Text
+        if ($badgeText -ne "v$modVer") {
+            throw "HelpWindow.xaml TxtHeaderBadge expected 'v$modVer', got '$badgeText'."
+        }
+        if ($aboutText -ne $modVer) {
+            throw "HelpWindow.xaml TxtAboutVersion expected '$modVer', got '$aboutText'."
+        }
+        Write-Host "  Verified HelpWindow.xaml: Header badge and About version tags match manifest v$modVer." -ForegroundColor Gray
+    }
+
     Write-Host "  Verified $($xf.File): All $($xf.RequiredControls.Count) required named controls resolved cleanly." -ForegroundColor Gray
 }
 
