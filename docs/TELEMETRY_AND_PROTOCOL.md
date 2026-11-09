@@ -7,10 +7,10 @@ This document explains the internal architecture of **PSRPM**'s remote collectio
 ## 1. Design Goals
 
 1. **Near-Zero Impact on the Remote Target (`< 0.25%` CPU)**:
-   - Traditional PowerShell process tools call `Get-CimInstance Win32_Process` or `Invoke-CimMethod -MethodName GetOwner`, which spawns `WmiPrvSE.exe` RPC storms and consumes 10%–25% CPU on the remote system.
+   - Traditional PowerShell process tools call `Get-CimInstance Win32_Process` or `Invoke-CimMethod -MethodName GetOwner`, which spawns `WmiPrvSE.exe` RPC storms and consumes 10%-25% CPU on the remote system.
    - Even `.NET`'s `System.Diagnostics.Process.GetProcesses()` allocates hundreds of managed wrapper objects per second and triggers expensive `SendMessageTimeout` calls if `$proc.Responding` is accessed.
    - **PSRPM** bypasses both WMI and `System.Diagnostics.Process` during steady-state polling by invoking `ntdll.dll!NtQuerySystemInformation(SystemProcessInformation = 5)` directly into a persistent unmanaged memory buffer.
-2. **Minimal Network Bandwidth (`~1.1 – 1.8 KB/s` steady state)**:
+2. **Minimal Network Bandwidth (`~1.1 - 1.8 KB/s` steady state)**:
    - On a typical server or workstation with 175 processes, around 120 processes are completely idle on any given 1-second tick, and static strings (executable path, command line, file description, company name, user account) never change after process creation.
    - PSRPM caches static metadata in the remote runspace and transmits **only** compact numeric deltas for processes whose CPU, working set (`> 4 KB`), private bytes (`> 4 KB`), thread count, handle count, or suspended state changed during the last second.
 3. **100% Fileless Execution (Zero `csc.exe`, Zero Temp DLLs)**:
@@ -73,14 +73,14 @@ To guarantee that double-clicking a process is instantaneous and never floods th
 1. **`InspectMode = "Core"` (Triggered when opening Process Properties)**:
    - Reads PE header linker timestamp, remote PEB `CurrentDirectory` and `Environment` block, extended `SystemProcessInformation` I/O and pool counters, GDI/USER handle counts, cached Windows Services for that PID, and `iphlpapi!GetExtendedTcpTable` / `GetExtendedUdpTable` endpoints.
    - **Skips** `DLLs` and `Handles` enumeration.
-   - **Performance**: `~12–25 ms` execution time, `~1.5–2.5 KB` payload.
+   - **Performance**: `~12-25 ms` execution time, `~1.5-2.5 KB` payload.
 2. **`InspectMode = "Modules"` (Triggered lazily when clicking the `DLLs` tab)**:
    - Enumerates loaded modules via `psapi.dll!EnumProcessModulesEx` (`LIST_MODULES_ALL = 0x03`), caching `FileVersionInfo` metadata (`$script:DllMetaCache`) by lowercase file path across inspections so system DLLs (`ntdll.dll`, `kernel32.dll`, etc.) are read from disk at most once per session.
-   - **Performance**: `~30–45 ms` execution time.
+   - **Performance**: `~30-45 ms` execution time.
 3. **`InspectMode = "Handles"` (Triggered lazily when clicking the `Handles` tab)**:
    - Queries `ntdll.dll!NtQueryInformationProcess(ProcessHandleInformation = 51)` and duplicates handles into the inspector process via `DuplicateHandle`.
    - **Deadlock Prevention**: Skips synchronous `"File"` / named-pipe IRP queries (which can deadlock in kernel mode when Chromium/`msedgewebview2.exe` worker threads block on synchronous Mojo pipes) and queries non-blocking Object Manager types (`Key`, `Section`, `Mutant`, `Event`, `ALPC Port`, `Directory`, `Semaphore`, `SymbolicLink`, `Job`, `Desktop`, `WindowStation`).
-   - **Performance**: `~20–35 ms` execution time, zero pipe-hang risk.
+   - **Performance**: `~20-35 ms` execution time, zero pipe-hang risk.
 
 ---
 

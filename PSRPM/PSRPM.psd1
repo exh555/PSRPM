@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.3.1'
+    ModuleVersion     = '1.5.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -53,6 +53,7 @@
         'UI\SystemInfoWindow.xaml',
         'UI\HelpWindow.xaml',
         'UI\ServiceDetailWindow.xaml',
+        'UI\FindHandleWindow.xaml',
         'Assets\psrpm.ico',
         'Assets\psrpm.png',
         'Assets\psrpm.svg',
@@ -76,11 +77,13 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.3.1 - Real-Time Performance Tab Polling, Remote Invoker Self-Healing & Comprehensive QA Verification
-- Real-Time Performance Tab Telemetry: Added lightweight "Performance" mode to DeepInspector and background DispatcherTimer to poll CPU cycles, processor times, and I/O counters dynamically every 1 second when the Performance tab is active.
-- Fixed 0% CPU Formatting: Corrected CPU usage percentage formatting when idle to cleanly display 0.00% rather than empty string.
-- Remote Invoker Self-Healing: Added transparent automatic fallback and re-initialization in RunspaceEngine if a remote PSSession recycles or drops the cached inspector invoker.
-- Deep Automated QA Suite: Added 39-check automated stress and resilience test suite validating static AST guardrails, synthetic kernel edge cases, headless WPF UX/UI, and network fault tolerance with 100% pass rate.
+PSRPM v1.5.0 - Process Explorer Full Command Line Hover Tooltips & Responsive UX
+- Process Explorer Command Line Tooltips: Added interactive hover tooltips across the Process Tree column displaying full launch arguments and executable paths formatted in Sysinternals syntax.
+- Responsive Cursor-Relative Positioning: Configured Placement="Mouse" with HorizontalOffset="20" and VerticalOffset="8" so the tooltip anchors below the hovered row and offset right of the cursor, preventing text overlap while keeping the process tree visible.
+- Ultra-Low Latency Display: Tuned InitialShowDelay to 150 ms for quick activation, BetweenShowDelay to 2000 ms for instantaneous (0 ms) row-to-row transitions, and ShowDuration to 60000 ms for comfortable reading.
+- Auto-Wrapping & Typography: Monospace Consolas typography with automatic line wrapping capped at 750 px to cleanly render long, complex command-line arguments without truncation or multi-monitor clipping.
+- Tree Navigation Isolation: Explicitly disabled tooltips on [+] / [-] tree expander hit targets to ensure clean, distraction-free node expansion.
+- Theme Synchronization: Dynamic resource brushes ensure tooltips adapt seamlessly across Clean Light, Precision Dark, Sysinternals Classic, and High-Contrast WCAG AAA palettes.
 '@
         }
     }

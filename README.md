@@ -2,9 +2,9 @@
   <img src="PSRPM/Assets/psrpm.png" alt="PSRPM Logo" width="128" height="128" />
 </p>
 
-# PSRPM — PowerShell Remote Process Manager
+# PSRPM -- PowerShell Remote Process Manager
 
-[![Version: 1.3.1](https://img.shields.io/badge/version-1.3.1-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.5.0](https://img.shields.io/badge/version-1.5.0-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 
@@ -36,14 +36,14 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
 - **100% Fileless & EDR-Safe Engine**:
   - Uses pure PowerShell 5.1 native classes ([`ViewModelClasses.ps1`](PSRPM/Private/ViewModelClasses.ps1)) and in-memory `.NET Reflection.Emit` (`AssemblyBuilderAccess.Run`) P/Invoke bindings.
   - **Zero `Add-Type -TypeDefinition`**, **zero `csc.exe` child processes**, and **zero temporary `.dll` or `.cs` files** written to `%TEMP%`.
-- **Single-Call Native Kernel Telemetry (`< 2–5 ms` collection time)**:
+- **Single-Call Native Kernel Telemetry (`< 2-5 ms` collection time)**:
   - Queries `ntdll.dll!NtQuerySystemInformation(SystemProcessInformation = 5)` and `kernel32.dll!GlobalMemoryStatusEx` into a persistent unmanaged buffer ([`DataCollector.ps1`](PSRPM/Private/DataCollector.ps1)).
   - Eliminates `WmiPrvSE.exe` CPU spikes, N+1 `Win32_Process.GetOwner()` RPC storms, `$p.Responding` 5-second UI hangs, and first-chance `AccessDenied` exception storms.
-- **State-Aware Differential Wire Protocol (`~1.1 – 1.8 KB/s` steady state)**:
+- **State-Aware Differential Wire Protocol (`~1.1 - 1.8 KB/s` steady state)**:
   - Transmits static metadata (`Path`, `CommandLine`, `User`, `Description`, `CompanyName`, `ParentPID`, `Arch`) **only once per process** upon spawn (keyed by `${PID}_${CreateTime}` to prevent PID-reuse collisions).
   - Subsequent ticks transmit only changed dynamic metric tuples (`[PID, CPU, WorkingSet, PrivateBytes, Threads, Handles, StatusFlags]`) compressed in-memory with GZIP.
 - **Sysinternals Process Explorer Unified Tree-Grid**:
-  - Single-surface hierarchical process tree with continuous pixel-snapped vector guide lines (`│`, `├─`, `└─`), interactive `[+]`/`[-]` expanders, `Left`/`Right` arrow key branch collapse/expansion, 16×16 process icons, right-aligned tabular numeric columns, and classic column tints (`CPU`, `Private Bytes`, `Working Set`).
+  - Single-surface hierarchical process tree with continuous pixel-snapped vector guide lines (`|`, `+-`, `\-`), interactive `[+]`/`[-]` expanders, `Left`/`Right` arrow key branch collapse/expansion, 16x16 process icons, right-aligned tabular numeric columns, and classic column tints (`CPU`, `Private Bytes`, `Working Set`).
   - **Smart Auto-Flat Sorting**: Clicking any column header (`CPU`, `Private Bytes`, `Working Set`, `PID`, `Name`, `Handles`) automatically switches to **Flat View** so processes rank globally across the entire system; clicking **Tree** (`Ctrl+T`) restores the hierarchical parent-child tree.
   - **Ancestor-Preserving Live Filter**: Typing in the filter box (`Ctrl+F`) or clicking a semantic category pill (`Services`, `Own / User`, `Packaged / WebView`) preserves parent ancestry chains in Tree View so every matching process remains contextualized.
 - **Semantic Category Color Coding & Light/Dark Themes**:
@@ -71,15 +71,15 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
 flowchart TB
     subgraph Host["LOCAL WORKSTATION (WPF UI + Coordinator Runspace)"]
         direction TB
-        UI["WPF UI Thread (STA Main Loop)<br/>• Unified Tree-Grid & Sparkline Strip<br/>• 7-Tab Deep Process Properties Modal (Lazy Tab Loader)<br/>• Live Audit Trail & Network Telemetry Console"]
-        Bus["Single-Owner Coordinator Runspace<br/>• ConcurrentQueue + AutoResetEvent (<1ms Wake)<br/>• Serializes Polls, Deep Inspections & Process Actions<br/>• Differential State Merge & Parent-Child Tree Builder"]
+        UI["WPF UI Thread (STA Main Loop)<br/>* Unified Tree-Grid & Sparkline Strip<br/>* 7-Tab Deep Process Properties Modal (Lazy Tab Loader)<br/>* Live Audit Trail & Network Telemetry Console"]
+        Bus["Single-Owner Coordinator Runspace<br/>* ConcurrentQueue + AutoResetEvent (<1ms Wake)<br/>* Serializes Polls, Deep Inspections & Process Actions<br/>* Differential State Merge & Parent-Child Tree Builder"]
         UI <-->|"CommandQueue / ResultQueue<br/>+ 150ms UI Dispatcher Sync"| Bus
     end
 
     subgraph Target["REMOTE TARGET COMPUTER (Persistent WinRM PSSession or -LocalOnly)"]
         direction TB
-        Native["In-Memory Reflection.Emit P/Invoke Layer<br/>• ntdll!NtQuerySystemInformation(5) (~2ms)<br/>• kernel32!QueryFullProcessImageNameW & GlobalMemoryStatusEx<br/>• advapi32!OpenProcessToken ($script:SidCache)<br/>• psapi!EnumProcessModulesEx & ntdll!NtQueryObject (Lazy On-Demand)"]
-        Diff["Differential Telemetry State Cache<br/>• Static Metadata Sent Once per (PID + CreateTime)<br/>• Delta Dynamic Tuples Only on Change<br/>• GZIP + Base64 JSON Stream (~1.2 KB/tick)"]
+        Native["In-Memory Reflection.Emit P/Invoke Layer<br/>* ntdll!NtQuerySystemInformation(5) (~2ms)<br/>* kernel32!QueryFullProcessImageNameW & GlobalMemoryStatusEx<br/>* advapi32!OpenProcessToken ($script:SidCache)<br/>* psapi!EnumProcessModulesEx & ntdll!NtQueryObject (Lazy On-Demand)"]
+        Diff["Differential Telemetry State Cache<br/>* Static Metadata Sent Once per (PID + CreateTime)<br/>* Delta Dynamic Tuples Only on Change<br/>* GZIP + Base64 JSON Stream (~1.2 KB/tick)"]
         Native --> Diff
     end
 
@@ -92,10 +92,10 @@ flowchart TB
 
 | Metric / Capability | Naive PowerShell (`Get-Process`) | Legacy WMI (`Win32_Process`) | **PSRPM Differential Engine** |
 | :--- | :--- | :--- | :--- |
-| **Remote CPU Impact** | 8% – 15% spike | 12% – 25% (`WmiPrvSE.exe`) | **< 0.25% CPU** |
-| **Kernel Collection Time (175 procs)** | ~350 ms | ~650 ms – 2,500 ms | **~2 – 8 ms** |
+| **Remote CPU Impact** | 8% - 15% spike | 12% - 25% (`WmiPrvSE.exe`) | **< 0.25% CPU** |
+| **Kernel Collection Time (175 procs)** | ~350 ms | ~650 ms - 2,500 ms | **~2 - 8 ms** |
 | **Initial Full Baseline (175 procs, 265 svcs)** | ~280 KB (CLIXML) | ~450 KB (CLIXML) | **~24 KB GZIP** (`121 KB` raw, **80% saved**) |
-| **Steady-State Wire Payload (1s tick)** | ~280 KB/s | ~450 KB/s | **~1.1 – 1.5 KB/s (Delta GZIP)** |
+| **Steady-State Wire Payload (1s tick)** | ~280 KB/s | ~450 KB/s | **~1.1 - 1.5 KB/s (Delta GZIP)** |
 | **UI Hang Risk (`$p.Responding`)** | High (5s SendMessageTimeout) | None | **Zero (Kernel WaitReason)** |
 | **UI State Preservation** | Lost on refresh | Lost on refresh | **100% In-Place Reconciled** |
 
@@ -143,7 +143,7 @@ Copy-Item -Path .\PSRPM -Destination $userModuleDir -Recurse -Force
 
 ## Usage Examples
 
-### 1. Connect to a Remote Computer (`-ComputerName`) — Primary Mode
+### 1. Connect to a Remote Computer (`-ComputerName`) -- Primary Mode
 ```powershell
 # Connect to a remote computer using your current Windows session credentials
 Start-PSRPM -ComputerName "SRV-PROD-01.corp.local"
@@ -268,38 +268,38 @@ Press **`Ctrl+L`** (or click **Audit Console (Ctrl+L)** in the bottom-right stat
 
 ```text
 PSRPM/
-├── README.md                              # Project Overview, Benchmarks & Quickstart
-├── CHANGELOG.md                           # Version History & Release Notes
-├── LICENSE                                # MIT Open Source License
-├── AGENTS.md                              # Quick Guardrails for AI Coding Agents & Contributors
-├── PRODUCT.md                             # Comprehensive Product Strategy & Operator Personas
-├── DESIGN.md                              # Impeccable UI/UX Design System & Color Tokens
-├── docs/
-│   ├── ENGINEERING_PLAYBOOK.md            # Mission, Guardrails, "Never-To-Do's" & Roadmap
-│   ├── TELEMETRY_AND_PROTOCOL.md          # Deep-Dive into Differential Wire Protocol & Native P/Invoke
-│   └── USER_GUIDE.md                      # Operator Manual, 7-Tab Inspector & WinRM Troubleshooting
-├── PSRPM/                                 # PowerShell Module Directory
-│   ├── PSRPM.psd1                         # PowerShell Module Manifest
-│   ├── PSRPM.psm1                         # Main Module Entry Point & WPF Controller
-│   ├── Private/
-│   │   ├── DataCollector.ps1              # Reflection.Emit Native Collector & Delta Engine
-│   │   ├── DeepInspector.ps1              # Lazy On-Demand PEB, DLLs, Handles & Socket Inspector
-│   │   ├── ProcessActions.ps1             # Atomic KillTree, Suspend/Resume, Priority & Service Control
-│   │   ├── RunspaceEngine.ps1             # Single-Owner Runspace Coordinator & Tree Reconciler
-│   │   └── ViewModelClasses.ps1           # Pure PS 5.1 INotifyPropertyChanged ViewModels
-│   ├── Assets/
-│   │   ├── psrpm.ico                      # Multi-Resolution Windows Icon (256, 48, 32, 24, 16)
-│   │   ├── psrpm.png / psrpm.svg          # Master 256x256 High-DPI Tachometer Gauge & Turbo Impeller Assets
-│   │   ├── psrpm_*.png                    # Mipmap PNGs (16x16, 24x24, 32x32, 48x48, 256x256)
-│   │   └── psrpm_*.svg                    # Scalable Vector SVGs (16x16, 24x24, 32x32, 48x48, 256x256)
-│   └── UI/
-│       ├── MainWindow.xaml                # Process Explorer-Inspired Tree-Grid Main Window
-│       ├── PropertiesWindow.xaml          # 7-Tab Process Properties Inspector Modal
-│       ├── SystemInfoWindow.xaml          # 4-Tab Live System Information Graphs Modal
-│       ├── ConnectDialog.xaml             # In-App Remote Host / LocalOnly Switcher Modal
-│       └── HelpWindow.xaml                # 4-Tab Help, Shortcuts & Runtime Diagnostics Modal
-└── Tests/
-    └── Test-PSRPMEngine.ps1               # Automated 7-Suite Verification & Benchmark Script
++-- README.md                              # Project Overview, Benchmarks & Quickstart
++-- CHANGELOG.md                           # Version History & Release Notes
++-- LICENSE                                # MIT Open Source License
++-- AGENTS.md                              # Quick Guardrails for AI Coding Agents & Contributors
++-- PRODUCT.md                             # Comprehensive Product Strategy & Operator Personas
++-- DESIGN.md                              # Impeccable UI/UX Design System & Color Tokens
++-- docs/
+|   +-- ENGINEERING_PLAYBOOK.md            # Mission, Guardrails, "Never-To-Do's" & Roadmap
+|   +-- TELEMETRY_AND_PROTOCOL.md          # Deep-Dive into Differential Wire Protocol & Native P/Invoke
+|   \-- USER_GUIDE.md                      # Operator Manual, 7-Tab Inspector & WinRM Troubleshooting
++-- PSRPM/                                 # PowerShell Module Directory
+|   +-- PSRPM.psd1                         # PowerShell Module Manifest
+|   +-- PSRPM.psm1                         # Main Module Entry Point & WPF Controller
+|   +-- Private/
+|   |   +-- DataCollector.ps1              # Reflection.Emit Native Collector & Delta Engine
+|   |   +-- DeepInspector.ps1              # Lazy On-Demand PEB, DLLs, Handles & Socket Inspector
+|   |   +-- ProcessActions.ps1             # Atomic KillTree, Suspend/Resume, Priority & Service Control
+|   |   +-- RunspaceEngine.ps1             # Single-Owner Runspace Coordinator & Tree Reconciler
+|   |   \-- ViewModelClasses.ps1           # Pure PS 5.1 INotifyPropertyChanged ViewModels
+|   +-- Assets/
+|   |   +-- psrpm.ico                      # Multi-Resolution Windows Icon (256, 48, 32, 24, 16)
+|   |   +-- psrpm.png / psrpm.svg          # Master 256x256 High-DPI Tachometer Gauge & Turbo Impeller Assets
+|   |   +-- psrpm_*.png                    # Mipmap PNGs (16x16, 24x24, 32x32, 48x48, 256x256)
+|   |   \-- psrpm_*.svg                    # Scalable Vector SVGs (16x16, 24x24, 32x32, 48x48, 256x256)
+|   \-- UI/
+|       +-- MainWindow.xaml                # Process Explorer-Inspired Tree-Grid Main Window
+|       +-- PropertiesWindow.xaml          # 7-Tab Process Properties Inspector Modal
+|       +-- SystemInfoWindow.xaml          # 4-Tab Live System Information Graphs Modal
+|       +-- ConnectDialog.xaml             # In-App Remote Host / LocalOnly Switcher Modal
+|       \-- HelpWindow.xaml                # 4-Tab Help, Shortcuts & Runtime Diagnostics Modal
+\-- Tests/
+    \-- Test-PSRPMEngine.ps1               # Automated 7-Suite Verification & Benchmark Script
 ```
 
 - **[Engineering Playbook: Mission, Guardrails, "Never-To-Do's" & Roadmap (`docs/ENGINEERING_PLAYBOOK.md`)](docs/ENGINEERING_PLAYBOOK.md)**

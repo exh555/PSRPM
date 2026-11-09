@@ -187,12 +187,13 @@ function Start-PSRPM {
 
     # 2. Load MainWindow.xaml
     $uiDir = Join-Path $PSScriptRoot "UI"
-    $mainXamlPath      = Join-Path $uiDir "MainWindow.xaml"
-    $propXamlPath      = Join-Path $uiDir "PropertiesWindow.xaml"
-    $connXamlPath      = Join-Path $uiDir "ConnectDialog.xaml"
-    $sysInfoXamlPath   = Join-Path $uiDir "SystemInfoWindow.xaml"
-    $helpXamlPath      = Join-Path $uiDir "HelpWindow.xaml"
-    $svcDetailXamlPath = Join-Path $uiDir "ServiceDetailWindow.xaml"
+    $mainXamlPath       = Join-Path $uiDir "MainWindow.xaml"
+    $propXamlPath       = Join-Path $uiDir "PropertiesWindow.xaml"
+    $connXamlPath       = Join-Path $uiDir "ConnectDialog.xaml"
+    $sysInfoXamlPath    = Join-Path $uiDir "SystemInfoWindow.xaml"
+    $helpXamlPath       = Join-Path $uiDir "HelpWindow.xaml"
+    $svcDetailXamlPath  = Join-Path $uiDir "ServiceDetailWindow.xaml"
+    $findHandleXamlPath = Join-Path $uiDir "FindHandleWindow.xaml"
 
     $xamlBytes = [System.IO.File]::ReadAllBytes($mainXamlPath)
     $msXaml = [System.IO.MemoryStream]::new($xamlBytes)
@@ -277,11 +278,13 @@ function Start-PSRPM {
     $initialTabVm.ServicesMap    = $engineHandle.ServicesMap
     $initialTabVm.PidServicesMap = $engineHandle.PidServicesMap
 
-    # 5. Theme Engine (Clean Light Sysinternals Default vs Precision Dark Mode)
-    $menuThemeLight = $window.FindName("MenuThemeLight")
-    $menuThemeDark  = $window.FindName("MenuThemeDark")
-    $txtThemeToggle = $window.FindName("TxtThemeToggle")
-    $brushConv      = [System.Windows.Media.BrushConverter]::new()
+    # 5. Theme Engine (Clean Light, Precision Dark, Sysinternals Classic & High-Contrast WCAG AAA)
+    $menuThemeLight        = $window.FindName("MenuThemeLight")
+    $menuThemeDark         = $window.FindName("MenuThemeDark")
+    $menuThemeClassic      = $window.FindName("MenuThemeClassic")
+    $menuThemeHighContrast = $window.FindName("MenuThemeHighContrast")
+    $txtThemeToggle        = $window.FindName("TxtThemeToggle")
+    $brushConv             = [System.Windows.Media.BrushConverter]::new()
 
     $setResourceBrush = {
         param([string]$key, [string]$hex)
@@ -290,10 +293,69 @@ function Start-PSRPM {
         $window.Resources[$key] = $b
     }
 
+    $stateContainer.CurrentTheme = "Light"
+
     $applyTheme = {
-        param([bool]$useDark)
-        $stateContainer.IsDarkTheme = $useDark
-        if ($useDark) {
+        param($themeArg)
+        $themeMode = if ($themeArg -is [bool]) { if ($themeArg) { "Dark" } else { "Light" } } else { [string]$themeArg }
+        if (-not $themeMode) { $themeMode = "Light" }
+        $stateContainer.CurrentTheme = $themeMode
+        $isDark = ($themeMode -in @("Dark", "HighContrast"))
+        $stateContainer.IsDarkTheme = $isDark
+
+        if ($themeMode -eq "HighContrast") {
+            &$setResourceBrush "BrushWindowBg"       "#000000"
+            &$setResourceBrush "BrushToolbarBg"      "#000000"
+            &$setResourceBrush "BrushSurfaceBg"      "#000000"
+            &$setResourceBrush "BrushHeaderBg"       "#1A1A1A"
+            &$setResourceBrush "BrushBorderSubtle"   "#FFFFFF"
+            &$setResourceBrush "BrushTreeLine"       "#FFFFFF"
+            &$setResourceBrush "BrushTextPrimary"    "#FFFFFF"
+            &$setResourceBrush "BrushTextSecondary"  "#FFFF00"
+            &$setResourceBrush "BrushTextMuted"      "#00FF00"
+            &$setResourceBrush "BrushRowHover"       "#330055FF"
+            &$setResourceBrush "BrushRowSelectedBg"  "#0055FF"
+            &$setResourceBrush "BrushRowSelectedFg"  "#FFFFFF"
+            &$setResourceBrush "BrushSparkBg"        "#000000"
+            &$setResourceBrush "BrushSparkBorder"    "#FFFFFF"
+            &$setResourceBrush "ColTint_CPU"          "#2200FF00"
+            &$setResourceBrush "ColTint_PrivateBytes" "#22FFFF00"
+            &$setResourceBrush "ColTint_WorkingSet"   "#2200FFFF"
+            &$setResourceBrush "BrushMenuBg"         "#000000"
+            &$setResourceBrush "BrushMenuBorder"     "#FFFFFF"
+            &$setResourceBrush "BrushMenuHover"      "#222222"
+            if ($menuThemeLight)        { $menuThemeLight.IsChecked        = $false }
+            if ($menuThemeDark)         { $menuThemeDark.IsChecked         = $false }
+            if ($menuThemeClassic)      { $menuThemeClassic.IsChecked      = $false }
+            if ($menuThemeHighContrast) { $menuThemeHighContrast.IsChecked = $true }
+            if ($txtThemeToggle)        { $txtThemeToggle.Text             = "High-Contrast" }
+        } elseif ($themeMode -eq "Classic") {
+            &$setResourceBrush "BrushWindowBg"       "#ECE9D8"
+            &$setResourceBrush "BrushToolbarBg"      "#ECE9D8"
+            &$setResourceBrush "BrushSurfaceBg"      "#FFFFFF"
+            &$setResourceBrush "BrushHeaderBg"       "#D4D0C8"
+            &$setResourceBrush "BrushBorderSubtle"   "#808080"
+            &$setResourceBrush "BrushTreeLine"       "#808080"
+            &$setResourceBrush "BrushTextPrimary"    "#000000"
+            &$setResourceBrush "BrushTextSecondary"  "#333333"
+            &$setResourceBrush "BrushTextMuted"      "#666666"
+            &$setResourceBrush "BrushRowHover"       "#220A246A"
+            &$setResourceBrush "BrushRowSelectedBg"  "#0A246A"
+            &$setResourceBrush "BrushRowSelectedFg"  "#FFFFFF"
+            &$setResourceBrush "BrushSparkBg"        "#ECE9D8"
+            &$setResourceBrush "BrushSparkBorder"    "#808080"
+            &$setResourceBrush "ColTint_CPU"          "#2222C55E"
+            &$setResourceBrush "ColTint_PrivateBytes" "#28EAB308"
+            &$setResourceBrush "ColTint_WorkingSet"   "#22F97316"
+            &$setResourceBrush "BrushMenuBg"         "#ECE9D8"
+            &$setResourceBrush "BrushMenuBorder"     "#808080"
+            &$setResourceBrush "BrushMenuHover"      "#D4D0C8"
+            if ($menuThemeLight)        { $menuThemeLight.IsChecked        = $false }
+            if ($menuThemeDark)         { $menuThemeDark.IsChecked         = $false }
+            if ($menuThemeClassic)      { $menuThemeClassic.IsChecked      = $true }
+            if ($menuThemeHighContrast) { $menuThemeHighContrast.IsChecked = $false }
+            if ($txtThemeToggle)        { $txtThemeToggle.Text             = "Classic" }
+        } elseif ($isDark) {
             &$setResourceBrush "BrushWindowBg"       "#0B0F17"
             &$setResourceBrush "BrushToolbarBg"      "#111827"
             &$setResourceBrush "BrushSurfaceBg"      "#0F172A"
@@ -314,9 +376,11 @@ function Start-PSRPM {
             &$setResourceBrush "BrushMenuBg"         "#161F30"
             &$setResourceBrush "BrushMenuBorder"     "#334155"
             &$setResourceBrush "BrushMenuHover"      "#26354D"
-            if ($menuThemeLight) { $menuThemeLight.IsChecked = $false }
-            if ($menuThemeDark)  { $menuThemeDark.IsChecked  = $true }
-            if ($txtThemeToggle) { $txtThemeToggle.Text      = "Light Mode" }
+            if ($menuThemeLight)        { $menuThemeLight.IsChecked        = $false }
+            if ($menuThemeDark)         { $menuThemeDark.IsChecked         = $true }
+            if ($menuThemeClassic)      { $menuThemeClassic.IsChecked      = $false }
+            if ($menuThemeHighContrast) { $menuThemeHighContrast.IsChecked = $false }
+            if ($txtThemeToggle)        { $txtThemeToggle.Text             = "Dark Mode" }
         } else {
             &$setResourceBrush "BrushWindowBg"       "#F8FAFC"
             &$setResourceBrush "BrushToolbarBg"      "#F1F5F9"
@@ -338,27 +402,86 @@ function Start-PSRPM {
             &$setResourceBrush "BrushMenuBg"         "#FFFFFF"
             &$setResourceBrush "BrushMenuBorder"     "#CBD5E1"
             &$setResourceBrush "BrushMenuHover"      "#F1F5F9"
-            if ($menuThemeLight) { $menuThemeLight.IsChecked = $true }
-            if ($menuThemeDark)  { $menuThemeDark.IsChecked  = $false }
-            if ($txtThemeToggle) { $txtThemeToggle.Text      = "Dark Mode" }
+            if ($menuThemeLight)        { $menuThemeLight.IsChecked        = $true }
+            if ($menuThemeDark)         { $menuThemeDark.IsChecked         = $false }
+            if ($menuThemeClassic)      { $menuThemeClassic.IsChecked      = $false }
+            if ($menuThemeHighContrast) { $menuThemeHighContrast.IsChecked = $false }
+            if ($txtThemeToggle)        { $txtThemeToggle.Text             = "Clean Light" }
         }
 
         foreach ($vm in $engineHandle.ProcessMap.Values) {
-            $vm.SetTheme($useDark)
+            $vm.SetThemeMode($themeMode)
         }
 
         $canClose = ($hostTabsCollection.Count -gt 1)
         foreach ($tVm in $hostTabsCollection) {
-            $tVm.UpdateVisualState(($tVm -eq $script:ActiveHostTab), $useDark, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
+            $tVm.UpdateVisualState(($tVm -eq $script:ActiveHostTab), $isDark, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
         }
-        if ($updatePauseUi) { &$updatePauseUi [bool]$stateContainer.IsPaused }
+        if ($updatePauseUi) { &$updatePauseUi ([bool]$stateContainer.IsPaused) }
+
+        if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded) {
+            foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+                if ($window.Resources.Contains($key)) {
+                    $script:ActiveFindHandleWin.Resources[$key] = $window.Resources[$key]
+                }
+            }
+        }
     }
 
-    if ($menuThemeLight) { $menuThemeLight.add_Click({ &$applyTheme $false }) }
-    if ($menuThemeDark)  { $menuThemeDark.add_Click({ &$applyTheme $true }) }
+    if ($menuThemeLight)        { $menuThemeLight.add_Click({ &$applyTheme "Light" }) }
+    if ($menuThemeDark)         { $menuThemeDark.add_Click({ &$applyTheme "Dark" }) }
+    if ($menuThemeClassic)      { $menuThemeClassic.add_Click({ &$applyTheme "Classic" }) }
+    if ($menuThemeHighContrast) { $menuThemeHighContrast.add_Click({ &$applyTheme "HighContrast" }) }
+
+    $cycleTheme = {
+        $cur = if ($stateContainer.CurrentTheme) { $stateContainer.CurrentTheme } else { if ($stateContainer.IsDarkTheme) { "Dark" } else { "Light" } }
+        $next = switch ($cur) {
+            "Light"        { "Dark" }
+            "Dark"         { "Classic" }
+            "Classic"      { "HighContrast" }
+            "HighContrast" { "Light" }
+            default        { "Dark" }
+        }
+        &$applyTheme $next
+    }
+
     $btnToolbarTheme = $window.FindName("BtnToolbarTheme")
     if ($btnToolbarTheme) {
-        $btnToolbarTheme.add_Click({ &$applyTheme (-not [bool]$stateContainer.IsDarkTheme) })
+        $btnToolbarTheme.add_Click({ &$cycleTheme })
+    }
+
+    # 5B. Row Highlighting Engine (Standard Sysinternals Semantic Categories vs Minimal Flashes-Only)
+    $menuHighlightCategories = $window.FindName("MenuHighlightCategories")
+    $btnToggleHighlights     = $window.FindName("BtnToggleHighlights")
+
+    $setCategoryHighlighting = {
+        param([bool]$enable)
+        $stateContainer.EnableCategoryHighlights = $enable
+        if ($menuHighlightCategories) { $menuHighlightCategories.IsChecked = $enable }
+        if ($btnToggleHighlights) {
+            $btnToggleHighlights.Content = if ($enable) { "Colors: Standard" } else { "Colors: Minimal" }
+            $btnToggleHighlights.ToolTip = if ($enable) {
+                "Static category colors enabled (Click to switch to Minimal mode: New/Exiting flashes only)"
+            } else {
+                "Minimal mode active (New/Exiting flashes only. Click to restore category colors)"
+            }
+        }
+        foreach ($vm in $engineHandle.ProcessMap.Values) {
+            $vm.SetCategoryHighlights($enable)
+        }
+        &$writeAuditLog "OPTIONS" ("Row category highlighting set to {0} (New/Exiting lifecycle flashes remain active)." -f $(if ($enable) { "Standard" } else { "Minimal" }))
+    }
+
+    if ($menuHighlightCategories) {
+        $menuHighlightCategories.add_Click({
+            &$setCategoryHighlighting ([bool]$menuHighlightCategories.IsChecked)
+        })
+    }
+    if ($btnToggleHighlights) {
+        $btnToggleHighlights.add_Click({
+            $cur = [bool]$stateContainer.EnableCategoryHighlights
+            &$setCategoryHighlighting (-not $cur)
+        })
     }
 
     # 6. Tree Node Expander Click Handler (PreviewMouseLeftButtonDown on GridProcesses)
@@ -837,7 +960,9 @@ function Start-PSRPM {
             [string]$actionName,
             [Object]$procVm,
             [string]$priorityVal = "Normal",
-            [scriptblock]$afterCallback = $null
+            [scriptblock]$afterCallback = $null,
+            [string]$handleId = "",
+            [string]$dumpType = "Mini"
         )
         if (-not $procVm) {
             $procVm = $gridProcesses.SelectedItem
@@ -847,7 +972,7 @@ function Start-PSRPM {
         $tPid  = [int]$procVm.PID
         $tName = [string]$procVm.Name
 
-        if ($tPid -le 4 -and $actionName -in @("KillProcess", "KillTree", "SuspendProcess")) {
+        if ($tPid -le 4 -and $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "CreateDump")) {
             [System.Windows.MessageBox]::Show(
                 "Cannot perform '$actionName' on critical Windows kernel process '$tName' (PID $tPid).",
                 "PSRPM - Protected Kernel Process",
@@ -882,6 +1007,8 @@ function Start-PSRPM {
             ExpectedName = $tName
             ServiceName  = ""
             Priority     = $priorityVal
+            HandleId     = $handleId
+            DumpType     = $dumpType
         }
 
         $localJss   = $jssAction
@@ -892,10 +1019,22 @@ function Start-PSRPM {
 
         & $engineHandle.SendCommand $cmdPayload ({
             param($res)
+            $actSuccess = $false
             if ($res.Success -and $res.PayloadJson) {
                 $parsed = $localJss.DeserializeObject($res.PayloadJson)
                 if ($parsed['Success']) {
+                    $actSuccess = $true
                     &$localLog "SUCCESS" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
+                    if ($localAct -eq "CreateDump" -and $parsed['DumpPath']) {
+                        $dPath = [string]$parsed['DumpPath']
+                        try { [System.Windows.Clipboard]::SetText($dPath) } catch { }
+                        [System.Windows.MessageBox]::Show(
+                            "Process memory dump created successfully!`n`nRemote Path:`n$dPath`n`n(The remote file path has been copied to your clipboard).",
+                            "PSRPM - Memory Dump Created",
+                            [System.Windows.MessageBoxButton]::OK,
+                            [System.Windows.MessageBoxImage]::Information
+                        ) | Out-Null
+                    }
                 } else {
                     &$localLog "WARN" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
                     [System.Windows.MessageBox]::Show($parsed['Message'], "PSRPM - Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
@@ -905,7 +1044,7 @@ function Start-PSRPM {
                 [System.Windows.MessageBox]::Show("Action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
             }
             [void]$localState.WakeEvent.Set()
-            if ($localAfter) { & $localAfter }
+            if ($localAfter) { & $localAfter $actSuccess }
         }.GetNewClosure())
     }
 
@@ -914,8 +1053,47 @@ function Start-PSRPM {
     $window.FindName("MenuEndProcessTree").add_Click({ &$invokeProcessAction "KillTree" $null })
     $window.FindName("MenuSuspend").add_Click({ &$invokeProcessAction "SuspendProcess" $null })
     $window.FindName("MenuResume").add_Click({ &$invokeProcessAction "ResumeProcess" $null })
-    $window.FindName("BtnToolbarKill").add_Click({ &$invokeProcessAction "KillProcess" $null })
-    $window.FindName("BtnToolbarKillTree").add_Click({ &$invokeProcessAction "KillTree" $null })
+    $btnKillProcess = $window.FindName("BtnToolbarKill")
+    if ($btnKillProcess) { $btnKillProcess.add_Click({ &$invokeProcessAction "KillProcess" $null }) }
+    $btnKillTree = $window.FindName("BtnToolbarKillTree")
+    if ($btnKillTree) { $btnKillTree.add_Click({ &$invokeProcessAction "KillTree" $null }) }
+
+    $actionCreateDump = {
+        param([string]$dumpType, [Object]$targetProc = $null)
+        $procVm = if ($targetProc) { $targetProc } else { $gridProcesses.SelectedItem }
+        if (-not $procVm) { return }
+        $tPid  = [int]$procVm.PID
+        $tName = [string]$procVm.Name
+        if ($tPid -le 4) {
+            [System.Windows.MessageBox]::Show(
+                "Cannot generate a memory dump for System process '$tName' (PID $tPid).",
+                "PSRPM - Protected Kernel Process",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            ) | Out-Null
+            return
+        }
+        $typeLabel = if ($dumpType -eq "Full") { "Full Memory Dump (~$([Math]::Round($procVm.MemoryBytes / 1MB, 1)) MB)" } else { "Minidump" }
+        $msg = "Generate $typeLabel for '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?`n`nThe dump will be saved directly to 'C:\temp\' on the target host."
+        $confirm = [System.Windows.MessageBox]::Show(
+            $msg,
+            "PSRPM - Confirm Process Dump",
+            [System.Windows.MessageBoxButton]::OKCancel,
+            [System.Windows.MessageBoxImage]::Question
+        )
+        if ($confirm -eq [System.Windows.MessageBoxResult]::OK) {
+            &$invokeProcessAction "CreateDump" $procVm "Normal" $null "" $dumpType
+        }
+    }
+
+    $menuCreateMini = $window.FindName("MenuCreateMiniDump")
+    if ($menuCreateMini) { $menuCreateMini.add_Click({ &$actionCreateDump "Mini" }) }
+    $menuCreateFull = $window.FindName("MenuCreateFullDump")
+    if ($menuCreateFull) { $menuCreateFull.add_Click({ &$actionCreateDump "Full" }) }
+    $ctxCreateMini  = $window.FindName("CtxCreateMiniDump")
+    if ($ctxCreateMini)  { $ctxCreateMini.add_Click({ &$actionCreateDump "Mini" }) }
+    $ctxCreateFull  = $window.FindName("CtxCreateFullDump")
+    if ($ctxCreateFull)  { $ctxCreateFull.add_Click({ &$actionCreateDump "Full" }) }
 
     $window.FindName("MenuPrioIdle").add_Click({ &$invokeProcessAction "SetPriority" $null "Idle" })
     $window.FindName("MenuPrioBelow").add_Click({ &$invokeProcessAction "SetPriority" $null "BelowNormal" })
@@ -1269,7 +1447,7 @@ function Start-PSRPM {
             $svcView.Filter = $null
         } else {
             $fLower = $filterText.ToLowerInvariant()
-            $svcView.Filter = [Predicate[Object]]{
+            $svcView.Filter = [Predicate[Object]]({
                 param($item)
                 if (-not $item) { return $false }
                 $n = [string]$item.Name
@@ -1286,7 +1464,7 @@ function Start-PSRPM {
                         $t.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                         $u.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                         $dp.IndexOf($fLower, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)
-            }
+            }.GetNewClosure())
         }
         &$updateSvcSummaryText
     }
@@ -1778,15 +1956,35 @@ function Start-PSRPM {
             &$invokeProcessAction $act $selectedVm "Normal" ({
                 $localBtn.Content = if ($localVm.Status -eq "Suspended") { "Suspend" } else { "Resume" }
                 & $localRun $false "Core"
-            }.GetNewClosure())
+            })
         })
+        $btnPropCreateDump = $propWin.FindName("BtnPropCreateDump")
+        if ($btnPropCreateDump) {
+            $btnPropCreateDump.add_Click({
+                if ($btnPropCreateDump.ContextMenu) {
+                    $btnPropCreateDump.ContextMenu.PlacementTarget = $btnPropCreateDump
+                    $btnPropCreateDump.ContextMenu.IsOpen = $true
+                } else {
+                    &$actionCreateDump "Mini" $selectedVm
+                }
+            })
+        }
+        $menuPropMini = $propWin.FindName("MenuPropMiniDump")
+        if ($menuPropMini) {
+            $menuPropMini.add_Click({ &$actionCreateDump "Mini" $selectedVm })
+        }
+        $menuPropFull = $propWin.FindName("MenuPropFullDump")
+        if ($menuPropFull) {
+            $menuPropFull.add_Click({ &$actionCreateDump "Full" $selectedVm })
+        }
+
         $propWin.FindName("BtnPropEndProcess").add_Click({
             $localPropWin = $propWin
-            &$invokeProcessAction "KillProcess" $selectedVm "Normal" ({ $localPropWin.Close() }.GetNewClosure())
+            &$invokeProcessAction "KillProcess" $selectedVm "Normal" ({ $localPropWin.Close() })
         })
         $propWin.FindName("BtnPropEndTree").add_Click({
             $localPropWin = $propWin
-            &$invokeProcessAction "KillTree" $selectedVm "Normal" ({ $localPropWin.Close() }.GetNewClosure())
+            &$invokeProcessAction "KillTree" $selectedVm "Normal" ({ $localPropWin.Close() })
         })
         $propWin.FindName("BtnCloseProp").add_Click({ $propWin.Close() })
 
@@ -2024,7 +2222,7 @@ function Start-PSRPM {
         }
 
         $txtComp.Text = if ($forceNewTab) { "localhost" } else { $stateContainer.TargetDisplayName }
-        $pickedCred   = $Credential
+        $credHolder   = @{ Value = $Credential }
 
         $rbRemote.add_Checked({ $gridInputs.IsEnabled = $true })
         $rbLocal.add_Checked({  $gridInputs.IsEnabled = $false })
@@ -2033,7 +2231,7 @@ function Start-PSRPM {
             try {
                 $c = Get-Credential
                 if ($c) {
-                    $pickedCred = $c
+                    $credHolder.Value = $c
                     $txtCredStatus.Text = $c.UserName
                 }
             } catch {}
@@ -2063,7 +2261,7 @@ function Start-PSRPM {
                     TabId        = $newTabId
                     ComputerName = $compName
                     IsLocal      = $useLocal
-                    Credential   = $pickedCred
+                    Credential   = $credHolder.Value
                     Port         = $portNum
                     UseSSL       = $useSslVal
                 }
@@ -2122,7 +2320,7 @@ function Start-PSRPM {
                     CommandType  = "SwitchTarget"
                     ComputerName = $compName
                     IsLocal      = $useLocal
-                    Credential   = $pickedCred
+                    Credential   = $credHolder.Value
                     Port         = $portNum
                     UseSSL       = $useSslVal
                 }
@@ -2260,7 +2458,35 @@ function Start-PSRPM {
                     }
                 }
                 if ($format -eq "JSON") {
-                    $rows | ConvertTo-Json -Depth 4 | Set-Content -Path $dlg.FileName -Encoding UTF8
+                    $activeSumm = if ($script:ActiveHostTab -and $script:ActiveHostTab.SummaryVm) { $script:ActiveHostTab.SummaryVm } else { $summaryVm }
+                    $exportPkg = [PSCustomObject]@{
+                        Target        = $stateContainer.TargetDisplayName
+                        ExportTimeUtc = [System.DateTime]::UtcNow.ToString("o")
+                        SystemSummary = [PSCustomObject]@{
+                            CpuPercent      = [Math]::Round($activeSumm.CpuUsage, 2)
+                            KernelPercent   = [Math]::Round($activeSumm.KernelCpuUsage, 2)
+                            CommitChargeMB  = $activeSumm.CommitUsedMB
+                            CommitLimitMB   = $activeSumm.CommitLimitMB
+                            PhysicalTotalMB = $activeSumm.RamTotalMB
+                            PhysicalUsedMB  = $activeSumm.RamUsedMB
+                            PhysicalAvailMB = [Math]::Max(0L, ($activeSumm.RamTotalMB - $activeSumm.RamUsedMB))
+                            ProcessCount    = $activeSumm.ProcessCount
+                            ThreadCount     = $activeSumm.ThreadCount
+                            HandleCount     = $activeSumm.HandleCount
+                            History120      = [PSCustomObject]@{
+                                Cpu          = $activeSumm.GetCpuHistory120()
+                                Kernel       = $activeSumm.GetKernelHistory120()
+                                CommitCharge = $activeSumm.GetCommitHistory120()
+                                RamPhysical  = $activeSumm.GetRamHistory120()
+                                IoTotal      = $activeSumm.GetIoTotalHistory120()
+                                IoWrite      = $activeSumm.GetIoWriteHistory120()
+                                NetRx        = $activeSumm.GetNetRxHistory120()
+                                NetTx        = $activeSumm.GetNetTxHistory120()
+                            }
+                        }
+                        Processes     = $rows
+                    }
+                    $exportPkg | ConvertTo-Json -Depth 6 | Set-Content -Path $dlg.FileName -Encoding UTF8
                 } else {
                     $rows | Export-Csv -Path $dlg.FileName -NoTypeInformation -Encoding UTF8
                 }
@@ -2293,15 +2519,16 @@ function Start-PSRPM {
         $sysWin = [System.Windows.Markup.XamlReader]::Load($msSys)
         $msSys.Close()
 
+        $activeSumm = if ($script:ActiveHostTab -and $script:ActiveHostTab.SummaryVm) { $script:ActiveHostTab.SummaryVm } else { $summaryVm }
         $sysWin.Owner       = $window
         if ($appIconFrame) { $sysWin.Icon = $appIconFrame }
         $sysWin.Title       = "System Information [$($stateContainer.TargetDisplayName)]"
-        $sysWin.DataContext = $summaryVm
+        $sysWin.DataContext = $activeSumm
 
-        $summaryVm.IsSysInfoOpen = $true
-        $summaryVm.RefreshSysInfoGraphs()
-        if ($summaryVm.ShowOneGraphPerCpu) {
-            foreach ($cg in $summaryVm.CoreGraphs) { $cg.BuildCoreGeometry() }
+        $activeSumm.IsSysInfoOpen = $true
+        $activeSumm.RefreshSysInfoGraphs()
+        if ($activeSumm.ShowOneGraphPerCpu) {
+            foreach ($cg in $activeSumm.CoreGraphs) { $cg.BuildCoreGeometry() }
         }
 
         $tcSys = $sysWin.FindName("SysInfoTabControl")
@@ -2328,8 +2555,9 @@ function Start-PSRPM {
 
         $chkPerCpu = $sysWin.FindName("ChkPerCpuGraph")
         if ($chkPerCpu) {
-            $chkPerCpu.add_Checked({ $summaryVm.SetPerCpuMode($true) })
-            $chkPerCpu.add_Unchecked({ $summaryVm.SetPerCpuMode($false) })
+            $localSumm = $activeSumm
+            $chkPerCpu.add_Checked({ $localSumm.SetPerCpuMode($true) }.GetNewClosure())
+            $chkPerCpu.add_Unchecked({ $localSumm.SetPerCpuMode($false) }.GetNewClosure())
         }
 
         $btnSysOk = $sysWin.FindName("BtnSysInfoOk")
@@ -2337,10 +2565,11 @@ function Start-PSRPM {
             $btnSysOk.add_Click({ $sysWin.Close() }.GetNewClosure())
         }
 
+        $localCloseSumm = $activeSumm
         $sysWin.add_Closed({
-            $summaryVm.IsSysInfoOpen = $false
+            $localCloseSumm.IsSysInfoOpen = $false
             $script:ActiveSysInfoWin = $null
-        })
+        }.GetNewClosure())
 
         $script:ActiveSysInfoWin = $sysWin
         $sysWin.Show()
@@ -2408,6 +2637,9 @@ function Start-PSRPM {
             $txtAboutUser = $helpWin.FindName("TxtAboutUser")
             if ($txtAboutUser) { $txtAboutUser.Text = "$env:USERDOMAIN\$env:USERNAME" }
 
+            $txtAboutVer = $helpWin.FindName("TxtAboutVersion")
+            if ($txtAboutVer) { $txtAboutVer.Text = "1.4.0" }
+
             $txtAboutTarget = $helpWin.FindName("TxtAboutTarget")
             if ($txtAboutTarget) { $txtAboutTarget.Text = "$($stateContainer.TargetDisplayName)" }
 
@@ -2455,6 +2687,309 @@ function Start-PSRPM {
     $btnToolbarHelp = $window.FindName("BtnToolbarHelp")
     if ($btnToolbarHelp) { $btnToolbarHelp.add_Click({ &$actionShowHelp 0 }) }
 
+    # 15C. Find Handle or DLL Window (Ctrl+Shift+F or Find Menu / Toolbar)
+    $script:ActiveFindHandleWin  = $null
+    $script:FindHandleControls   = @{}
+    $script:FindHandleResultsCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+
+    $executeHandleSearch = {
+        $ctrls     = $script:FindHandleControls
+        $txtBox    = $ctrls['TxtSearchHandle']
+        $btnSearch = $ctrls['BtnSearchHandle']
+        $txtStatus = $ctrls['TxtHandleStatus']
+        $findWin   = $script:ActiveFindHandleWin
+        $localCol  = $script:FindHandleResultsCol
+
+        $q = if ($txtBox) { $txtBox.Text.Trim() } else { "" }
+        if ([string]::IsNullOrWhiteSpace($q)) {
+            if ($txtStatus) { $txtStatus.Text = "Please enter a file name, folder path, DLL, or key substring to search." }
+            return
+        }
+
+        if ($btnSearch) { $btnSearch.IsEnabled = $false }
+        if ($txtStatus) { $txtStatus.Text = "Searching across processes on '$($stateContainer.TargetDisplayName)' for '$q'..." }
+
+        $cmdFind = @{
+            CommandType = "FindHandles"
+            Query       = $q
+        }
+
+        $localJss = $jssAction
+        $localQ   = $q
+
+        & $engineHandle.SendCommand $cmdFind ({
+            param($res)
+            if ($findWin -and $findWin.IsLoaded) {
+                $findWin.Dispatcher.Invoke([Action]({
+                    if ($btnSearch) { $btnSearch.IsEnabled = $true }
+                    if ($res.Success -and $res.PayloadJson) {
+                        $parsedList = $localJss.DeserializeObject($res.PayloadJson)
+                        $localCol.Clear()
+                        if ($parsedList -and $parsedList.Count -gt 0) {
+                            foreach ($item in $parsedList) {
+                                [void]$localCol.Add([PSCustomObject]@{
+                                    ProcessName = [string]$item['ProcessName']
+                                    PID         = [int]$item['PID']
+                                    Type        = [string]$item['Type']
+                                    Handle      = [string]$item['Handle']
+                                    Name        = [string]$item['Name']
+                                })
+                            }
+                            if ($txtStatus) {
+                                $txtStatus.Text = "Found $($parsedList.Count) matching handle(s) and DLL(s) in $($res.ElapsedMs) ms."
+                            }
+                        } else {
+                            if ($txtStatus) {
+                                $txtStatus.Text = "0 matches found for '$localQ' ($($res.ElapsedMs) ms)."
+                            }
+                        }
+                    } else {
+                        if ($txtStatus) {
+                            $txtStatus.Text = "Search failed: $($res.Error)"
+                        }
+                    }
+                }))
+            }
+        }.GetNewClosure())
+    }
+
+    $closeSelectedHandle = {
+        $gridHandles = $script:FindHandleControls['GridHandleResults']
+        if (-not $gridHandles -or -not $gridHandles.SelectedItem) { return }
+        $sel    = $gridHandles.SelectedItem
+        $hVal   = [string]$sel.Handle
+        $tVal   = [string]$sel.Type
+        $pName  = [string]$sel.ProcessName
+        $pidVal = [int]$sel.PID
+        $nVal   = [string]$sel.Name
+
+        if ($tVal -eq "DLL") {
+            [System.Windows.MessageBox]::Show(
+                "Cannot close a loaded DLL module handle directly. To unload a DLL, terminate or restart '$pName' (PID $pidVal).",
+                "PSRPM - Close Handle",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Information
+            ) | Out-Null
+            return
+        }
+
+        $warnMsg = "WARNING: Forcibly closing an active handle in '$pName' (PID $pidVal) can cause the target process to crash or become unstable.`n`nAre you sure you want to close handle $hVal ($nVal)?"
+        $confirm = [System.Windows.MessageBox]::Show(
+            $warnMsg,
+            "PSRPM - Confirm Close Handle",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Warning
+        )
+        if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
+
+        $procVmDummy = [PSCustomObject]@{
+            PID  = $pidVal
+            Name = $pName
+        }
+        $targetPid    = $pidVal
+        $targetHnd    = $hVal
+        $targetPName  = $pName
+        $targetSel    = $sel
+        $targetCol    = $script:FindHandleResultsCol
+        $targetWin    = $script:ActiveFindHandleWin
+        $targetStatus = $script:FindHandleControls['TxtHandleStatus']
+
+        $closeCallback = {
+            param($actionSuccess)
+            if ($actionSuccess -eq $false) { return }
+            $win = $targetWin
+            if ($win -and $win.IsLoaded) {
+                $win.Dispatcher.Invoke([Action]({
+                    $col = $targetCol
+                    if (-not $col) { return }
+                    $removeIdx = -1
+                    for ($i = $col.Count - 1; $i -ge 0; $i--) {
+                        $item = $col[$i]
+                        if ($item -eq $targetSel) {
+                            $removeIdx = $i
+                            break
+                        }
+                        $itemPid = [int]$item.PID
+                        $itemHnd = [string]$item.Handle
+                        $matchHnd = ($itemHnd.Trim().ToLowerInvariant() -eq $targetHnd.Trim().ToLowerInvariant())
+                        if ($itemPid -eq $targetPid -and $matchHnd) {
+                            $removeIdx = $i
+                            break
+                        }
+                    }
+                    if ($removeIdx -ge 0) {
+                        [void]$col.RemoveAt($removeIdx)
+                    }
+                    $txtSt = $targetStatus
+                    if ($txtSt) {
+                        if ($removeIdx -ge 0) {
+                            $txtSt.Text = "Successfully closed handle $targetHnd in '$targetPName' (PID $targetPid). Remaining matches: $($col.Count)."
+                        } else {
+                            $txtSt.Text = "Closed handle $targetHnd in '$targetPName' (PID $targetPid)."
+                        }
+                    }
+                }))
+            }
+        }.GetNewClosure()
+
+        &$invokeProcessAction "CloseHandle" $procVmDummy "Normal" $closeCallback $hVal
+    }
+
+    $goToProcessInTree = {
+        $gridHandles = $script:FindHandleControls['GridHandleResults']
+        if (-not $gridHandles -or -not $gridHandles.SelectedItem) { return }
+        $sel    = $gridHandles.SelectedItem
+        $pidVal = [int]$sel.PID
+
+        $mainTabs = $window.FindName("MainTabControl")
+        if ($mainTabs -and $mainTabs.SelectedIndex -ne 0) {
+            $mainTabs.SelectedIndex = 0
+        }
+
+        if ($engineHandle.ProcessMap.ContainsKey($pidVal)) {
+            $targetVm = $engineHandle.ProcessMap[$pidVal]
+            $currPid = $targetVm.ParentPID
+            $guard = 0
+            while ($currPid -gt 0 -and $engineHandle.ProcessMap.ContainsKey($currPid) -and $guard -lt 30) {
+                $parentVm = $engineHandle.ProcessMap[$currPid]
+                $parentVm.IsExpanded = $true
+                $parentVm.UpdateExpanderGeometry()
+                $currPid = $parentVm.ParentPID
+                $guard++
+            }
+            if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
+            $gridProcesses.SelectedItem = $targetVm
+            $gridProcesses.ScrollIntoView($targetVm)
+            $window.Activate()
+        } else {
+            [System.Windows.MessageBox]::Show("Process '$($sel.ProcessName)' (PID $pidVal) is no longer active in the process tree.", "PSRPM - Process Not Found", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information) | Out-Null
+        }
+    }
+
+    $copySelectedPath = {
+        $gridHandles = $script:FindHandleControls['GridHandleResults']
+        if ($gridHandles -and $gridHandles.SelectedItem) {
+            $sel = $gridHandles.SelectedItem
+            if ($sel.Name) {
+                [System.Windows.Clipboard]::SetText([string]$sel.Name)
+                &$writeAuditLog "CLIPBOARD" "Copied object path '$($sel.Name)'."
+            }
+        }
+    }
+
+    $actionShowFindHandle = {
+        if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded) {
+            $script:ActiveFindHandleWin.Activate()
+            $txt = $script:FindHandleControls['TxtSearchHandle']
+            if ($txt) { [void]$txt.Focus() }
+            return
+        }
+
+        # Clear any previous search results so fresh modal opens cleanly
+        $script:FindHandleResultsCol.Clear()
+
+        $fBytes  = [System.IO.File]::ReadAllBytes($findHandleXamlPath)
+        $msFind  = [System.IO.MemoryStream]::new($fBytes)
+        $findWin = [System.Windows.Markup.XamlReader]::Load($msFind)
+        $msFind.Close()
+
+        $findWin.Owner = $window
+        if ($appIconFrame) { $findWin.Icon = $appIconFrame }
+        $findWin.Title = "Find Handle or DLL Substring [$($stateContainer.TargetDisplayName)]"
+
+        # Apply active theme brushes from main window
+        foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+            if ($window.Resources.Contains($key)) {
+                $findWin.Resources[$key] = $window.Resources[$key]
+            }
+        }
+
+        $txtSearchHandle = $findWin.FindName("TxtSearchHandle")
+        $btnSearchHandle = $findWin.FindName("BtnSearchHandle")
+        $txtHandleStatus = $findWin.FindName("TxtHandleStatus")
+        $gridHandles     = $findWin.FindName("GridHandleResults")
+        $ctxCloseHandle  = $findWin.FindName("CtxCloseHandle")
+        $ctxGoToProcess  = $findWin.FindName("CtxGoToProcess")
+        $ctxCopyPath     = $findWin.FindName("CtxCopyPath")
+        $btnCloseHandle  = $findWin.FindName("BtnCloseHandle")
+        $btnGoToProcess  = $findWin.FindName("BtnGoToProcess")
+        $btnCopyPath     = $findWin.FindName("BtnCopyPath")
+        $btnCloseDlg     = $findWin.FindName("BtnCloseDlg")
+
+        if ($txtSearchHandle) { $txtSearchHandle.Text = "" }
+        if ($txtHandleStatus) { $txtHandleStatus.Text = "Enter a file name, folder path, DLL, or registry key to search across processes." }
+
+        $script:ActiveFindHandleWin = $findWin
+        $script:FindHandleControls = @{
+            TxtSearchHandle   = $txtSearchHandle
+            BtnSearchHandle   = $btnSearchHandle
+            TxtHandleStatus   = $txtHandleStatus
+            GridHandleResults = $gridHandles
+        }
+
+        if ($gridHandles) {
+            $gridHandles.ItemsSource = $script:FindHandleResultsCol
+            $gridHandles.add_MouseDoubleClick({
+                param($s, $e)
+                $dg = $script:FindHandleControls['GridHandleResults']
+                if ($dg -and $dg.SelectedItem) {
+                    &$goToProcessInTree
+                }
+            })
+        }
+
+        if ($btnSearchHandle) { $btnSearchHandle.add_Click({ &$executeHandleSearch }) }
+        if ($txtSearchHandle) {
+            $txtSearchHandle.add_KeyDown({
+                param($s, $e)
+                if ($e.Key -eq [System.Windows.Input.Key]::Enter) {
+                    &$executeHandleSearch
+                    $e.Handled = $true
+                }
+            })
+        }
+        if ($btnCloseHandle) { $btnCloseHandle.add_Click({ &$closeSelectedHandle }) }
+        if ($ctxCloseHandle) { $ctxCloseHandle.add_Click({ &$closeSelectedHandle }) }
+        if ($btnGoToProcess) { $btnGoToProcess.add_Click({ &$goToProcessInTree }) }
+        if ($ctxGoToProcess) { $ctxGoToProcess.add_Click({ &$goToProcessInTree }) }
+        if ($btnCopyPath)    { $btnCopyPath.add_Click({ &$copySelectedPath }) }
+        if ($ctxCopyPath)    { $ctxCopyPath.add_Click({ &$copySelectedPath }) }
+        if ($btnCloseDlg)    { $btnCloseDlg.add_Click({ if ($script:ActiveFindHandleWin) { $script:ActiveFindHandleWin.Close() } }) }
+
+        $findWin.add_KeyDown({
+            param($s, $e)
+            $dg = $script:FindHandleControls['GridHandleResults']
+            if ($e.Key -eq [System.Windows.Input.Key]::Escape) {
+                if ($script:ActiveFindHandleWin) {
+                    $script:ActiveFindHandleWin.Close()
+                }
+                $e.Handled = $true
+            } elseif ($e.Key -eq [System.Windows.Input.Key]::Delete -and $dg -and $dg.IsKeyboardFocusWithin) {
+                &$closeSelectedHandle
+                $e.Handled = $true
+            } elseif ($e.Key -eq [System.Windows.Input.Key]::Enter -and $dg -and $dg.IsKeyboardFocusWithin) {
+                &$goToProcessInTree
+                $e.Handled = $true
+            }
+        })
+
+        $findWin.add_Closed({
+            $script:FindHandleResultsCol.Clear()
+            $script:ActiveFindHandleWin = $null
+            $script:FindHandleControls.Clear()
+        })
+
+        $findWin.Show()
+        if ($txtSearchHandle) {
+            [void]$txtSearchHandle.Focus()
+        }
+    }
+
+    $menuFindHandle     = $window.FindName("MenuFindHandle")
+    $btnFindHandleOrDll = $window.FindName("BtnFindHandleOrDll")
+    if ($menuFindHandle)     { $menuFindHandle.add_Click({ &$actionShowFindHandle }) }
+    if ($btnFindHandleOrDll) { $btnFindHandleOrDll.add_Click({ &$actionShowFindHandle }) }
+
     # 16. Global Keyboard Accelerators
     $window.add_PreviewKeyDown({
         param($sender, $e)
@@ -2470,6 +3005,9 @@ function Start-PSRPM {
             $e.Handled = $true
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin)) {
             &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused)
+            $e.Handled = $true
+        } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::F) {
+            &$actionShowFindHandle
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::F) {
             $mainTabs = $window.FindName("MainTabControl")
@@ -2498,7 +3036,7 @@ function Start-PSRPM {
             &$setViewMode (-not [bool]$stateContainer.IsTreeMode)
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::D) {
-            &$applyTheme (-not [bool]$stateContainer.IsDarkTheme)
+            &$cycleTheme
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::L) {
             &$toggleLogPane

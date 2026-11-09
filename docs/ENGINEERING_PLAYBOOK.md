@@ -17,11 +17,11 @@ Every design decision is governed by four pillars, in strict priority order:
    - Must work over a single persistent WinRM `PSSession` without opening secondary ports, RPC/DCOM channels, or SMB file shares.
    - Must also run locally (`-LocalOnly` / `-Local`) without requiring WinRM or elevation.
 2. **Performance Budget (`< 0.25%` Remote CPU, `< 1.5 KB/s` Steady-State Network)**:
-   - Remote per-tick collection must complete in **`2 – 10 ms`** using a single kernel transition (`NtQuerySystemInformation`).
-   - Steady-state network payloads must remain **`~1.1 – 1.8 KB/s`** by transmitting only differential changes compressed with GZIP.
+   - Remote per-tick collection must complete in **`2 - 10 ms`** using a single kernel transition (`NtQuerySystemInformation`).
+   - Steady-state network payloads must remain **`~1.1 - 1.8 KB/s`** by transmitting only differential changes compressed with GZIP.
    - Local workstation memory for historical graphs must remain strictly bounded (`< 12 KB` via fixed-size circular ring buffers).
 3. **UX & Visual Fidelity (Process Explorer Ergonomics)**:
-   - Single-surface hierarchical **Tree-Grid** with pixel-snapped vector connectors (`│`, `├─`, `└─`), semantic row colors, instant ancestor-preserving search, auto-flat column sorting, a lazy-loaded **7-tab Process Properties Inspector**, a live **4-tab System Information** window, and a real-time **Audit & Network Telemetry Console**.
+   - Single-surface hierarchical **Tree-Grid** with pixel-snapped vector connectors (`|`, `+-`, `\-`), semantic row colors, instant ancestor-preserving search, auto-flat column sorting, a lazy-loaded **7-tab Process Properties Inspector**, a live **4-tab System Information** window, and a real-time **Audit & Network Telemetry Console**.
 4. **100% Fileless & EDR-Safe Security Posture**:
    - **Zero `csc.exe` invocations** and **zero temporary `.dll` or `.cs` files** dropped to disk on either the local workstation or the remote target.
 
@@ -31,29 +31,29 @@ Every design decision is governed by four pillars, in strict priority order:
 
 Every rule below was learned from real-world failure modes during PSRPM's development. **Never violate these rules.**
 
-### 🚫 1. NEVER use `Add-Type -TypeDefinition` or `Add-Type -MemberDefinition`
-- **Why**: Both invoke `csc.exe` on disk and write temporary `.cs` and `.dll` files into `%TEMP%`. On enterprise endpoints, compiling C# inside a remote `wsmprovhost.exe` WinRM process triggers EDR behavioral alerts and adds 500–1,200 ms of cold-start latency.
+### 1. NEVER use `Add-Type -TypeDefinition` or `Add-Type -MemberDefinition`
+- **Why**: Both invoke `csc.exe` on disk and write temporary `.cs` and `.dll` files into `%TEMP%`. On enterprise endpoints, compiling C# inside a remote `wsmprovhost.exe` WinRM process triggers EDR behavioral alerts and adds 500-1,200 ms of cold-start latency.
 - **Do This Instead**:
   - For Win32 / NTAPI P/Invoke signatures: Use in-memory `.NET Reflection.Emit` (`DefineDynamicAssembly` with `AssemblyBuilderAccess::Run` and `DefinePInvokeMethod`), as implemented in [`DataCollector.ps1`](../PSRPM/Private/DataCollector.ps1) and [`DeepInspector.ps1`](../PSRPM/Private/DeepInspector.ps1).
   - For ViewModels: Use pure PowerShell 5.1 native `class` declarations (`class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged`), which the PowerShell AST compiler emits directly into memory via `Reflection.Emit`.
 
-### 🚫 2. NEVER put non-ASCII Unicode characters inside `.ps1` or `.psm1` files
-- **Why**: Windows PowerShell 5.1 reads `.ps1` and `.psm1` files without a UTF-8 BOM using the legacy `Windows-1252` codepage. Multi-byte UTF-8 characters such as `Δ` (`0xCE 0x94`), `—` (`0xE2 0x80 0x94`), or smart quotes contain byte `0x94`, which Windows-1252 interprets as a closing double-quote (`”`), silently corrupting string literals and causing fatal parser errors.
+### 2. NEVER put non-ASCII Unicode characters inside `.ps1` or `.psm1` files
+- **Why**: Windows PowerShell 5.1 reads `.ps1` and `.psm1` files without a UTF-8 BOM using the legacy `Windows-1252` codepage. Multi-byte UTF-8 characters such as `Delta` (`0xCE 0x94`), `--` (`0xE2 0x80 0x94`), or smart quotes contain byte `0x94`, which Windows-1252 interprets as a closing double-quote (`"`), silently corrupting string literals and causing fatal parser errors.
 - **Do This Instead**:
   - Keep all `.ps1` and `.psm1` files strictly **7-bit ASCII**.
   - Put Unicode symbols or XML entities (`&#x...;`, `&amp;`) inside `.xaml` files (which are parsed as UTF-8 XML streams) or construct them via `[char]0x...` if ever needed in code.
 
-### 🚫 3. NEVER use custom PowerShell 5.1 `class` types as generic type parameters inside `.GetNewClosure()`
+### 3. NEVER use custom PowerShell 5.1 `class` types as generic type parameters inside `.GetNewClosure()`
 - **Why**: When you call `{ ... }.GetNewClosure()` in PowerShell 5.1, PowerShell binds the scriptblock to an isolated dynamic module. Inside that closure, expressions like `[System.Collections.Generic.List[InspectorModuleItem]]::new()` fail at runtime with `Unable to find type [System.Collections.Generic.List]` because the CLR type resolver cannot bind custom PowerShell classes inside generic type parameters across dynamic closure modules.
 - **Do This Instead**:
   - Inside UI callbacks or `.GetNewClosure()` blocks, always use `[System.Collections.Generic.List[Object]]::new()` and populate items with `[PSCustomObject]@{ ... }` (WPF `DataGrid` binds to `PSCustomObject` properties natively).
 
-### 🚫 4. NEVER nest `.GetNewClosure()` inside another `.GetNewClosure()`
+### 4. NEVER nest `.GetNewClosure()` inside another `.GetNewClosure()`
 - **Why**: Nested closures in PowerShell 5.1 frequently drop parent-scope variables (`$engineHandle`, `$jss`, `$window`), causing silent `$null` invocations when async callbacks return.
 - **Do This Instead**:
   - Capture required outer variables into explicit local variables immediately before creating the single `.GetNewClosure()` callback passed to `SendCommand`.
 
-### 🚫 5. NEVER cast `Marshal::ReadInt32` directly to `[uint32]` or use C# `0UL` suffixes
+### 5. NEVER cast `Marshal::ReadInt32` directly to `[uint32]` or use C# `0UL` suffixes
 - **Why**:
   - PowerShell 5.1 does not support the `UL` unsigned-long literal suffix (`0UL` causes a syntax error).
   - `Marshal::ReadInt32($ptr, $offset)` returns a signed `[int32]`. When a 32-bit kernel counter (such as `PageFaultCount`, `ContextSwitches`, or `InterruptCount`) exceeds `2,147,483,647` (`0x80000000`), `ReadInt32` returns a negative number, and `[uint32](-6627701)` throws a runtime `InvalidCastIConvertible` exception!
@@ -63,33 +63,67 @@ Every rule below was learned from real-world failure modes during PSRPM's develo
     $val = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, $offset) -band 0xFFFFFFFFL)
     ```
 
-### 🚫 6. NEVER query `"File"` handles synchronously during bulk handle enumeration
-- **Why**: Calling `GetFileType`, `GetFinalPathNameByHandleW`, or `NtQueryObject(..., ObjectNameInformation = 1, ...)` on a synchronous named pipe handle (especially Chromium / `msedgewebview2.exe` Mojo IPC pipes) blocks inside the Windows kernel waiting for the pipe reader/writer, freezing the remote runspace indefinitely.
+### 6. NEVER query non-disk "File" handles (pipes, devices) synchronously via `NtQueryObject(ObjectNameInformation)`
+- **Why**: Calling `NtQueryObject(..., ObjectNameInformation = 1, ...)` on a synchronous named pipe handle (especially Chromium / `msedgewebview2.exe` Mojo IPC pipes) blocks inside the Windows kernel waiting for the pipe reader/writer, freezing the remote runspace indefinitely.
 - **Do This Instead**:
-  - In [`DeepInspector.ps1`](../PSRPM/Private/DeepInspector.ps1) (`Handles` mode), always keep `"File"` in `$skipTypes` so `NtQueryObject(ObjectNameInformation)` is only invoked on non-blocking Object Manager types (`Key`, `Section`, `Mutant`, `Event`, `ALPC Port`, `Directory`, `Semaphore`, `Job`, `Desktop`, `WindowStation`).
+  - In [`DeepInspector.ps1`](../PSRPM/Private/DeepInspector.ps1) (`Handles` and `FindHandles` modes), do **not** skip `"File"` completely (which would break disk file/folder search). Instead, defensively gate all `"File"` objects:
+    1. Call `GetFileType($dup)`.
+    2. If `GetFileType($dup) -eq 1` (`FILE_TYPE_DISK`), resolve the path via `GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)`.
+    3. If `GetFileType($dup) -ne 1` (pipes, character devices, sockets), **skip** querying the name so synchronous pipes are never touched.
+  - For non-file types (`Key`, `Section`, `Mutant`, `Event`, `ALPC Port`, `Directory`, `Semaphore`), query `NtQueryObject(ObjectNameInformation)` safely.
 
-### 🚫 7. NEVER eagerly load `DLLs` or `Handles` when opening Process Properties
+### 7. NEVER eagerly load `DLLs` or `Handles` when opening Process Properties
 - **Why**: Enumerating 150+ loaded DLLs (`GetVersionInfo` disk reads) and 1,000+ kernel handles takes ~60 ms and 40+ KB of JSON. Doing that every time the user double-clicks a process makes the UI feel sluggish.
 - **Do This Instead**:
   - Always open Process Properties in `"Core"` mode (`< 15 ms`, `< 2 KB`), which populates `Image`, `Performance`, `TCP/IP`, `Services`, and `Environment` immediately.
   - Trigger `"Modules"` (`DLLs` tab) or `"Handles"` (`Handles` tab) lazily via `PropTabControl.add_SelectionChanged` only when the user clicks those tabs.
 
-### 🚫 8. NEVER call `Win32_Process`, `GetOwner()`, or `$Process.Responding` on steady-state ticks
+### 8. NEVER call `Win32_Process`, `GetOwner()`, or `$Process.Responding` on steady-state ticks
 - **Why**:
-  - `Get-CimInstance Win32_Process` and `Invoke-CimMethod -MethodName GetOwner` cause `WmiPrvSE.exe` to spike remote CPU to 15–25%.
+  - `Get-CimInstance Win32_Process` and `Invoke-CimMethod -MethodName GetOwner` cause `WmiPrvSE.exe` to spike remote CPU to 15-25%.
   - Accessing `.Responding` on a `System.Diagnostics.Process` object calls `user32!SendMessageTimeout` with a 5,000 ms timeout per window, freezing the collector whenever any GUI app on the remote machine is busy.
 - **Do This Instead**:
   - Read process state from `NtQuerySystemInformation(5)` (`SYSTEM_PROCESS_INFORMATION` + `SYSTEM_THREAD_INFORMATION` `WaitReason == 5`), resolve SIDs once per new process via `OpenProcessToken` + `$script:SidCache`, and query `Win32_Service` at most once every 30 seconds.
 
-### 🚫 9. NEVER call `$ObservableCollection.Clear()` on live-updating DataGrids
+### 9. NEVER call `$ObservableCollection.Clear()` on live-updating DataGrids
 - **Why**: Calling `.Clear()` and re-adding items every second destroys the user's selected row, keyboard focus, and vertical scroll position.
 - **Do This Instead**:
   - Always use the in-place diff reconciler (`$reconcileCollection` in [`RunspaceEngine.ps1`](../PSRPM/Private/RunspaceEngine.ps1)) and update existing `ProcessItemViewModel` properties in-place via dirty-checked `INotifyPropertyChanged`.
 
-### 🚫 10. NEVER use unbounded history arrays or build hidden chart strings every tick
+### 10. NEVER use unbounded history arrays or build hidden chart strings every tick
 - **Why**: Unbounded metric lists leak memory over multi-hour sessions, and building large `PointCollection` strings when a modal is closed wastes UI thread CPU.
 - **Do This Instead**:
   - Store history in fixed-capacity circular `Queue[double]` ring buffers (`120` samples = `< 12 KB` total RAM) and only execute `RefreshSysInfoGraphs()` when `$summaryVm.IsSysInfoOpen -eq $true`.
+
+### 11. NEVER use `IsCancel="True"` on buttons in modeless (`.Show()`) WPF windows
+- **Why**: In WPF, `IsCancel="True"` automatically assigns `Window.DialogResult = false` when the button is clicked or Escape is pressed. On modeless windows displayed with `.Show()` (instead of `.ShowDialog()`), setting `DialogResult` throws an unhandled `InvalidOperationException: DialogResult can be set only after Window is created and shown as Dialog.`
+- **Do This Instead**:
+  - Remove `IsCancel="True"` from buttons in modeless XAML windows. Wire the Close button click and window `Escape` key (`add_KeyDown`) directly to `$script:ActiveWindow.Close()`.
+
+### 12. NEVER reference function-local variables in event handlers on modeless (`.Show()`) windows
+- **Why**: Modeless `.Show()` returns immediately, causing the instantiating function to exit and pop its local variable scope. When WPF subsequently fires `Click`, `KeyDown`, or `MouseDoubleClick` events, any unclosed reference to local variables (such as `$findWin`, `$gridHandles`) resolves to `$null`, causing `InvokeMethodOnNull` exceptions or silently broken handlers.
+- **Do This Instead**:
+  - Store control references in a persistent module-scoped hashtable (e.g. `$script:FindHandleControls`) or use the event sender `$s`.
+
+### 13. NEVER rely on `ObservableCollection.Remove($sel)` with `[PSCustomObject]` instances across closures
+- **Why**: In PowerShell 5.1, `[PSCustomObject]` instances inside an `ObservableCollection[Object]` rely on reference equality. When passed across scriptblock closures, runspaces, or JSON deserialization, object references do not match, causing `.Remove($sel)` to return `$false` and silently leave deleted items in the DataGrid.
+- **Do This Instead**:
+  - Iterate backwards through the collection by index and use `.RemoveAt($i)` matching explicit unique identity keys (`PID` and `Handle`).
+
+### 14. NEVER assign to unqualified outer variables inside event scriptblocks without container wrapping
+- **Why**: In PowerShell 5.1, assigning to an unqualified variable inside an event handler scriptblock (`$pickedCred = $c`) implicitly defines a child-local variable in that scriptblock's scope rather than mutating the outer variable, silently discarding the captured value.
+- **Do This Instead**:
+  - Wrap outer state inside a hashtable reference container (`$credHolder = @{ Value = $Credential }`) and assign to `$credHolder.Value = $c`.
+
+### 15. NEVER create persistent WPF collection filter predicates without `.GetNewClosure()`
+- **Why**: Assigning `$view.Filter = [Predicate[Object]]{ ... $filterText ... }` without `.GetNewClosure()` evaluates `$filterText` dynamically. Once the filter setup function returns, `$filterText` evaluates to `$null` during background collection updates and virtualization, causing `string.IndexOf(null)` to throw `ArgumentNullException` and blank out all rows.
+- **Do This Instead**:
+  - Always close over the filter text: `$view.Filter = [Predicate[Object]]({ ... }.GetNewClosure())`.
+
+### 16. NEVER hardcode 64-bit structure sizes in P/Invoke calls
+- **Why**: Native Win32 structures such as `MODULEINFO` vary in size between architectures (24 bytes on x64 vs 12 bytes on x86). Hardcoding 24 causes APIs like `GetModuleInformation` to fail with `ERROR_INVALID_PARAMETER` (87) on 32-bit PowerShell or x86 hosts.
+- **Do This Instead**:
+  - Parameterize structure sizes dynamically: `$cbModInfo = if ([IntPtr]::Size -eq 8) { [uint32]24 } else { [uint32]12 }`.
 
 ---
 
@@ -179,8 +213,8 @@ When extending PSRPM in future iterations, prioritize features that preserve the
 
 - [ ] **Thread Stack & Start Address Tab (`Threads` Tab in Process Properties)**:
   - Enumerate `SYSTEM_EXTENDED_THREAD_INFORMATION` (`Class 64`) on-demand to display each thread's `TID`, `CPUDelta`, `CyclesDelta`, `StartAddress` (`Module!Offset`), `Priority`, and `WaitReason`.
-- [ ] **On-Demand Handle Search (`Ctrl+F` Global Handle / DLL Finder)**:
-  - Allow searching across all processes on the remote machine for a locked file path, registry key, or loaded DLL name using a single on-demand remote scan.
+- [x] **On-Demand Handle Search (`Ctrl+Shift+F` Global Handle / DLL Finder)** *(Completed in v1.4.0)*:
+  - Searches across all processes on the remote machine for a locked file path, registry key, or loaded DLL name using an on-demand scan, with atomic handle closure and tree navigation.
 - [x] **Multi-Host Tabbed Session Bar** *(Completed)*:
   - Supports multiple concurrent remote (`-ComputerName` via WinRM) and local targets in switchable tabs with `< 5ms` in-place swapping, state caching (`ProcessMap`, `ServicesMap`, `SummaryVm`), keyboard navigation (`Ctrl+Shift+K`, `Ctrl+W`, `Ctrl+Tab`), and 0 KB/s standby bandwidth on inactive tabs.
 - [ ] **ETW / Event Log Correlation Snippet (On-Demand)**:

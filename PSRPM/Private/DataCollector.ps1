@@ -39,6 +39,7 @@ $script:PSRPMCollectorScriptBlock = {
         &$addPInvoke "OpenProcessToken"           "advapi32.dll" ([int])    @([IntPtr], [uint32], [IntPtr].MakeByRefType())
         &$addPInvoke "GetTokenInformation"        "advapi32.dll" ([int])    @([IntPtr], [int], [IntPtr], [int], [int].MakeByRefType())
         &$addPInvoke "GetPerformanceInfo"         "psapi.dll"    ([int])    @([IntPtr], [uint32])
+        &$addPInvoke "GetIfTable"                 "iphlpapi.dll" ([int])    @([IntPtr], [int].MakeByRefType(), [bool])
 
         [void]$tb.CreateType()
     }
@@ -69,6 +70,13 @@ $script:PSRPMCollectorScriptBlock = {
         $script:LastIoWriteBytes   = 0L
         $script:LastIoOtherBytes   = 0L
         $script:HasKernelBaseline  = $false
+
+        # Network & Storage Hardware Throughput Tracking
+        $script:LastNetRx          = 0L
+        $script:LastNetTx          = 0L
+        $script:LastNetTicks       = 0L
+        $script:IfBufSize          = 32768
+        $script:IfBufPtr           = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:IfBufSize)
 
         # One-Time Static System & Storage Metadata (Registry + DriveInfo, 0 WMI)
         $machineStr = "Windows PC"
@@ -421,8 +429,8 @@ $script:PSRPMCollectorScriptBlock = {
             $handles   = [System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offHandles)
             $sessionId = [System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offSession)
             $basePrio  = [System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offBasePrio)
-            $wsBytes   = if ($is64) { [System.Runtime.InteropServices.Marshal]::ReadInt64($curPtr, $offWsBytes) } else { [long][uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offWsBytes) }
-            $privBytes = if ($is64) { [System.Runtime.InteropServices.Marshal]::ReadInt64($curPtr, $offPrivBytes) } else { [long][uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offPrivBytes) }
+            $wsBytes   = if ($is64) { [System.Runtime.InteropServices.Marshal]::ReadInt64($curPtr, $offWsBytes) } else { ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offWsBytes) -band 0xFFFFFFFFL) }
+            $privBytes = if ($is64) { [System.Runtime.InteropServices.Marshal]::ReadInt64($curPtr, $offPrivBytes) } else { ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, $offPrivBytes) -band 0xFFFFFFFFL) }
 
             $totalThreads += $numThreads
             $totalHandles += $handles
@@ -825,6 +833,52 @@ $script:PSRPMCollectorScriptBlock = {
 
     # C. psapi.dll!GetPerformanceInfo counters already computed natively in Section 6
 
+    # D. Extended Hardware Counters (iphlpapi!GetIfTable Network & Storage Activity)
+    $netRxKBs       = 0.0
+    $netTxKBs       = 0.0
+    $diskReadKBs    = 0.0
+    $diskWriteKBs   = 0.0
+    $diskQueueDepth = 0.0
+
+    try {
+        if ($script:IfBufPtr -ne [IntPtr]::Zero) {
+            $ifRet = [PSRPM.NativeCollectorV2]::GetIfTable($script:IfBufPtr, [ref]$script:IfBufSize, $false)
+            if ($ifRet -eq 122 -and $script:IfBufSize -gt 0) {
+                $script:IfBufPtr = [System.Runtime.InteropServices.Marshal]::ReAllocHGlobal($script:IfBufPtr, [IntPtr]$script:IfBufSize)
+                $ifRet = [PSRPM.NativeCollectorV2]::GetIfTable($script:IfBufPtr, [ref]$script:IfBufSize, $false)
+            }
+            if ($ifRet -eq 0) {
+                $numIf = [System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, 0)
+                $totRx = 0L
+                $totTx = 0L
+                for ($ifIdx = 0; $ifIdx -lt $numIf; $ifIdx++) {
+                    $ifOff = 4 + ($ifIdx * 860)
+                    $ifType = [System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, $ifOff + 516)
+                    if ($ifType -eq 24) { continue } # skip loopback
+                    $totRx += ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, $ifOff + 552) -band 0xFFFFFFFFL)
+                    $totTx += ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, $ifOff + 576) -band 0xFFFFFFFFL)
+                }
+
+                $curNetTicks = [DateTime]::UtcNow.Ticks
+                if ($script:LastNetTicks -gt 0L) {
+                    $netSec = [Math]::Max(0.1, ($curNetTicks - $script:LastNetTicks) / 10000000.0)
+                    if ($totRx -ge $script:LastNetRx) {
+                        $netRxKBs = [Math]::Round((($totRx - $script:LastNetRx) / 1024.0) / $netSec, 1)
+                    }
+                    if ($totTx -ge $script:LastNetTx) {
+                        $netTxKBs = [Math]::Round((($totTx - $script:LastNetTx) / 1024.0) / $netSec, 1)
+                    }
+                    $diskReadKBs    = [Math]::Round(($ioReadDelta / 1024.0) / $netSec, 1)
+                    $diskWriteKBs   = [Math]::Round(($ioWriteDelta / 1024.0) / $netSec, 1)
+                    $diskQueueDepth = [Math]::Round([Math]::Min(99.0, (($diskReadKBs + $diskWriteKBs) / 5000.0)), 2)
+                }
+                $script:LastNetRx    = $totRx
+                $script:LastNetTx    = $totTx
+                $script:LastNetTicks = $curNetTicks
+            }
+        }
+    } catch {}
+
     $script:LastSnapTicks = $nowTicks
 
     # 7. Fast Compact JSON Construction + GZip Compression
@@ -843,7 +897,7 @@ $script:PSRPMCollectorScriptBlock = {
     $sb = [System.Text.StringBuilder]::new(8192)
     [void]$sb.Append('{"seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
-    [void]$sb.Append(',"sys":[').Append("$sysCpuStr,$ramUsedMB,$ramTotalMB,$totalProcs,$totalThreads,$totalHandles,$commitUsedMB,$commitLimitMB,$kernCpuStr,$commitCurKB,$commitLimKB,$commitPeakKB,$physTotalKB,$physAvailKB,$sysCacheKB,$kernelPagedKB,$kernelNonPagedKB,$pfDelta,$prDelta,$pfwDelta,$mfwDelta,$csDelta,$intrDelta,$scDelta,$ioReadDelta,$ioWriteDelta,$ioOtherDelta").Append(']')
+    [void]$sb.Append(',"sys":[').Append("$sysCpuStr,$ramUsedMB,$ramTotalMB,$totalProcs,$totalThreads,$totalHandles,$commitUsedMB,$commitLimitMB,$kernCpuStr,$commitCurKB,$commitLimKB,$commitPeakKB,$physTotalKB,$physAvailKB,$sysCacheKB,$kernelPagedKB,$kernelNonPagedKB,$pfDelta,$prDelta,$pfwDelta,$mfwDelta,$csDelta,$intrDelta,$scDelta,$ioReadDelta,$ioWriteDelta,$ioOtherDelta,$($netRxKBs.ToString($inv)),$($netTxKBs.ToString($inv)),$($diskReadKBs.ToString($inv)),$($diskWriteKBs.ToString($inv)),$($diskQueueDepth.ToString($inv))").Append(']')
     [void]$sb.Append(',"cores":[').Append(($coreTuples -join ',')).Append(']')
     [void]$sb.Append(',"hw":').Append($hwJson)
     [void]$sb.Append(',"dead":[').Append(($deadPids -join ',')).Append(']')

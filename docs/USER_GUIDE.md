@@ -34,7 +34,7 @@ You do not need to close PSRPM to switch computers. Press **`Ctrl+K`** (or click
 ## 2. Navigating the Process Tree-Grid
 
 ### Tree View vs. Flat View
-- **Tree View (Default)**: Displays parent-child process relationships with crisp vector connector lines (`│`, `├─`, `└─`) and `[+]`/`[-]` expanders.
+- **Tree View (Default)**: Displays parent-child process relationships with crisp vector connector lines (`|`, `+-`, `\-`) and `[+]`/`[-]` expanders.
   - **Mouse**: Click `[+]` or `[-]` next to any parent process to expand or collapse its subtree, or use **View -> Expand All / Collapse All**.
   - **Keyboard (`Left` / `Right` Arrows)**:
     - Press **`Left Arrow`** on an expanded parent node to collapse its branch; press **`Left Arrow`** on a collapsed or leaf node to jump directly to its parent process.
@@ -80,7 +80,7 @@ Double-click any process row (or press **`Enter`**) to open the **Process Proper
 
 Double-click any of the 3 mini-graphs in the top toolbar (`CPU`, `Commit`, `Phys RAM`) or press **`Ctrl+I`** (**View -> System Information...**) to open the live **System Information** window:
 
-- **Summary Tab**: Displays static **System** (`Machine`, `Host`, `Operating System`, `CPU`, `Architecture`, `Cores`) and **Storage** (`Memory`, `Commit Limit`, `Boot Drive`, `Capacity`, `Available`, `File System`, `Type`) metadata alongside a 2×2 grid of live 2-minute history graphs (**CPU Usage**, **System Commit**, **Physical Memory**, and **I/O**). Double-clicking any of the 4 quadrant graphs jumps directly to its dedicated tab.
+- **Summary Tab**: Displays static **System** (`Machine`, `Host`, `Operating System`, `CPU`, `Architecture`, `Cores`) and **Storage** (`Memory`, `Commit Limit`, `Boot Drive`, `Capacity`, `Available`, `File System`, `Type`) metadata alongside a 2x2 grid of live 2-minute history graphs (**CPU Usage**, **System Commit**, **Physical Memory**, and **I/O**). Double-clicking any of the 4 quadrant graphs jumps directly to its dedicated tab.
 - **CPU Tab**: Full-size **Total CPU (Green)** + **Kernel CPU (Red)** history graph with a vertical bar gauge, live **Totals** (`Handles`, `Threads`, `Processes`), **CPU Deltas** (`Context Switch Delta`, `Interrupt Delta`, `System Call Delta`), **Topology** (`Cores`, `Sockets`, `Logical Processors`), and a **`Show one graph per CPU`** checkbox for per-core graphs.
 - **Memory Tab**: Full-size **System Commit** and **Physical Memory** graphs plus exact kilobyte (`K`) breakdowns for **Commit Charge (K)** (`Current`, `Limit`, `Peak`, `Peak/Limit`, `Current/Limit`), **Physical Memory (K)** (`Total`, `Available`, `In Use`, `System Cache`), **Kernel Memory (K)** (`Paged Pool`, `Nonpaged Pool`, `Total Kernel`), and **Paging** (`Page Fault Delta`, `Page Read Delta`, `Paging File Write Delta`, `Mapped File Write Delta`).
 - **I/O Tab**: Live **I/O Bytes History** graph (Blue: Total Read+Write+Other, Pink: Write+Other) with per-tick transfer deltas and session cumulative I/O.

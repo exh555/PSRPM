@@ -24,6 +24,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$HandlesFormatted
     [string]$Path
     [string]$CommandLine
+    [string]$CommandLineToolTip
     [string]$StartTime
     [string]$Architecture
     [int]$SessionId
@@ -50,6 +51,8 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$RowForeground
     [double]$RowOpacity
     [bool]$IsDarkTheme
+    [string]$ThemeMode
+    [bool]$EnableCategoryHighlights
 
     [System.Collections.ObjectModel.ObservableCollection[ProcessItemViewModel]]$Children
 
@@ -65,6 +68,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CompanyName            = ""
         $this.Path                   = "N/A"
         $this.CommandLine            = "N/A"
+        $this.CommandLineToolTip     = ""
         $this.StartTime              = "N/A"
         $this.Architecture           = "x64"
         $this.Category               = "System"
@@ -97,6 +101,8 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.RowForeground          = "#0F172A"
         $this.RowOpacity             = 1.0
         $this.IsDarkTheme            = $false
+        $this.ThemeMode              = "Light"
+        $this.EnableCategoryHighlights = $true
     }
 
     [void] add_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {
@@ -133,6 +139,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($m['cat']) { $this.Category = [string]$m['cat'] }
         $this.IsDarkTheme  = $isDark
 
+        $this.UpdateCommandLineToolTip()
         $this.RefreshRowColors()
 
         $this.OnPropertyChanged('PID')
@@ -143,9 +150,24 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.OnPropertyChanged('Architecture')
         $this.OnPropertyChanged('Path')
         $this.OnPropertyChanged('CommandLine')
+        $this.OnPropertyChanged('CommandLineToolTip')
         $this.OnPropertyChanged('Description')
         $this.OnPropertyChanged('CompanyName')
         $this.OnPropertyChanged('StartTime')
+    }
+
+    [void] UpdateCommandLineToolTip() {
+        $p = if ([string]::IsNullOrWhiteSpace($this.Path) -or $this.Path -eq "N/A") { "n/a" } else { $this.Path }
+        $c = if ([string]::IsNullOrWhiteSpace($this.CommandLine) -or $this.CommandLine -eq "N/A") { "n/a" } else { $this.CommandLine }
+        if ($p -eq "n/a" -and $c -eq "n/a") {
+            $this.CommandLineToolTip = "Command line: n/a"
+        } elseif ($p -ne "n/a" -and $c -ne "n/a") {
+            $this.CommandLineToolTip = "Path: $p`nCommand line: $c"
+        } elseif ($c -ne "n/a") {
+            $this.CommandLineToolTip = "Command line: $c"
+        } else {
+            $this.CommandLineToolTip = "Path: $p`nCommand line: n/a"
+        }
     }
 
     [void] UpdateDynamic([double]$cpu, [long]$wsBytes, [long]$privBytes, [int]$threads, [int]$handles, [int]$flags) {
@@ -216,10 +238,14 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] SetTheme([bool]$isDark) {
-        if ($this.IsDarkTheme -ne $isDark) {
-            $this.IsDarkTheme = $isDark
-            $this.RefreshRowColors()
-        }
+        $mode = if ($isDark) { "Dark" } else { "Light" }
+        $this.SetThemeMode($mode)
+    }
+
+    [void] SetThemeMode([string]$mode) {
+        $this.ThemeMode   = $mode
+        $this.IsDarkTheme = ($mode -in @("Dark", "HighContrast"))
+        $this.RefreshRowColors()
     }
 
     [void] SetLifecycleState([int]$state) {
@@ -229,48 +255,116 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
     }
 
+    [void] SetCategoryHighlights([bool]$enable) {
+        if ($this.EnableCategoryHighlights -ne $enable) {
+            $this.EnableCategoryHighlights = $enable
+            $this.RefreshRowColors()
+        }
+    }
+
     [void] RefreshRowColors() {
         $bg = "#FFFFFF"
         $fg = "#0F172A"
 
-        if ($this.IsDarkTheme) {
+        if ($this.ThemeMode -eq "HighContrast") {
+            $fg = "#FFFFFF"
+            if ($this.LifecycleState -eq 1) {
+                $bg = "#005500" # High-Contrast Lime Green
+                $fg = "#00FF00"
+            } elseif ($this.LifecycleState -eq 2) {
+                $bg = "#550000" # High-Contrast Crimson Red
+                $fg = "#FF5555"
+            } elseif ($this.EnableCategoryHighlights) {
+                if ($this.Status -eq "Suspended") {
+                    $bg = "#222222"
+                    $fg = "#AAAAAA"
+                } elseif ($this.CPU -ge 50.0) {
+                    $bg = "#333300"
+                    $fg = "#FFFF00"
+                } elseif ($this.Category -eq "Packaged") {
+                    $bg = "#003333"
+                    $fg = "#00FFFF"
+                } elseif ($this.Category -eq "Service") {
+                    $bg = "#330033"
+                    $fg = "#FFB6C1"
+                } elseif ($this.Category -eq "Own") {
+                    $bg = "#001A33"
+                    $fg = "#ADD8E6"
+                } else {
+                    $bg = "#000000"
+                }
+            } else {
+                $bg = "#000000"
+            }
+        } elseif ($this.ThemeMode -eq "Classic") {
+            $fg = "#000000"
+            if ($this.LifecycleState -eq 1) {
+                $bg = "#80FF80" # Classic Lime
+            } elseif ($this.LifecycleState -eq 2) {
+                $bg = "#FF8080" # Classic Crimson
+            } elseif ($this.EnableCategoryHighlights) {
+                if ($this.Status -eq "Suspended") {
+                    $bg = "#D0D0D0" # Classic Gray
+                } elseif ($this.CPU -ge 50.0) {
+                    $bg = "#FFFFB0" # Classic Yellow
+                } elseif ($this.Category -eq "Packaged") {
+                    $bg = "#E0FFFF" # Classic Cyan
+                } elseif ($this.Category -eq "Service") {
+                    $bg = "#FFE0E0" # Classic Pink
+                } elseif ($this.Category -eq "Own") {
+                    $bg = "#E0E0FF" # Classic Lavender/Periwinkle
+                } else {
+                    $bg = "#FFFFFF"
+                }
+            } else {
+                $bg = "#FFFFFF"
+            }
+        } elseif ($this.IsDarkTheme) {
             $fg = "#F1F5F9"
             if ($this.LifecycleState -eq 1) {
-                $bg = "#14532D" # New Process Lime Dark
+                $bg = "#14532D" # New Process Lime Dark (Always active)
             } elseif ($this.LifecycleState -eq 2) {
-                $bg = "#7F1D1D" # Exiting Process Crimson Dark
-            } elseif ($this.Status -eq "Suspended") {
-                $bg = "#334155" # Suspended Slate Dark
-                $fg = "#CBD5E1"
-            } elseif ($this.CPU -ge 50.0) {
-                $bg = "#451A03" # High CPU Amber Dark
-            } elseif ($this.Category -eq "Packaged") {
-                $bg = "#0E3A47" # Packaged / WebView Cyan Dark
-            } elseif ($this.Category -eq "Service") {
-                $bg = "#3B1824" # Service Rose Dark
-            } elseif ($this.Category -eq "Own") {
-                $bg = "#1E2646" # Own User Periwinkle Dark
+                $bg = "#7F1D1D" # Exiting Process Crimson Dark (Always active)
+            } elseif ($this.EnableCategoryHighlights) {
+                if ($this.Status -eq "Suspended") {
+                    $bg = "#334155" # Suspended Slate Dark
+                    $fg = "#CBD5E1"
+                } elseif ($this.CPU -ge 50.0) {
+                    $bg = "#451A03" # High CPU Amber Dark
+                } elseif ($this.Category -eq "Packaged") {
+                    $bg = "#0E3A47" # Packaged / WebView Cyan Dark
+                } elseif ($this.Category -eq "Service") {
+                    $bg = "#3B1824" # Service Rose Dark
+                } elseif ($this.Category -eq "Own") {
+                    $bg = "#1E2646" # Own User Periwinkle Dark
+                } else {
+                    $bg = "#0F172A" # System Default Dark
+                }
             } else {
-                $bg = "#0F172A" # System Default Dark
+                $bg = "#0F172A" # System Default Dark (Category colors muted)
             }
         } else {
             $fg = "#0F172A"
             if ($this.LifecycleState -eq 1) {
-                $bg = "#86EFAC" # New Process Lime Light
+                $bg = "#86EFAC" # New Process Lime Light (Always active)
             } elseif ($this.LifecycleState -eq 2) {
-                $bg = "#FCA5A5" # Exiting Process Crimson Light
-            } elseif ($this.Status -eq "Suspended") {
-                $bg = "#94A3B8" # Suspended Slate Light (Process Explorer Gray)
-            } elseif ($this.CPU -ge 50.0) {
-                $bg = "#FDE68A" # High CPU Amber Light
-            } elseif ($this.Category -eq "Packaged") {
-                $bg = "#67E8F9" # Packaged / WebView Cyan Light (Process Explorer Cyan)
-            } elseif ($this.Category -eq "Service") {
-                $bg = "#FFE4E6" # Service Rose Pink Light (Process Explorer Pink)
-            } elseif ($this.Category -eq "Own") {
-                $bg = "#E0E7FF" # Own User Periwinkle Light (Process Explorer Lavender/Blue)
+                $bg = "#FCA5A5" # Exiting Process Crimson Light (Always active)
+            } elseif ($this.EnableCategoryHighlights) {
+                if ($this.Status -eq "Suspended") {
+                    $bg = "#94A3B8" # Suspended Slate Light (Process Explorer Gray)
+                } elseif ($this.CPU -ge 50.0) {
+                    $bg = "#FDE68A" # High CPU Amber Light
+                } elseif ($this.Category -eq "Packaged") {
+                    $bg = "#67E8F9" # Packaged / WebView Cyan Light (Process Explorer Cyan)
+                } elseif ($this.Category -eq "Service") {
+                    $bg = "#FFE4E6" # Service Rose Pink Light (Process Explorer Pink)
+                } elseif ($this.Category -eq "Own") {
+                    $bg = "#E0E7FF" # Own User Periwinkle Light (Process Explorer Lavender/Blue)
+                } else {
+                    $bg = "#FFFFFF" # System Default White
+                }
             } else {
-                $bg = "#FFFFFF" # System Default White
+                $bg = "#FFFFFF" # System Default White (Category colors muted)
             }
         }
 
@@ -653,17 +747,28 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$IoPeakRateFormatted
     [string]$IoSessionTotalFormatted
 
+    # Extended Hardware Counters (Network & Disk Activity)
+    [double]$NetRxKBs
+    [double]$NetTxKBs
+    [double]$DiskReadKBs
+    [double]$DiskWriteKBs
+    [double]$DiskQueueDepth
+    [string]$NetThroughputFormatted
+    [string]$DiskActivityFormatted
+
     hidden [System.Collections.Generic.Queue[double]] $CpuHistory
     hidden [System.Collections.Generic.Queue[double]] $CommitHistory
     hidden [System.Collections.Generic.Queue[double]] $RamHistory
 
-    # 120-Sample (2-Minute) Circular Ring Buffers (< 6 KB Total Memory)
+    # 120-Sample (2-Minute) Circular Ring Buffers (< 8 KB Total Memory)
     hidden [System.Collections.Generic.Queue[double]] $CpuHistory120
     hidden [System.Collections.Generic.Queue[double]] $KernelHistory120
     hidden [System.Collections.Generic.Queue[double]] $CommitHistory120
     hidden [System.Collections.Generic.Queue[double]] $RamHistory120
     hidden [System.Collections.Generic.Queue[double]] $IoTotalHistory120
     hidden [System.Collections.Generic.Queue[double]] $IoWriteHistory120
+    hidden [System.Collections.Generic.Queue[double]] $NetRxHistory120
+    hidden [System.Collections.Generic.Queue[double]] $NetTxHistory120
     hidden [long] $SessionIoBytesTotal
     hidden [double] $PeakIoBytesDelta
 
@@ -680,6 +785,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.RamHistory120          = [System.Collections.Generic.Queue[double]]::new()
         $this.IoTotalHistory120      = [System.Collections.Generic.Queue[double]]::new()
         $this.IoWriteHistory120      = [System.Collections.Generic.Queue[double]]::new()
+        $this.NetRxHistory120        = [System.Collections.Generic.Queue[double]]::new()
+        $this.NetTxHistory120        = [System.Collections.Generic.Queue[double]]::new()
         $this.CoreGraphs             = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
 
         $this.IsSysInfoOpen            = $false
@@ -688,6 +795,14 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.PerCpuGridVisibility     = "Collapsed"
         $this.SessionIoBytesTotal      = 0L
         $this.PeakIoBytesDelta         = 1024.0
+
+        $this.NetRxKBs                 = 0.0
+        $this.NetTxKBs                 = 0.0
+        $this.DiskReadKBs              = 0.0
+        $this.DiskWriteKBs             = 0.0
+        $this.DiskQueueDepth           = 0.0
+        $this.NetThroughputFormatted   = "NET: 0.0 KB/s"
+        $this.DiskActivityFormatted    = "DISK: 0.0 KB/s Q: 0.0"
 
         $this.CpuUsage               = 0.0
         $this.KernelCpuUsage         = 0.0
@@ -803,8 +918,19 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.RamHistory120.Enqueue(0.0)
             $this.IoTotalHistory120.Enqueue(0.0)
             $this.IoWriteHistory120.Enqueue(0.0)
+            $this.NetRxHistory120.Enqueue(0.0)
+            $this.NetTxHistory120.Enqueue(0.0)
         }
     }
+
+    [double[]] GetCpuHistory120()     { return $this.CpuHistory120.ToArray() }
+    [double[]] GetKernelHistory120()  { return $this.KernelHistory120.ToArray() }
+    [double[]] GetCommitHistory120()  { return $this.CommitHistory120.ToArray() }
+    [double[]] GetRamHistory120()     { return $this.RamHistory120.ToArray() }
+    [double[]] GetIoTotalHistory120() { return $this.IoTotalHistory120.ToArray() }
+    [double[]] GetIoWriteHistory120() { return $this.IoWriteHistory120.ToArray() }
+    [double[]] GetNetRxHistory120()   { return $this.NetRxHistory120.ToArray() }
+    [double[]] GetNetTxHistory120()   { return $this.NetTxHistory120.ToArray() }
 
     [void] add_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {
         if ($handler) { $this.Handlers.Add($handler) }
@@ -1089,6 +1215,36 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.IoWriteDeltaFormatted   = $this.FormatBytesCompact([double]$ioWriteD)
         $this.IoOtherDeltaFormatted   = $this.FormatBytesCompact([double]$ioOtherD)
         $this.IoSessionTotalFormatted = $this.FormatBytesCompact([double]$this.SessionIoBytesTotal)
+
+        # 3. Extended Hardware Counters (Network Throughput & Storage Activity)
+        if ($sysArr.Count -gt 27) {
+            $this.NetRxKBs       = [double]$sysArr[27]
+            $this.NetTxKBs       = if ($sysArr.Count -gt 28) { [double]$sysArr[28] } else { 0.0 }
+            $this.DiskReadKBs    = if ($sysArr.Count -gt 29) { [double]$sysArr[29] } else { 0.0 }
+            $this.DiskWriteKBs   = if ($sysArr.Count -gt 30) { [double]$sysArr[30] } else { 0.0 }
+            $this.DiskQueueDepth = if ($sysArr.Count -gt 31) { [double]$sysArr[31] } else { 0.0 }
+
+            $rxStr = if ($this.NetRxKBs -ge 1024.0) { "$([Math]::Round($this.NetRxKBs / 1024.0, 1)) MB/s" } else { "$([Math]::Round($this.NetRxKBs, 1)) KB/s" }
+            $txStr = if ($this.NetTxKBs -ge 1024.0) { "$([Math]::Round($this.NetTxKBs / 1024.0, 1)) MB/s" } else { "$([Math]::Round($this.NetTxKBs, 1)) KB/s" }
+            $this.NetThroughputFormatted = "NET: v $rxStr ^ $txStr"
+
+            $dTotKB = $this.DiskReadKBs + $this.DiskWriteKBs
+            $dStr = if ($dTotKB -ge 1024.0) { "$([Math]::Round($dTotKB / 1024.0, 1)) MB/s" } else { "$([Math]::Round($dTotKB, 1)) KB/s" }
+            $this.DiskActivityFormatted = "DISK: $dStr Q: $($this.DiskQueueDepth.ToString('F1'))"
+
+            if ($this.NetRxHistory120.Count -ge 120) { [void]$this.NetRxHistory120.Dequeue() }
+            if ($this.NetTxHistory120.Count -ge 120) { [void]$this.NetTxHistory120.Dequeue() }
+            $this.NetRxHistory120.Enqueue($this.NetRxKBs)
+            $this.NetTxHistory120.Enqueue($this.NetTxKBs)
+
+            $this.OnPropertyChanged('NetRxKBs')
+            $this.OnPropertyChanged('NetTxKBs')
+            $this.OnPropertyChanged('DiskReadKBs')
+            $this.OnPropertyChanged('DiskWriteKBs')
+            $this.OnPropertyChanged('DiskQueueDepth')
+            $this.OnPropertyChanged('NetThroughputFormatted')
+            $this.OnPropertyChanged('DiskActivityFormatted')
+        }
 
         # Only build the 120-point UI strings and notify System Info properties when the System Info window is open!
         if ($this.IsSysInfoOpen) {

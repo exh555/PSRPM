@@ -11,7 +11,8 @@ $script:PSRPMDeepInspectorScriptBlock = {
     param(
         [int]$TargetPid,
         [bool]$VerifySignature = $false,
-        [string]$InspectMode = "Core"
+        [string]$InspectMode = "Core",
+        [string]$Query = ""
     )
 
     if (-not ('PSRPM.NativeInspectorV2' -as [type])) {
@@ -59,6 +60,170 @@ $script:PSRPMDeepInspectorScriptBlock = {
 
     if (-not $script:DllMetaCache)    { $script:DllMetaCache    = @{} }
     if (-not $script:HandleTypeCache) { $script:HandleTypeCache = @{} }
+
+    if ($InspectMode -eq "FindHandles") {
+        $matches = [System.Collections.Generic.List[Object]]::new()
+        if (-not [string]::IsNullOrWhiteSpace($Query)) {
+            $qClean = $Query.Trim()
+            $qLower = $qClean.ToLowerInvariant()
+            $qNormalized = $qLower.Replace('/', '\')
+
+            $allProcs = [System.Diagnostics.Process]::GetProcesses()
+            $currProc = [PSRPM.NativeInspectorV2]::GetCurrentProcess()
+            $hBufLen  = 262144
+            $hBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
+            $objBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
+            $sbPath   = [System.Text.StringBuilder]::new(1024)
+            $skipTypes = @("WaitCompletionPacket", "IRTimer", "TpWorkerFactory", "IoCompletion", "EtwRegistration", "DxgkCompositionObject")
+
+            try {
+                foreach ($p in $allProcs) {
+                    $pidVal = $p.Id
+                    if ($pidVal -le 4) { continue }
+                    $pName = $p.ProcessName
+
+                    # Check loaded modules (DLLs)
+                    $hProc = [PSRPM.NativeInspectorV2]::OpenProcess(0x0410, 0, $pidVal)
+                    if ($hProc -ne [IntPtr]::Zero) {
+                        try {
+                            $modBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
+                            try {
+                                $cbNeeded = 0
+                                if ([PSRPM.NativeInspectorV2]::EnumProcessModulesEx($hProc, $modBuf, 4096, [ref]$cbNeeded, 0x03) -ne 0) {
+                                    $numMods = [Math]::Min([int]($cbNeeded / [IntPtr]::Size), 200)
+                                    $sbModPath = [System.Text.StringBuilder]::new(1024)
+                                    for ($mIdx = 0; $mIdx -lt $numMods; $mIdx++) {
+                                        $hMod = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($modBuf, $mIdx * [IntPtr]::Size)
+                                        [void]$sbModPath.Clear()
+                                        if ([PSRPM.NativeInspectorV2]::GetModuleFileNameExW($hProc, $hMod, $sbModPath, 1024) -gt 0) {
+                                            $mPath = $sbModPath.ToString()
+                                            if ($mPath.ToLowerInvariant().Replace('/', '\').Contains($qNormalized)) {
+                                                $matches.Add(@{
+                                                    ProcessName = $pName
+                                                    PID         = $pidVal
+                                                    Type        = "DLL"
+                                                    Handle      = ("0x{0:X8}" -f $hMod.ToInt64())
+                                                    Name        = $mPath
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
+                            } finally {
+                                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                            }
+                        } finally {
+                            [void][PSRPM.NativeInspectorV2]::CloseHandle($hProc)
+                        }
+                    }
+
+                    # Check open kernel handles
+                    $hDupProc = [PSRPM.NativeInspectorV2]::OpenProcess(0x1440, 0, $pidVal)
+                    if ($hDupProc -eq [IntPtr]::Zero) {
+                        $hDupProc = [PSRPM.NativeInspectorV2]::OpenProcess(0x1040, 0, $pidVal)
+                    }
+                    if ($hDupProc -ne [IntPtr]::Zero) {
+                        try {
+                            $hRetLen = 0
+                            $hSt = [PSRPM.NativeInspectorV2]::NtQueryInformationProcess($hDupProc, 51, $hBufPtr, $hBufLen, [ref]$hRetLen)
+                            while ($hSt -eq -1073741820) {
+                                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                                $hBufLen = [Math]::Max($hBufLen * 2, $hRetLen + 65536)
+                                $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
+                                $hSt = [PSRPM.NativeInspectorV2]::NtQueryInformationProcess($hDupProc, 51, $hBufPtr, $hBufLen, [ref]$hRetLen)
+                            }
+
+                            if ($hSt -eq 0) {
+                                $numHandles = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($hBufPtr, 0).ToInt64()
+                                $maxScan = [Math]::Min($numHandles, 65536L)
+
+                                for ($hIdx = 0; $hIdx -lt $maxScan; $hIdx++) {
+                                    $entryOff = 16 + ($hIdx * 40)
+                                    if (($entryOff + 40) -gt $hBufLen) { break }
+
+                                    $hVal = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($hBufPtr, $entryOff)
+                                    $tIdx = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + 28) -band 0xFFFFFFFFL)
+
+                                    if ($script:HandleTypeCache.ContainsKey($tIdx) -and $script:HandleTypeCache[$tIdx] -in $skipTypes) {
+                                        continue
+                                    }
+
+                                    $dup = [IntPtr]::Zero
+                                    if ([PSRPM.NativeInspectorV2]::DuplicateHandle($hDupProc, $hVal, $currProc, [ref]$dup, 0, 0, 2) -ne 0) {
+                                        try {
+                                            $tName = if ($script:HandleTypeCache.ContainsKey($tIdx)) {
+                                                $script:HandleTypeCache[$tIdx]
+                                            } else {
+                                                $tn = ""
+                                                $oRet = 0
+                                                if ([PSRPM.NativeInspectorV2]::NtQueryObject($dup, 2, $objBuf, 4096, [ref]$oRet) -eq 0) {
+                                                    $tLen = [System.Runtime.InteropServices.Marshal]::ReadInt16($objBuf, 0)
+                                                    $tPtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($objBuf, 8)
+                                                    if ($tLen -gt 0 -and $tPtr -ne [IntPtr]::Zero) {
+                                                        $tn = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($tPtr, [int]($tLen / 2))
+                                                    }
+                                                }
+                                                if ($tn) { $script:HandleTypeCache[$tIdx] = $tn }
+                                                $tn
+                                            }
+
+                                            if (-not $tName -or $tName -in $skipTypes) { continue }
+
+                                            $nStr = ""
+                                            if ($tName -eq "File") {
+                                                # Query disk files/folders safely. Non-disk/pipe handles are skipped to prevent synchronous pipe deadlocks.
+                                                $fType = [PSRPM.NativeInspectorV2]::GetFileType($dup)
+                                                if ($fType -eq 1) {
+                                                    [void]$sbPath.Clear()
+                                                    $fLen = [PSRPM.NativeInspectorV2]::GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)
+                                                    if ($fLen -gt 0) {
+                                                        $nStr = $sbPath.ToString() -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''
+                                                    }
+                                                }
+                                            } else {
+                                                $oRet = 0
+                                                if ([PSRPM.NativeInspectorV2]::NtQueryObject($dup, 1, $objBuf, 4096, [ref]$oRet) -eq 0) {
+                                                    $nLen = [System.Runtime.InteropServices.Marshal]::ReadInt16($objBuf, 0)
+                                                    $nPtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($objBuf, 8)
+                                                    if ($nLen -gt 0 -and $nPtr -ne [IntPtr]::Zero) {
+                                                        $nStr = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($nPtr, [int]($nLen / 2))
+                                                    }
+                                                }
+                                            }
+
+                                            if ($nStr -and $nStr.ToLowerInvariant().Replace('/', '\').Contains($qNormalized)) {
+                                                $matches.Add(@{
+                                                    ProcessName = $pName
+                                                    PID         = $pidVal
+                                                    Type        = $tName
+                                                    Handle      = ("0x{0:X4}" -f $hVal.ToInt64())
+                                                    Name        = $nStr
+                                                })
+                                            }
+                                        } finally {
+                                            [void][PSRPM.NativeInspectorV2]::CloseHandle($dup)
+                                        }
+                                    }
+                                }
+                            }
+                        } finally {
+                            [void][PSRPM.NativeInspectorV2]::CloseHandle($hDupProc)
+                        }
+                    }
+
+                    if ($matches.Count -ge 1000) { break }
+                }
+            } finally {
+                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($objBuf)
+            }
+        }
+
+        Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
+        $jss = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+        $jss.MaxJsonLength = 10485760
+        return $jss.Serialize($matches)
+    }
 
     $runCore        = ($InspectMode -eq "Core" -or $InspectMode -eq "All")
     $runPerformance = ($InspectMode -eq "Performance" -or $runCore)
@@ -179,7 +344,7 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             if ($read -ge 64 -and $hdr[0] -eq 0x4D -and $hdr[1] -eq 0x5A) {
                                 $peOffset = [BitConverter]::ToInt32($hdr, 60)
                                 if ($peOffset -gt 0 -and ($peOffset + 12) -le $read) {
-                                    $tsSeconds = [uint32][BitConverter]::ToInt32($hdr, $peOffset + 8)
+                                    $tsSeconds = ([long][BitConverter]::ToInt32($hdr, $peOffset + 8) -band 0xFFFFFFFFL)
                                     if ($tsSeconds -gt 0 -and $tsSeconds -lt 2147483647) {
                                         $dtBuild = [DateTime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc).AddSeconds($tsSeconds).ToLocalTime()
                                         $buildTimeStr = $dtBuild.ToString("ddd MMM dd HH:mm:ss yyyy")
@@ -373,7 +538,7 @@ $script:PSRPMDeepInspectorScriptBlock = {
                                 $result.Performance["WorkingSet"]     = "$([Math]::Round([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 144) / 1KB, 0).ToString('N0')) K"
                                 $result.Performance["PrivateBytes"]   = "$([Math]::Round([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 184) / 1KB, 0).ToString('N0')) K"
                                 $result.Performance["VirtualSize"]    = "$([Math]::Round([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 120) / 1MB, 1)) MB"
-                                $result.Performance["PageFaults"]     = ([uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($cPtr, 128)).ToString("N0")
+                                $result.Performance["PageFaults"]     = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($cPtr, 128) -band 0xFFFFFFFFL).ToString("N0")
                                 $result.Performance["PagedPool"]      = "$([Math]::Round([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 160) / 1KB, 1)) K"
                                 $result.Performance["NonPagedPool"]   = "$([Math]::Round([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 176) / 1KB, 1)) K"
                                 $result.Performance["IoReadOps"]      = [System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 208).ToString("N0")
@@ -404,10 +569,14 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     $ownPid = [System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 20)
                     if ($ownPid -eq $TargetPid) {
                         $stVal = [System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff)
-                        $lAddr = [System.Net.IPAddress]::new(([int64]([uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 4)))).ToString()
-                        $lPort = [System.Net.IPAddress]::NetworkToHostOrder([int16][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 8)) -band 0xFFFF
-                        $rAddr = [System.Net.IPAddress]::new(([int64]([uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 12)))).ToString()
-                        $rPort = [System.Net.IPAddress]::NetworkToHostOrder([int16][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 16)) -band 0xFFFF
+                        $rawLAddr = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 4) -band 0xFFFFFFFFL)
+                        $lAddr = [System.Net.IPAddress]::new($rawLAddr).ToString()
+                        $rawLPort = [System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 8) -band 0xFFFF
+                        $lPort = (($rawLPort -band 0xFF) -shl 8) -bor (($rawLPort -band 0xFF00) -shr 8)
+                        $rawRAddr = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 12) -band 0xFFFFFFFFL)
+                        $rAddr = [System.Net.IPAddress]::new($rawRAddr).ToString()
+                        $rawRPort = [System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 16) -band 0xFFFF
+                        $rPort = (($rawRPort -band 0xFF) -shl 8) -bor (($rawRPort -band 0xFF00) -shr 8)
                         $stStr = if ($stVal -ge 1 -and $stVal -le $tcpStates.Count) { $tcpStates[$stVal - 1] } else { "$stVal" }
                         $result.Connections.Add(@{
                             Protocol       = "TCP"
@@ -428,8 +597,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     if (($rowOff + 12) -gt 262144) { break }
                     $ownPid = [System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 8)
                     if ($ownPid -eq $TargetPid) {
-                        $lAddr = [System.Net.IPAddress]::new(([int64]([uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff)))).ToString()
-                        $lPort = [System.Net.IPAddress]::NetworkToHostOrder([int16][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 4)) -band 0xFFFF
+                        $rawUdpAddr = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff) -band 0xFFFFFFFFL)
+                        $lAddr = [System.Net.IPAddress]::new($rawUdpAddr).ToString()
+                        $rawUdpPort = [System.Runtime.InteropServices.Marshal]::ReadInt32($buf, $rowOff + 4) -band 0xFFFF
+                        $lPort = (($rawUdpPort -band 0xFF) -shl 8) -bor (($rawUdpPort -band 0xFF00) -shr 8)
                         $result.Connections.Add(@{
                             Protocol       = "UDP"
                             LocalEndpoint  = "${lAddr}:${lPort}"
@@ -464,8 +635,9 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             $mName = [System.IO.Path]::GetFileName($mPath)
                             $baseAddr = "0x" + $hMod.ToInt64().ToString("X")
                             $sizeKB = "N/A"
-                            if ([PSRPM.NativeInspectorV2]::GetModuleInformation($hModProc, $hMod, $objBuf, 24) -ne 0) {
-                                $imgSize = [uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($objBuf, $ptrSize)
+                            $cbModInfo = if ($ptrSize -eq 8) { [uint32]24 } else { [uint32]12 }
+                            if ([PSRPM.NativeInspectorV2]::GetModuleInformation($hModProc, $hMod, $objBuf, $cbModInfo) -ne 0) {
+                                $imgSize = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($objBuf, $ptrSize) -band 0xFFFFFFFFL)
                                 $sizeKB = "$([Math]::Round($imgSize / 1KB, 0).ToString('N0')) K"
                             }
 
@@ -563,18 +735,19 @@ $script:PSRPMDeepInspectorScriptBlock = {
 
                     if ($hSt -eq 0) {
                         $numHandles = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($hBufPtr, 0).ToInt64()
-                        $maxScan = [Math]::Min($numHandles, 1500L)
+                        $maxScan = [Math]::Min($numHandles, 65536L)
                         $currProc = [PSRPM.NativeInspectorV2]::GetCurrentProcess()
-                        # Skip kernel object types that have no name or whose QueryNameProcedure (File/Pipe) can block on synchronous IPC
-                        $skipTypes = @("File", "WaitCompletionPacket", "IRTimer", "TpWorkerFactory", "IoCompletion", "EtwRegistration", "DxgkCompositionObject")
+                        $sbPath = [System.Text.StringBuilder]::new(1024)
+                        # Skip kernel object types that have no name or are irrelevant high-frequency objects
+                        $skipTypes = @("WaitCompletionPacket", "IRTimer", "TpWorkerFactory", "IoCompletion", "EtwRegistration", "DxgkCompositionObject")
 
                         for ($hIdx = 0; $hIdx -lt $maxScan; $hIdx++) {
                             $entryOff = 16 + ($hIdx * 40)
                             if (($entryOff + 40) -gt $hBufLen) { break }
 
                             $hVal = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($hBufPtr, $entryOff)
-                            $acc  = [uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + 24)
-                            $tIdx = [uint32][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + 28)
+                            $acc  = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + 24) -band 0xFFFFFFFFL)
+                            $tIdx = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + 28) -band 0xFFFFFFFFL)
 
                             if ($script:HandleTypeCache.ContainsKey($tIdx) -and $script:HandleTypeCache[$tIdx] -in $skipTypes) {
                                 continue
@@ -602,11 +775,23 @@ $script:PSRPMDeepInspectorScriptBlock = {
                                     if (-not $tName -or $tName -in $skipTypes) { continue }
 
                                     $nStr = ""
-                                    if ([PSRPM.NativeInspectorV2]::NtQueryObject($dup, 1, $objBuf, 4096, [ref]$oRet) -eq 0) {
-                                        $nLen = [System.Runtime.InteropServices.Marshal]::ReadInt16($objBuf, 0)
-                                        $nPtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($objBuf, 8)
-                                        if ($nLen -gt 0 -and $nPtr -ne [IntPtr]::Zero) {
-                                            $nStr = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($nPtr, [int]($nLen / 2))
+                                    if ($tName -eq "File") {
+                                        # Query disk files/folders safely. Non-disk/pipe handles are skipped to prevent synchronous pipe deadlocks.
+                                        $fType = [PSRPM.NativeInspectorV2]::GetFileType($dup)
+                                        if ($fType -eq 1) {
+                                            [void]$sbPath.Clear()
+                                            $fLen = [PSRPM.NativeInspectorV2]::GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)
+                                            if ($fLen -gt 0) {
+                                                $nStr = $sbPath.ToString() -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''
+                                            }
+                                        }
+                                    } else {
+                                        if ([PSRPM.NativeInspectorV2]::NtQueryObject($dup, 1, $objBuf, 4096, [ref]$oRet) -eq 0) {
+                                            $nLen = [System.Runtime.InteropServices.Marshal]::ReadInt16($objBuf, 0)
+                                            $nPtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($objBuf, 8)
+                                            if ($nLen -gt 0 -and $nPtr -ne [IntPtr]::Zero) {
+                                                $nStr = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($nPtr, [int]($nLen / 2))
+                                            }
                                         }
                                     }
 

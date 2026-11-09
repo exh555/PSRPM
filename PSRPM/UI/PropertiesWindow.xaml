@@ -148,6 +148,14 @@
                             <StackPanel Grid.Column="1" VerticalAlignment="Top">
                                 <Button x:Name="BtnVerifySig" Content="Verify" Height="26" Margin="0,0,0,6" ToolTip="Verify Authenticode Digital Signature on Target"/>
                                 <Button x:Name="BtnSuspendResume" Content="Suspend" Height="26" Margin="0,0,0,6" ToolTip="Suspend or Resume Process"/>
+                                <Button x:Name="BtnPropCreateDump" Content="Create Dump..." Height="26" Margin="0,0,0,6" ToolTip="Generate Process Memory Dump in C:\temp on Target Host">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem x:Name="MenuPropMiniDump" Header="Create Minidump..."/>
+                                            <MenuItem x:Name="MenuPropFullDump" Header="Create Full Memory Dump..."/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button x:Name="BtnPropEndProcess" Content="Kill Process" Height="26" Margin="0,0,0,6" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" FontWeight="SemiBold"/>
                                 <Button x:Name="BtnPropEndTree" Content="Kill Process Tree" Height="26" Background="#FECACA" Foreground="#7F1D1D" BorderBrush="#EF4444" FontWeight="SemiBold"/>
                             </StackPanel>

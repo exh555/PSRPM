@@ -62,6 +62,7 @@ function Start-PSRPMEngine {
         IsPaused            = $false
         IsTreeMode          = $true
         IsDarkTheme         = $false
+        EnableCategoryHighlights = $true
         SortProperty        = "PID"
         SortDescending      = $false
         FilterText          = ""
@@ -197,11 +198,13 @@ function Start-PSRPMEngine {
                             $expName  = [string]$cmd.ExpectedName
                             $svcName  = [string]$cmd.ServiceName
                             $prio     = [string]$cmd.Priority
+                            $hId      = if ($cmd.HandleId) { [string]$cmd.HandleId } else { "" }
+                            $dType    = if ($cmd.DumpType) { [string]$cmd.DumpType } else { "Mini" }
                             $useLocal = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
                             $useSess  = if ($activeSessObj) { $activeSessObj.Session } else { $session }
 
                             $jsonRes = if ($useLocal) {
-                                & $actionSb $actName $tPid $expName $svcName $prio
+                                & $actionSb $actName $tPid $expName $svcName $prio $hId $dType
                             } else {
                                 if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
                                     Invoke-Command -Session $useSess -ScriptBlock {
@@ -211,19 +214,54 @@ function Start-PSRPMEngine {
                                     $activeSessObj.ActionInitialized = $true
                                 }
                                 Invoke-Command -Session $useSess -ScriptBlock {
-                                    param($a, $p, $e, $s, $pr)
+                                    param($a, $p, $e, $s, $pr, $h, $dt)
                                     if ($script:PSRPMActionInvoker) {
-                                        & $script:PSRPMActionInvoker $a $p $e $s $pr
+                                        & $script:PSRPMActionInvoker $a $p $e $s $pr $h $dt
                                     } else {
                                         $null
                                     }
-                                } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio) -ErrorAction Stop
+                                } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio, $hId, $dType) -ErrorAction Stop
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
                                 RequestId   = $cmd.RequestId
                                 CommandType = "ProcessAction"
                                 Action      = $actName
+                                Success     = $true
+                                PayloadJson = [string]$jsonRes
+                                ElapsedMs   = $swCmd.ElapsedMilliseconds
+                            })
+                        }
+
+                        "FindHandles" {
+                            $query       = [string]$cmd.Query
+                            $useLocal    = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
+                            $useSess     = if ($activeSessObj) { $activeSessObj.Session } else { $session }
+
+                            $jsonRes = if ($useLocal) {
+                                & $inspectorSb 0 $false "FindHandles" $query
+                            } else {
+                                if ($activeSessObj -and -not $activeSessObj.InspectorInitialized) {
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($code)
+                                        $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
+                                    } -ArgumentList @($inspectorCode) -ErrorAction Stop
+                                    $activeSessObj.InspectorInitialized = $true
+                                }
+                                Invoke-Command -Session $useSess -ScriptBlock {
+                                    param($q)
+                                    if ($script:PSRPMInspectorInvoker) {
+                                        & $script:PSRPMInspectorInvoker 0 $false "FindHandles" $q
+                                    } else {
+                                        $null
+                                    }
+                                } -ArgumentList @($query) -ErrorAction Stop
+                            }
+                            $swCmd.Stop()
+                            $stateContainer.ResultQueue.Enqueue(@{
+                                RequestId   = $cmd.RequestId
+                                CommandType = "FindHandles"
+                                Query       = $query
                                 Success     = $true
                                 PayloadJson = [string]$jsonRes
                                 ElapsedMs   = $swCmd.ElapsedMilliseconds
@@ -765,6 +803,9 @@ function Start-PSRPMEngine {
         TotalRttMs     = 0L
     }
 
+    $createProcessVm = { [ProcessItemViewModel]::new() }
+    $createServiceVm = { [ServiceItemViewModel]::new() }
+
     $tickHandler = {
         # 1. Drain Async Command Results
         $resItem = $null
@@ -846,6 +887,7 @@ function Start-PSRPMEngine {
 
             $seq = [int]$data['seq']
             $isDark = [bool]$stateContainer.IsDarkTheme
+            $enableCatHighlights = if ($stateContainer.ContainsKey('EnableCategoryHighlights')) { [bool]$stateContainer.EnableCategoryHighlights } else { $true }
             $structureChanged = $false
 
             # A. Clear Previous Tick's 1-Tick Lifecycle Flashes (New -> Normal, Exiting -> Remove)
@@ -903,7 +945,7 @@ function Start-PSRPMEngine {
                     if ($servicesMap.ContainsKey($sName)) {
                         $servicesMap[$sName].UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
                     } else {
-                        $sVm = [ServiceItemViewModel]::new()
+                        $sVm = & $createServiceVm
                         $sVm.UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
                         $servicesMap[$sName] = $sVm
                         if ($null -ne $ServicesCollection) {
@@ -947,12 +989,13 @@ function Start-PSRPMEngine {
                         if ($processMap.ContainsKey($pidVal)) {
                             $vm = $processMap[$pidVal]
                         } else {
-                            $vm = [ProcessItemViewModel]::new()
+                            $vm = & $createProcessVm
                             $processMap[$pidVal] = $vm
                             $isBrandNew = $true
                             $structureChanged = $true
                         }
 
+                        $vm.EnableCategoryHighlights = $enableCatHighlights
                         $vm.SetStaticMetadata($m, $isDark)
                         if ($pidServicesMap.ContainsKey($pidVal)) {
                             $hostedStr = ($pidServicesMap[$pidVal] -join ", ")
@@ -1059,7 +1102,8 @@ function Start-PSRPMEngine {
                 }
 
                 if ($statusText) {
-                    $telemMsg = "CPU Usage: $($SummaryViewModel.CpuSummaryFormatted) | Commit Charge: $($SummaryViewModel.CommitSummaryFormatted) | Processes: $($SummaryViewModel.ProcessCount) | Physical Usage: $($SummaryViewModel.RamPctFormatted) | Wire: ${wireKB} KB ($($stateContainer.PollLatencyMs) ms)"
+                    $netTag = if ($SummaryViewModel.NetThroughputFormatted -and $SummaryViewModel.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($SummaryViewModel.NetThroughputFormatted)" } else { "" }
+                    $telemMsg = "CPU: $($SummaryViewModel.CpuSummaryFormatted) | Commit: $($SummaryViewModel.CommitSummaryFormatted) | Procs: $($SummaryViewModel.ProcessCount) | RAM: $($SummaryViewModel.RamPctFormatted)$netTag | Wire: ${wireKB} KB ($($stateContainer.PollLatencyMs) ms)"
                     $stateContainer.LastStatusText = $telemMsg
                     if ($stateContainer.IsPaused) {
                         $statusText.Text = "[PAUSED] $telemMsg"

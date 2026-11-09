@@ -1,16 +1,16 @@
-# PRODUCT.md — PSRPM (PowerShell Remote Process Manager)
+# PRODUCT.md -- PSRPM (PowerShell Remote Process Manager)
 
 ## 1. Executive Summary & Vision
 **PSRPM (PowerShell Remote Process Manager)** is an enterprise-grade, **100% fileless**, agentless Windows process monitoring, forensics, and administration application. Built natively for **Windows PowerShell 5.1** and **PowerShell 7+** using pure WPF and in-memory `.NET Reflection.Emit`, PSRPM bridges the gap between raw remote command-line tools and native desktop inspection utilities.
 
-Inspired by **Sysinternals Process Explorer**, PSRPM provides a unified hierarchical **Tree-Grid**, semantic row coloring, real-time telemetry sparklines, an interactive **Multi-Host Tabbed Session Bar**, a live **4-tab System Information** modal, a **7-tab Deep Process Properties Inspector**, and a live **Audit & Network Telemetry Console**—delivered entirely over persistent WinRM `PSSession`s (`-ComputerName`) or zero-privilege local execution (`-LocalOnly`).
+Inspired by **Sysinternals Process Explorer**, PSRPM provides a unified hierarchical **Tree-Grid**, semantic row coloring, real-time telemetry sparklines, an interactive **Multi-Host Tabbed Session Bar**, a live **4-tab System Information** modal, a **7-tab Deep Process Properties Inspector**, and a live **Audit & Network Telemetry Console**--delivered entirely over persistent WinRM `PSSession`s (`-ComputerName`) or zero-privilege local execution (`-LocalOnly`).
 
 ---
 
 ## 2. Core Problem Statement
 
 Traditional remote administration on Windows forced operators into severe trade-offs:
-1. **WMI & CIM RPC Storms**: Calling `Get-CimInstance Win32_Process` or `Invoke-CimMethod -MethodName GetOwner` triggers `WmiPrvSE.exe` spikes of 12%–25% remote CPU, N+1 DCOM RPC round-trips, and massive network wire bloat (~280–450 KB/s).
+1. **WMI & CIM RPC Storms**: Calling `Get-CimInstance Win32_Process` or `Invoke-CimMethod -MethodName GetOwner` triggers `WmiPrvSE.exe` spikes of 12%-25% remote CPU, N+1 DCOM RPC round-trips, and massive network wire bloat (~280-450 KB/s).
 2. **UI Freezes on Hung Apps**: `.NET`'s `System.Diagnostics.Process` invokes `user32!SendMessageTimeout` with a 5,000 ms timeout per window whenever `$p.Responding` is queried, freezing the UI whenever any remote window is unresponsive.
 3. **EDR Trigger Risks**: Dropping temporary binaries or compiling C# on-the-fly (`Add-Type -TypeDefinition`) invokes `csc.exe` on disk, creating temporary `.cs`/`.dll` artifacts in `%TEMP%` that trip enterprise EDR/SIEM behavioral heuristics.
 4. **Lack of Visual Diagnostics over Remoting**: System administrators troubleshooting remote endpoints had to reconstruct parent-child relationships, CPU utilization trends, and handle locks by piecing together multiple CLI cmdlets.
@@ -36,18 +36,18 @@ Every capability in PSRPM is governed by four strict architectural non-negotiabl
 
 ```mermaid
 flowchart TD
-    P1["1. Seamless Connectivity<br/>• Persistent WinRM PSSession (-ComputerName)<br/>• Zero-privilege local mode (-LocalOnly)<br/>• Unlocked background runspaces (-NoWait)"]
-    P2["2. Ultra-Low Overhead<br/>• < 0.25% Remote CPU (2–8ms NtQuerySystemInformation)<br/>• ~1.1–1.8 KB/s Steady-State GZIP Wire<br/>• < 12 KB Ring Buffer RAM per Host"]
-    P3["3. Process Explorer UX<br/>• Single-surface Hierarchical Tree-Grid<br/>• Semantic Row Colors & Column Tints<br/>• 7-Tab Inspector & 4-Tab System Graphs<br/>• Multi-Host Warm Standby Tabs"]
-    P4["4. 100% Fileless Security<br/>• Zero Add-Type -TypeDefinition / csc.exe<br/>• Zero disk writes to %TEMP%<br/>• Pure Reflection.Emit & PS 5.1 Classes"]
+    P1["1. Seamless Connectivity<br/>* Persistent WinRM PSSession (-ComputerName)<br/>* Zero-privilege local mode (-LocalOnly)<br/>* Unlocked background runspaces (-NoWait)"]
+    P2["2. Ultra-Low Overhead<br/>* < 0.25% Remote CPU (2-8ms NtQuerySystemInformation)<br/>* ~1.1-1.8 KB/s Steady-State GZIP Wire<br/>* < 12 KB Ring Buffer RAM per Host"]
+    P3["3. Process Explorer UX<br/>* Single-surface Hierarchical Tree-Grid<br/>* Semantic Row Colors & Column Tints<br/>* 7-Tab Inspector & 4-Tab System Graphs<br/>* Multi-Host Warm Standby Tabs"]
+    P4["4. 100% Fileless Security<br/>* Zero Add-Type -TypeDefinition / csc.exe<br/>* Zero disk writes to %TEMP%<br/>* Pure Reflection.Emit & PS 5.1 Classes"]
 
     P1 --- P2 --- P3 --- P4
 ```
 
 1. **Near-Zero Remote Impact (`< 0.25%` CPU)**:
-   - Collection runs in **2–8 ms** using a single native kernel transition (`ntdll!NtQuerySystemInformation(5)`).
+   - Collection runs in **2-8 ms** using a single native kernel transition (`ntdll!NtQuerySystemInformation(5)`).
    - Reusable unmanaged heap buffers (`[Marshal]::AllocHGlobal(512KB)`) prevent Large Object Heap (LOH) allocation churn.
-2. **Differential Wire Compression (`~1.1 – 1.8 KB/s`)**:
+2. **Differential Wire Compression (`~1.1 - 1.8 KB/s`)**:
    - Static metadata (`Path`, `CommandLine`, `User`, `Description`, `Company`, `Architecture`) is sent **only once** upon process spawn.
    - Subsequent ticks transmit only 7-element numeric delta tuples for processes whose metrics changed, compressed in-memory with GZIP.
 3. **Zero-Leak Memory Architecture (`< 12 KB` RAM per Session)**:
@@ -63,7 +63,7 @@ flowchart TD
 ## 5. Core Capabilities & Feature Breakdown
 
 ### A. Sysinternals Process Explorer Unified Tree-Grid
-- **Vector Parent-Child Hierarchy**: Pixel-snapped vector guide lines (`│`, `├─`, `└─`) and interactive expanders.
+- **Vector Parent-Child Hierarchy**: Pixel-snapped vector guide lines (`|`, `+-`, `\-`) and interactive expanders.
 - **Smart Auto-Flat Sorting**: Clicking any column header (`CPU`, `Private Bytes`, `Working Set`, `PID`, `Handles`) automatically switches to **Flat View** for global system ranking; clicking **Tree** (`Ctrl+T`) restores the hierarchical tree.
 - **Ancestor-Preserving Search Filter**: Typing in the search box (`Ctrl+F`) preserves full parent ancestry chains so matched processes retain operational context.
 - **Semantic Category Highlighting**:

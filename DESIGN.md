@@ -1,4 +1,4 @@
-# DESIGN.md — PSRPM Visual System & Operate Mode Specification
+# DESIGN.md -- PSRPM Visual System & Operate Mode Specification
 
 ## 1. Visual Authority & Design Philosophy
 
@@ -6,7 +6,7 @@
 - **Visual Anchor**: Sysinternals Process Explorer (`procexp64.exe`), elevated with high-DPI WPF vector geometry, modern typographic hierarchy, and WCAG AA (`>= 4.5:1`) contrast across both **Clean Light** and **Precision Dark** themes.
 - **Operate Mode Principles**:
   - **Density & Scanability**: High information density without visual noise. Tabular numeric columns, right alignment, and immediate visual hierarchy outrank decorative expression.
-  - **Vector Geometry Over Text Glyphs**: Tree hierarchy lines, expander arrows, status indicators, and chart curves are rendered with crisp, pixel-snapped WPF `<Path>` and `<Polygon>` vectors—never Unicode text characters (`+`, `-`, `│`, `└`) that misalign across fonts and DPI scaling.
+  - **Vector Geometry Over Text Glyphs**: Tree hierarchy lines, expander arrows, status indicators, and chart curves are rendered with crisp, pixel-snapped WPF `<Path>` and `<Polygon>` vectors--never Unicode text characters (`+`, `-`, `|`, `\`) that misalign across fonts and DPI scaling.
   - **Zero Visual Gimmicks**: No decorative drop shadows, glass/blur effects, rainbow gradients, or floating card containers. Every pixel serves diagnostic utility.
   - **In-Place UI Reconciliation**: Live collections update properties in-place via dirty-checked `INotifyPropertyChanged`. The UI never calls `.Clear()` on live grids, ensuring scroll position, selected rows, and expander states remain rock-solid.
 
@@ -21,7 +21,7 @@
 | **Grid Headers** | `Segoe UI` | `11px` | SemiBold | Match Column | DataGrid column header titles |
 | **Tab Titles (Active)** | `Segoe UI` | `11px` | Bold | Left | Selected Host Session Tab |
 | **Tab Titles (Standby)**| `Segoe UI` | `11px` | Normal | Left | Inactive Host Session Tabs |
-| **Metric Badges / Pills**| `Segoe UI` | `8.5–9px` | Bold | Center | Transport Badges (`LOCAL`, `WINRM`), Filter Pills |
+| **Metric Badges / Pills**| `Segoe UI` | `8.5-9px` | Bold | Center | Transport Badges (`LOCAL`, `WINRM`), Filter Pills |
 | **Modal Titles** | `Segoe UI` | `14px` | Bold | Left | Window headers, Section titles |
 | **Status Bar Telemetry**| `Segoe UI` | `11px` | Normal | Left | Global summary metrics, wire transfer statistics |
 | **Audit Console / Logs**| `Consolas` | `11px` | Normal | Left | Activity console, hex addresses, SIDs, CLI commands |
@@ -64,9 +64,9 @@ Semantic row coloring matches Sysinternals Process Explorer conventions, ordered
 
 ### C. Vertical Column Metric Tints
 Vertical column highlights provide immediate peripheral vision for resource utilization:
-- **`ColTint_CPU`**: `#2222C55E` (Light) / `#1422C55E` (Dark) — Soft Emerald Green
-- **`ColTint_PrivateBytes`**: `#28EAB308` (Light) / `#14EAB308` (Dark) — Soft Amber Yellow
-- **`ColTint_WorkingSet`**: `#22F97316` (Light) / `#14F97316` (Dark) — Soft Tangerine Orange
+- **`ColTint_CPU`**: `#2222C55E` (Light) / `#1422C55E` (Dark) -- Soft Emerald Green
+- **`ColTint_PrivateBytes`**: `#28EAB308` (Light) / `#14EAB308` (Dark) -- Soft Amber Yellow
+- **`ColTint_WorkingSet`**: `#22F97316` (Light) / `#14F97316` (Dark) -- Soft Tangerine Orange
 
 ### D. Interactive States
 - **Row Selected**: `BrushRowSelectedBg` (`#006CBE` Light / `#0369A1` Dark) with `BrushRowSelectedFg = #FFFFFF` across all cells.
@@ -81,7 +81,7 @@ Located at the top of the main window directly below the menu bar, the **Host Ta
 
 ```text
 +-----------------------------------------------------------------------------------------+
-| [● SRV-PROD-01 WINRM 42ms]  [● WKSTN-LOCAL-01 LOCAL 18ms  x]                 [+ Add Host] |
+| [* SRV-PROD-01 WINRM 42ms]  [* WKSTN-LOCAL-01 LOCAL 18ms  x]                 [+ Add Host] |
 +-----------------------------------------------------------------------------------------+
 ```
 
@@ -108,15 +108,15 @@ Located at the top of the main window directly below the menu bar, the **Host Ta
 PSPRM rejects Unicode box-drawing characters in favor of resolution-independent WPF vector paths:
 
 ### Parent-Child Connector Geometry
-- **Vertical Pass-Through Line** (`│`):
+- **Vertical Pass-Through Line** (`|`):
   ```xaml
   <Path Data="M 7.5,0 L 7.5,18" Stroke="{DynamicResource BrushTreeLine}" StrokeThickness="1" SnapsToDevicePixels="True"/>
   ```
-- **Branch Connector** (`├─`):
+- **Branch Connector** (`+-`):
   ```xaml
   <Path Data="M 7.5,0 L 7.5,18 M 7.5,9 L 16,9" Stroke="{DynamicResource BrushTreeLine}" StrokeThickness="1" SnapsToDevicePixels="True"/>
   ```
-- **Terminal Child Connector** (`└─`):
+- **Terminal Child Connector** (`\-`):
   ```xaml
   <Path Data="M 7.5,0 L 7.5,9 L 16,9" Stroke="{DynamicResource BrushTreeLine}" StrokeThickness="1" SnapsToDevicePixels="True"/>
   ```
@@ -134,7 +134,7 @@ The System Information window faithfully reproduces Sysinternals Process Explore
 
 ```text
 +-----------------------------------------------------------------------------------------+
-| System Information [SRV-PROD-01]                                              -  □  X   |
+| System Information [SRV-PROD-01]                                              -  [ ]  X   |
 +-----------------------------------------------------------------------------------------+
 | [Summary]  [CPU]  [Memory]  [I/O]                                                       |
 |                                                                                         |
@@ -148,7 +148,7 @@ The System Information window faithfully reproduces Sysinternals Process Explore
 ```
 
 ### Chart Coordinate System & Curves
-- **Canvas Size**: Standardized `360 × 120` coordinate space (`Viewbox`).
+- **Canvas Size**: Standardized `360 x 120` coordinate space (`Viewbox`).
 - **History Depth**: Exactly `120` points (2 minutes of 1-second telemetry ticks).
 - **Dual-Layer Area Curves**:
   - **CPU Graph**: Green total line (`#22C55E`, fill `#3322C55E`) overlaying Red kernel line (`#EF4444`, fill `#44EF4444`).
@@ -162,7 +162,7 @@ The System Information window faithfully reproduces Sysinternals Process Explore
 
 ## 7. Deep Process Properties Inspector (7-Tab Layout)
 
-- **Header Band**: 32×32 process icon, bold process name, PID, path, and action buttons (`Suspend`/`Resume`, `Kill Process`, `Kill Tree`).
+- **Header Band**: 32x32 process icon, bold process name, PID, path, and action buttons (`Suspend`/`Resume`, `Kill Process`, `Kill Tree`).
 - **Tabs**:
   1. **Image**: File version, linker build timestamp, path, command line, PEB current directory, autostart location, and interactive **Verify** Authenticode signature button.
   2. **Performance**: Total/Kernel/User CPU time, cycles, working set, private bytes, virtual size, page faults, kernel pool counters, and I/O read/write deltas.

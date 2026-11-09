@@ -95,7 +95,7 @@ Write-Host "  Tick 2 (Differential Sync): $($sw2.ElapsedMilliseconds) ms | Wire 
 if ($dataTick1['sys'].Count -lt 27 -or -not $dataTick1['hw'] -or $null -ne $dataTick2['hw']) {
     throw "Expected 27 sys metrics and one-time hw metadata on Tick 1 (got sys=$($dataTick1['sys'].Count), hw1=$($null -ne $dataTick1['hw']), hw2=$($null -ne $dataTick2['hw']))."
 }
-Write-Host "  Verified System Info Telemetry: 27 kernel counters, $($dataTick1['cores'].Count) CPU core series, OS='$($dataTick1['hw']['os'])', CPU='$($dataTick1['hw']['cpu'])'" -ForegroundColor Gray
+Write-Host "  Verified System Info Telemetry: $($dataTick1['sys'].Count) kernel/hardware counters, $($dataTick1['cores'].Count) CPU core series, OS='$($dataTick1['hw']['os'])', CPU='$($dataTick1['hw']['cpu'])'" -ForegroundColor Gray
 Write-Host "  [PASS] Differential telemetry engine verified (Steady-State Latency: $($sw2.ElapsedMilliseconds) ms, Wire Size: $tick2WireKB KB)." -ForegroundColor Green
 
 # ------------------------------------------------------------------
@@ -170,18 +170,56 @@ if (-not $actRes['Success']) {
 }
 Write-Host "  [PASS] ProcessActions verified: $($actRes['Message'])" -ForegroundColor Green
 
+# TEST 5B: Process Memory Dump Generation (CreateDump - Minidump)
+Write-Host "  Testing ProcessActions (CreateDump Mini)..." -ForegroundColor Gray
+$dumpJson = & $script:PSRPMActionScriptBlock "CreateDump" $PID "powershell" "" "Normal" "" "Mini"
+$dumpRes = $jss.DeserializeObject($dumpJson)
+if (-not $dumpRes['Success'] -or -not (Test-Path $dumpRes['DumpPath'])) {
+    throw "CreateDump action failed: $($dumpRes['Message'])"
+}
+$dumpBytes = [System.IO.File]::ReadAllBytes($dumpRes['DumpPath'])
+$isMdmp = ($dumpBytes.Length -ge 4 -and $dumpBytes[0] -eq 0x4D -and $dumpBytes[1] -eq 0x44 -and $dumpBytes[2] -eq 0x4D -and $dumpBytes[3] -eq 0x50) # 'MDMP'
+Remove-Item -Path $dumpRes['DumpPath'] -Force -ErrorAction SilentlyContinue
+if (-not $isMdmp) {
+    throw "Generated dump file is missing MDMP signature."
+}
+Write-Host "  [PASS] CreateDump verified: Valid MDMP minidump created and verified at $($dumpRes['DumpPath'])" -ForegroundColor Green
+
+# TEST 5C: ProcessActions (CloseHandle via DuplicateHandle)
+Write-Host "  Testing ProcessActions (CloseHandle)..." -ForegroundColor Gray
+$tempLockFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "psrpm_test_lock.tmp")
+$fsLock = [System.IO.File]::Open($tempLockFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+$hLockVal = "0x{0:X}" -f $fsLock.SafeFileHandle.DangerousGetHandle().ToInt64()
+$closeJson = & $script:PSRPMActionScriptBlock "CloseHandle" $PID "powershell" "" "Normal" $hLockVal ""
+$closeRes = $jss.DeserializeObject($closeJson)
+if (-not $closeRes['Success']) {
+    throw "CloseHandle action failed: $($closeRes['Message'])"
+}
+$fileUnlocked = $false
+try {
+    [System.IO.File]::Delete($tempLockFile)
+    $fileUnlocked = $true
+} catch {
+    $fileUnlocked = $false
+}
+if (-not $fileUnlocked) {
+    throw "CloseHandle succeeded but target file remained locked."
+}
+Write-Host "  [PASS] CloseHandle verified: Atomic handle invalidation released locked file." -ForegroundColor Green
+
 # ------------------------------------------------------------------
 # TEST 6: ViewModel Classes & WPF XAML Integrity Verification
 # ------------------------------------------------------------------
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices") }
-    @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate") }
+    @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
     @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
     @{ File = "ServiceDetailWindow.xaml"; RequiredControls = @("TxtDlgDisplayName", "TxtDlgServiceName", "TxtDlgPid", "BadgeDlgStatus", "TxtDlgStatus", "SvcTabControl", "TxtDlgDescription", "TxtDlgPath", "TxtDlgStartup", "TxtDlgAccount", "TxtDlgDepSummary", "GridDlgPrereqs", "GridDlgDependents", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
+    @{ File = "FindHandleWindow.xaml"; RequiredControls = @("TxtSearchHandle", "BtnSearchHandle", "TxtHandleStatus", "GridHandleResults", "CtxCloseHandle", "CtxGoToProcess", "CtxCopyPath", "BtnCloseHandle", "BtnGoToProcess", "BtnCopyPath", "BtnCloseDlg") }
 )
 
 foreach ($xf in $xamlFiles) {
@@ -207,6 +245,35 @@ $vmTest.UpdateDynamic(1.25, 65536000, 45056000, 14, 420, 0)
 $vmTest.UpdateTreeState(2, $true, $true, "M 7.5,0 L 7.5,22 M 23.5,0 L 23.5,11.5 L 31,11.5", 1.0)
 $vmTest.SetTheme($true)
 $vmTest.SetTheme($false)
+
+# Verify Process Explorer-style Command Line ToolTip
+if ([string]::IsNullOrWhiteSpace($vmTest.CommandLineToolTip) -or -not $vmTest.CommandLineToolTip.Contains("Command line:")) {
+    throw "ProcessItemViewModel failed to build Process Explorer-style CommandLineToolTip."
+}
+
+# Verify Selective Category Highlighting & Lifecycle Flash Invariance
+$vmTest.SetCategoryHighlights($true)
+if ($vmTest.RowBackground -ne "#FFFFFF" -and -not $vmTest.RowBackground.StartsWith("#")) {
+    throw "RowBackground failed to initialize with category highlighting enabled."
+}
+$vmTest.SetCategoryHighlights($false)
+if ($vmTest.RowBackground -ne "#FFFFFF") {
+    throw "RowBackground expected neutral #FFFFFF when category highlights are disabled."
+}
+# Critical requirement: Lifecycle flashes (Lime/Crimson) remain active when category highlights are off
+$vmTest.LifecycleState = 1 # New Process
+$vmTest.RefreshRowColors()
+if ($vmTest.RowBackground -ne "#86EFAC") {
+    throw "Lifecycle New process flash (Lime Green #86EFAC) was suppressed when category highlights were disabled."
+}
+$vmTest.LifecycleState = 2 # Exiting Process
+$vmTest.RefreshRowColors()
+if ($vmTest.RowBackground -ne "#FCA5A5") {
+    throw "Lifecycle Exiting process flash (Crimson Red #FCA5A5) was suppressed when category highlights were disabled."
+}
+$vmTest.LifecycleState = 0
+$vmTest.RefreshRowColors()
+Write-Host "  Verified Selective Highlighting: Lifecycle flashes (Lime/Crimson) strictly preserved when category colors disabled." -ForegroundColor Gray
 
 $sumTest = [SystemSummaryViewModel]::new()
 $sumTest.IsSysInfoOpen = $true
@@ -383,6 +450,73 @@ try {
     }
     Write-Host "  Verified Async Command Bus (SendCommand -> InspectPid[Modules] -> UI Closure Callback populated $($cbState.Count) DLL rows)." -ForegroundColor Gray
 
+    # Test FindHandles command on Async Command Bus
+    $findState = @{ Fired = $false; Matches = 0; PayloadJson = ""; Err = "" }
+    $localFindState = $findState
+    & $eng.SendCommand @{
+        CommandType = "FindHandles"
+        Query       = "kernel32"
+    } ({
+        param($res)
+        if ($res.Success -and $res.PayloadJson) {
+            $parsed = $jss.DeserializeObject($res.PayloadJson)
+            $localFindState.Matches = $parsed.Count
+            $localFindState.PayloadJson = $res.PayloadJson
+            $localFindState.Fired = $true
+        } else {
+            $localFindState.Err = $res.Error
+            $localFindState.Fired = $true
+        }
+    }.GetNewClosure())
+
+    $findDeadline = [DateTime]::UtcNow.AddSeconds(3.0)
+    while ([DateTime]::UtcNow -lt $findDeadline -and -not $findState.Fired) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Background,
+            [Action]{}
+        )
+        Start-Sleep -Milliseconds 50
+    }
+    if (-not $findState.Fired -or $findState.Matches -lt 1) {
+        throw "SendCommand async FindHandles command bus callback failed (Fired=$($findState.Fired), Matches=$($findState.Matches), Err=$($findState.Err))."
+    }
+    Write-Host "  Verified Async Command Bus (SendCommand -> FindHandles['kernel32'] -> UI Callback returned $($findState.Matches) matches)." -ForegroundColor Gray
+
+    # Verify FindHandleWindow GridHandleResults Data Binding & Visible Text Rendering
+    $fBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "FindHandleWindow.xaml"))
+    $msF = [System.IO.MemoryStream]::new($fBytes)
+    $findWinTest = [System.Windows.Markup.XamlReader]::Load($msF)
+    $msF.Close()
+    $dgFindTest = $findWinTest.FindName("GridHandleResults")
+    $parsedMatches = $jss.DeserializeObject($findState.PayloadJson)
+    $testFindCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+    foreach ($m in $parsedMatches) {
+        $testFindCol.Add([PSCustomObject]@{
+            ProcessName = [string]$m['ProcessName']
+            PID         = [int]$m['PID']
+            Type        = [string]$m['Type']
+            Handle      = [string]$m['Handle']
+            Name        = [string]$m['Name']
+        })
+    }
+    $dgFindTest.ItemsSource = $testFindCol
+    $findWinTest.Show()
+    [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
+    $dgFindTest.UpdateLayout()
+    $rowTest = $dgFindTest.ItemContainerGenerator.ContainerFromIndex(0)
+    if ($rowTest) {
+        $cell0 = $dgFindTest.Columns[0].GetCellContent($rowTest)
+        if (-not $cell0 -or [string]::IsNullOrEmpty($cell0.Text)) {
+            $findWinTest.Close()
+            throw "FindHandleWindow DataGrid text binding failed: Cell text in column 0 (ProcessName) is empty."
+        }
+        $findWinTest.Close()
+        Write-Host "  Verified FindHandleWindow DataGrid binding: ProcessName text '$($cell0.Text)' rendered with non-empty text." -ForegroundColor Gray
+    } else {
+        $findWinTest.Close()
+        throw "FindHandleWindow DataGrid failed to generate row container."
+    }
+
     # Test Multi-Host Tab Session Command Bus
     $testTabsCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
     $localTestTabs = $testTabsCol
@@ -396,13 +530,14 @@ try {
         Port         = 0
         UseSSL       = $false
     }
+    $fnCreateTestTabVm = { param($id, $target, $transport, $isLoc) [HostTabItemViewModel]::new($id, $target, $target, $transport, [bool]$isLoc, $null) }
     & $eng.SendCommand $cmdAddTab ({
         param($res)
         $tabCb.Fired   = $true
         $tabCb.Success = [bool]$res.Success
         $tabCb.TabId   = [string]$res.TabId
         if ($res.Success) {
-            $tVm = [HostTabItemViewModel]::new($res.TabId, $res.Target, $res.Target, $res.Transport, [bool]$res.IsLocal, $null)
+            $tVm = & $fnCreateTestTabVm $res.TabId $res.Target $res.Transport $res.IsLocal
             $localTestTabs.Add($tVm)
         }
     }.GetNewClosure())
