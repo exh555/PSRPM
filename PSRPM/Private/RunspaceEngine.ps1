@@ -80,6 +80,9 @@ function Start-PSRPMEngine {
         LastErr             = $null
         VerboseTelemetryLog = $true
         IsStopping          = $false
+        LastSampleUtcTicks  = 0L
+        TelemetryAgeMs      = 0
+        FreshnessState      = "Fresh"
         CommandQueue        = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
         ResultQueue         = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
         WakeEvent           = [System.Threading.AutoResetEvent]::new($false)
@@ -115,6 +118,7 @@ function Start-PSRPMEngine {
         # Multi-Host Session Dictionary (TabId -> @{ Session, IsLocal, Target, Badge, CollectorSb, ... })
         $sessions = @{}
         $initBadge = if ($isLocalMode) { "LOCAL" } else { "WINRM" }
+        $initComp  = if ($isLocalMode) { "$env:COMPUTERNAME" } elseif ($session) { $session.ComputerName } else { $stateContainer.TargetDisplayName }
         $sessions[$initTabId] = @{
             Session              = $session
             IsLocal              = $isLocalMode
@@ -124,13 +128,31 @@ function Start-PSRPMEngine {
             CollectorInitialized = $false
             InspectorInitialized = $false
             ActionInitialized    = $false
+            ConnectionConfig     = @{
+                ComputerName = $initComp
+                IsLocal      = $isLocalMode
+                Credential   = $null
+                Port         = 0
+                UseSSL       = ($initBadge -eq "WINRM-SSL")
+            }
+            ConnState           = if ($isLocalMode) { "LocalMode" } else { "Connected" }
+            ConsecutiveFailures = 0
+            ReconnectAttempts   = 0
+            NextReconnectTicks  = 0L
+            BackoffSec          = 1
         }
         $activeTabId = $initTabId
 
+        $lastPollUtcTicks = 0L
+        $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
+
         while (-not $stateContainer.IsStopping) {
-            # 1. Drain High-Priority User Commands Immediately
+            # 1. Drain High-Priority User Commands (Cooperative Quantum: at most 5 commands or 250 ms)
+            $cmdBudgetSw = [System.Diagnostics.Stopwatch]::StartNew()
+            $cmdCount = 0
             $cmd = $null
-            while ($stateContainer.CommandQueue.TryDequeue([ref]$cmd)) {
+            while ($cmdCount -lt 5 -and $cmdBudgetSw.ElapsedMilliseconds -lt 250 -and $stateContainer.CommandQueue.TryDequeue([ref]$cmd)) {
+                $cmdCount++
                 if ($stateContainer.IsStopping) { break }
                 $swCmd = [System.Diagnostics.Stopwatch]::StartNew()
                 try {
@@ -198,13 +220,14 @@ function Start-PSRPMEngine {
                             $expName  = [string]$cmd.ExpectedName
                             $svcName  = [string]$cmd.ServiceName
                             $prio     = [string]$cmd.Priority
-                            $hId      = if ($cmd.HandleId) { [string]$cmd.HandleId } else { "" }
-                            $dType    = if ($cmd.DumpType) { [string]$cmd.DumpType } else { "Mini" }
-                            $useLocal = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
-                            $useSess  = if ($activeSessObj) { $activeSessObj.Session } else { $session }
+                            $hId       = if ($cmd.HandleId) { [string]$cmd.HandleId } else { "" }
+                            $dType     = if ($cmd.DumpType) { [string]$cmd.DumpType } else { "Mini" }
+                            $expCreate = if ($cmd.ExpectedCreateTime) { [long]$cmd.ExpectedCreateTime } else { 0L }
+                            $useLocal  = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
+                            $useSess   = if ($activeSessObj) { $activeSessObj.Session } else { $session }
 
                             $jsonRes = if ($useLocal) {
-                                & $actionSb $actName $tPid $expName $svcName $prio $hId $dType
+                                & $actionSb $actName $tPid $expName $svcName $prio $hId $dType $expCreate
                             } else {
                                 if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
                                     Invoke-Command -Session $useSess -ScriptBlock {
@@ -214,13 +237,13 @@ function Start-PSRPMEngine {
                                     $activeSessObj.ActionInitialized = $true
                                 }
                                 Invoke-Command -Session $useSess -ScriptBlock {
-                                    param($a, $p, $e, $s, $pr, $h, $dt)
+                                    param($a, $p, $e, $s, $pr, $h, $dt, $ct)
                                     if ($script:PSRPMActionInvoker) {
-                                        & $script:PSRPMActionInvoker $a $p $e $s $pr $h $dt
+                                        & $script:PSRPMActionInvoker $a $p $e $s $pr $h $dt $ct
                                     } else {
                                         $null
                                     }
-                                } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio, $hId, $dType) -ErrorAction Stop
+                                } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio, $hId, $dType, $expCreate) -ErrorAction Stop
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -304,6 +327,18 @@ function Start-PSRPMEngine {
                                 CollectorInitialized = $false
                                 InspectorInitialized = $false
                                 ActionInitialized    = $false
+                                ConnectionConfig     = @{
+                                    ComputerName = $newComp
+                                    IsLocal      = $newLocal
+                                    Credential   = $newCred
+                                    Port         = $newPort
+                                    UseSSL       = $newSsl
+                                }
+                                ConnState           = if ($newLocal) { "LocalMode" } else { "Connected" }
+                                ConsecutiveFailures = 0
+                                ReconnectAttempts   = 0
+                                NextReconnectTicks  = 0L
+                                BackoffSec          = 1
                             }
 
                             $activeTabId = $newTabId
@@ -425,6 +460,18 @@ function Start-PSRPMEngine {
                                 CollectorInitialized = $false
                                 InspectorInitialized = $false
                                 ActionInitialized    = $false
+                                ConnectionConfig     = @{
+                                    ComputerName = $newComp
+                                    IsLocal      = $newLocal
+                                    Credential   = $newCred
+                                    Port         = $newPort
+                                    UseSSL       = $newSsl
+                                }
+                                ConnState           = if ($newLocal) { "LocalMode" } else { "Connected" }
+                                ConsecutiveFailures = 0
+                                ReconnectAttempts   = 0
+                                NextReconnectTicks  = 0L
+                                BackoffSec          = 1
                             }
 
                             $stateContainer.ClearHostMaps = $true
@@ -451,10 +498,18 @@ function Start-PSRPMEngine {
 
             if ($stateContainer.IsStopping) { break }
 
-            # 2. Periodic Telemetry Snapshot Poll on Active Host Session (0 KB/s standby for inactive tabs)
-            if (-not $stateContainer.IsPaused -and $sessions.ContainsKey($activeTabId) -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
+            # 2. Periodic Telemetry Snapshot Poll on Active Host Session (Wall-Clock Anchored & Reconnect Protected)
+            $nowTicks = [DateTime]::UtcNow.Ticks
+            $isDue = ($nowTicks -ge $nextScheduledUtcTicks) -or [bool]$stateContainer.ForceFullSync
+            $canPollSession = $sessions.ContainsKey($activeTabId)
+            $activeSessObj = if ($canPollSession) { $sessions[$activeTabId] } else { $null }
+            $isReconnectingBackoff = $false
+            if ($activeSessObj -and -not $activeSessObj.IsLocal -and $activeSessObj.ConnState -eq "Reconnecting" -and $nowTicks -lt $activeSessObj.NextReconnectTicks) {
+                $isReconnectingBackoff = $true
+            }
+
+            if (-not $stateContainer.IsPaused -and $activeSessObj -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
                 $swPoll = [System.Diagnostics.Stopwatch]::StartNew()
-                $activeSessObj = $sessions[$activeTabId]
                 try {
                     $forceFull = [bool]$stateContainer.ForceFullSync
                     $stateContainer.ForceFullSync = $false
@@ -464,7 +519,7 @@ function Start-PSRPMEngine {
                     } else {
                         $sRef = $activeSessObj.Session
                         if (-not $sRef -or $sRef.State -ne 'Opened') {
-                            throw "WinRM session is not open (State: $(if ($sRef) { $sRef.State } else { 'Null' }))."
+                            throw "WinRM session state is $(if ($sRef) { $sRef.State } else { 'Null' })."
                         }
                         if (-not $activeSessObj.CollectorInitialized) {
                             Invoke-Command -Session $sRef -ScriptBlock {
@@ -492,22 +547,111 @@ function Start-PSRPMEngine {
 
                     $swPoll.Stop()
                     if ($rawResult) {
+                        $pollFinishTicks = [DateTime]::UtcNow.Ticks
+                        $lastPollUtcTicks = $pollFinishTicks
+                        $stateContainer.LastSampleUtcTicks = $pollFinishTicks
+                        $currInterval = [Math]::Max(250, [int]$stateContainer.IntervalMs)
+                        $nextScheduledUtcTicks = $pollFinishTicks + ([long]$currInterval * 10000L)
+
                         $stateContainer.PollLatencyMs   = [int]$swPoll.ElapsedMilliseconds
                         $stateContainer.PayloadBytes    = [int]([string]$rawResult).Length
                         $stateContainer.PayloadTabId    = $activeTabId
                         $stateContainer.Payload         = [string]$rawResult
                         $stateContainer.ConnectionState = if ($activeSessObj.IsLocal) { "LocalMode" } else { "Connected" }
                         $stateContainer.LastErr         = $null
+
+                        $activeSessObj.ConnState           = if ($activeSessObj.IsLocal) { "LocalMode" } else { "Connected" }
+                        $activeSessObj.ConsecutiveFailures = 0
+                        $activeSessObj.ReconnectAttempts   = 0
+                        $activeSessObj.BackoffSec          = 1
                     }
                 } catch {
                     $swPoll.Stop()
-                    $stateContainer.ConnectionState = "Disconnected"
-                    $stateContainer.LastErr         = $_.Exception.Message
+                    $activeSessObj.ConsecutiveFailures++
+                    $fails = $activeSessObj.ConsecutiveFailures
+
+                    if ($activeSessObj.IsLocal) {
+                        $stateContainer.ConnectionState = "Disconnected"
+                        $stateContainer.LastErr         = $_.Exception.Message
+                    } else {
+                        if ($fails -lt 3 -and $activeSessObj.Session -and $activeSessObj.Session.State -eq 'Opened') {
+                            $activeSessObj.ConnState = "Degraded"
+                            $stateContainer.ConnectionState = "Degraded"
+                            $stateContainer.LastErr = "Telemetry poll warning: $($_.Exception.Message)"
+                        } else {
+                            $activeSessObj.ConnState = "Reconnecting"
+                            $activeSessObj.ReconnectAttempts++
+                            $attempts = $activeSessObj.ReconnectAttempts
+
+                            if ($attempts -gt 10) {
+                                $activeSessObj.ConnState = "Disconnected"
+                                $stateContainer.ConnectionState = "Disconnected"
+                                $stateContainer.LastErr = "WinRM reconnection failed after $attempts attempts: $($_.Exception.Message)"
+                            } else {
+                                $stateContainer.ConnectionState = "Reconnecting"
+                                # Bounded exponential backoff: 1s -> 2s -> 4s -> 8s -> 15s
+                                $bSec = [Math]::Min(15, [int][Math]::Pow(2, [Math]::Min(4, $attempts - 1)))
+                                $activeSessObj.BackoffSec = $bSec
+                                $activeSessObj.NextReconnectTicks = [DateTime]::UtcNow.Ticks + ($bSec * 10000000L)
+                                $stateContainer.LastErr = "WinRM link interrupted ($($_.Exception.Message)). Reconnecting in ${bSec}s (attempt $attempts/10)..."
+
+                                # Stage 1: Connect-PSSession if session is disconnected
+                                $recovered = $false
+                                if ($activeSessObj.Session -and $activeSessObj.Session.State -eq 'Disconnected') {
+                                    try {
+                                        $activeSessObj.Session = Connect-PSSession -Session $activeSessObj.Session -ErrorAction Stop
+                                        if ($activeSessObj.Session.State -eq 'Opened') { $recovered = $true }
+                                    } catch {}
+                                }
+
+                                # Stage 2: Recreate New-PSSession if Stage 1 failed or session broken
+                                if (-not $recovered -and $activeSessObj.ConnectionConfig -and $activeSessObj.ConnectionConfig.ComputerName) {
+                                    try {
+                                        if ($activeSessObj.Session) {
+                                            Remove-PSSession -Session $activeSessObj.Session -ErrorAction SilentlyContinue
+                                        }
+                                        $cfg = $activeSessObj.ConnectionConfig
+                                        $so = New-PSSessionOption -OpenTimeout 8000 -OperationTimeout 10000 -CancelTimeout 3000 -NoMachineProfile
+                                        $sParams = @{
+                                            ComputerName  = $cfg.ComputerName
+                                            SessionOption = $so
+                                            ErrorAction   = 'Stop'
+                                        }
+                                        if ($cfg.Credential) { $sParams['Credential'] = $cfg.Credential }
+                                        if ($cfg.Port -gt 0) { $sParams['Port'] = $cfg.Port }
+                                        if ($cfg.UseSSL)     { $sParams['UseSSL'] = $true }
+
+                                        $activeSessObj.Session = New-PSSession @sParams
+                                        if ($activeSessObj.Session.State -eq 'Opened') { $recovered = $true }
+                                    } catch {
+                                        $stateContainer.LastErr = "WinRM recreate failed: $($_.Exception.Message)"
+                                    }
+                                }
+
+                                if ($recovered) {
+                                    $activeSessObj.CollectorInitialized = $false
+                                    $activeSessObj.InspectorInitialized = $false
+                                    $activeSessObj.ActionInitialized    = $false
+                                    $activeSessObj.ConnState            = "Connected"
+                                    $activeSessObj.ConsecutiveFailures  = 0
+                                    $activeSessObj.ReconnectAttempts    = 0
+                                    $activeSessObj.BackoffSec           = 1
+                                    $stateContainer.ConnectionState     = "Connected"
+                                    $stateContainer.ForceFullSync       = $true
+                                    $stateContainer.LastErr             = $null
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            $waitMs = [int]$stateContainer.IntervalMs
-            if ($waitMs -lt 250) { $waitMs = 250 }
+            # 3. Dynamic Drift-Compensated Sleep
+            $curIntMs = [Math]::Max(250, [int]$stateContainer.IntervalMs)
+            $remTicks = $nextScheduledUtcTicks - [DateTime]::UtcNow.Ticks
+            $waitMs   = [int]($remTicks / 10000L)
+            if ($waitMs -gt $curIntMs) { $waitMs = $curIntMs }
+            if ($waitMs -lt 10)        { $waitMs = 10 }
             [void]$stateContainer.WakeEvent.WaitOne($waitMs)
         }
 
@@ -797,16 +941,31 @@ function Start-PSRPMEngine {
     $txtTelemDelta     = $Window.FindName("TxtTelemDelta")
 
     $telemStats = @{
-        TotalWireBytes = 0L
-        TotalRawBytes  = 0L
-        TotalTicks     = 0L
-        TotalRttMs     = 0L
+        TotalWireBytes  = 0L
+        TotalRawBytes   = 0L
+        TotalTicks      = 0L
+        TotalRttMs      = 0L
+        LastReceivedSeq = 0
     }
 
     $createProcessVm = { [ProcessItemViewModel]::new() }
     $createServiceVm = { [ServiceItemViewModel]::new() }
 
     $tickHandler = {
+        # 0. Telemetry Freshness & Age Tracking
+        if ($stateContainer.LastSampleUtcTicks -gt 0L) {
+            $ageMs = [int](([DateTime]::UtcNow.Ticks - [long]$stateContainer.LastSampleUtcTicks) / 10000L)
+            $stateContainer.TelemetryAgeMs = $ageMs
+            $targetInt = [Math]::Max(250, [int]$stateContainer.IntervalMs)
+            if ($ageMs -le ($targetInt * 1.5)) {
+                $stateContainer.FreshnessState = "Fresh"
+            } elseif ($ageMs -le ($targetInt * 3.0)) {
+                $stateContainer.FreshnessState = "Stale"
+            } else {
+                $stateContainer.FreshnessState = "Frozen"
+            }
+        }
+
         # 1. Drain Async Command Results
         $resItem = $null
         while ($stateContainer.ResultQueue.TryDequeue([ref]$resItem)) {
@@ -829,6 +988,7 @@ function Start-PSRPMEngine {
         # 2. Check Target Switch / Reset Request
         if ($stateContainer.ClearHostMaps) {
             $stateContainer.ClearHostMaps = $false
+            $telemStats.LastReceivedSeq = 0
             $processMap.Clear()
             $servicesMap.Clear()
             $pidServicesMap.Clear()
@@ -843,18 +1003,43 @@ function Start-PSRPMEngine {
 
         # 3. Update Connection Status Indicators
         $cState = $stateContainer.ConnectionState
+        $fState = $stateContainer.FreshnessState
         if ($connDot) {
             if ($stateContainer.IsPaused) {
                 $connDot.Fill = "#F59E0B"
             } elseif ($cState -in @("Connected", "LocalMode")) {
-                $connDot.Fill = "#16A34A"
+                if ($fState -eq "Frozen") {
+                    $connDot.Fill = "#EA580C"
+                } elseif ($fState -eq "Stale") {
+                    $connDot.Fill = "#EAB308"
+                } else {
+                    $connDot.Fill = "#16A34A"
+                }
+            } elseif ($cState -eq "Degraded") {
+                $connDot.Fill = "#EAB308"
+            } elseif ($cState -eq "Reconnecting") {
+                $connDot.Fill = "#EA580C"
             } else {
                 $connDot.Fill = "#DC2626"
             }
         }
         if ($txtTarget)    { $txtTarget.Text    = [string]$stateContainer.TargetDisplayName }
         if ($txtTransport) { $txtTransport.Text = [string]$stateContainer.TransportBadge }
-        if ($txtLatency)   { $txtLatency.Text   = if ($stateContainer.IsPaused) { "Paused" } else { "$($stateContainer.PollLatencyMs) ms" } }
+        if ($txtLatency) {
+            if ($stateContainer.IsPaused) {
+                $txtLatency.Text = "Paused"
+            } elseif ($cState -eq "Reconnecting") {
+                $txtLatency.Text = "Reconnecting"
+            } elseif ($cState -eq "Degraded") {
+                $txtLatency.Text = "$($stateContainer.PollLatencyMs) ms (Degraded)"
+            } elseif ($cState -eq "Disconnected") {
+                $txtLatency.Text = "Offline"
+            } else {
+                $ageTag = if ($fState -ne "Fresh" -and $stateContainer.TelemetryAgeMs -gt 0) { " ($fState)" } else { "" }
+                $txtLatency.Text = "$($stateContainer.PollLatencyMs) ms$ageTag"
+            }
+            $txtLatency.ToolTip = "Poll Latency: $($stateContainer.PollLatencyMs) ms | Age: $($stateContainer.TelemetryAgeMs) ms | State: $cState ($fState)"
+        }
         if ($badgePaused)  { $badgePaused.Visibility = if ($stateContainer.IsPaused) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed } }
 
         # 4. Consume Differential Telemetry Payload
@@ -885,7 +1070,19 @@ function Start-PSRPMEngine {
             $data = $jss.DeserializeObject($payloadStr)
             if (-not $data) { return }
 
+            $wireVer = if ($data.ContainsKey('ver')) { [int]$data['ver'] } else { 1 }
             $seq = [int]$data['seq']
+
+            $lastSeq = [int]$telemStats.LastReceivedSeq
+            if ($lastSeq -gt 0 -and $seq -gt ($lastSeq + 1)) {
+                $gapCount = $seq - $lastSeq - 1
+                if ($LogConsole) {
+                    $tsGap = (Get-Date).ToString("HH:mm:ss.fff")
+                    $LogConsole.AppendText("[$tsGap] [WARN] Telemetry sequence gap detected: expected #$($lastSeq + 1), received #$seq ($gapCount missed ticks). Triggering baseline resync.`r`n")
+                }
+                $stateContainer.ForceFullSync = $true
+            }
+            $telemStats.LastReceivedSeq = $seq
             $isDark = [bool]$stateContainer.IsDarkTheme
             $enableCatHighlights = if ($stateContainer.ContainsKey('EnableCategoryHighlights')) { [bool]$stateContainer.EnableCategoryHighlights } else { $true }
             $structureChanged = $false
@@ -1103,7 +1300,7 @@ function Start-PSRPMEngine {
 
                 if ($statusText) {
                     $netTag = if ($SummaryViewModel.NetThroughputFormatted -and $SummaryViewModel.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($SummaryViewModel.NetThroughputFormatted)" } else { "" }
-                    $telemMsg = "CPU: $($SummaryViewModel.CpuSummaryFormatted) | Commit: $($SummaryViewModel.CommitSummaryFormatted) | Procs: $($SummaryViewModel.ProcessCount) | RAM: $($SummaryViewModel.RamPctFormatted)$netTag | Wire: ${wireKB} KB ($($stateContainer.PollLatencyMs) ms)"
+                    $telemMsg = "CPU: $($SummaryViewModel.CpuSummaryFormatted) | Commit: $($SummaryViewModel.CommitSummaryFormatted) | Procs: $($SummaryViewModel.ProcessCount) | RAM: $($SummaryViewModel.RamPctFormatted)$netTag | Wire: $($wireKB.ToString('F2')) KB ($($stateContainer.PollLatencyMs) ms)"
                     $stateContainer.LastStatusText = $telemMsg
                     if ($stateContainer.IsPaused) {
                         $statusText.Text = "[PAUSED] $telemMsg"
@@ -1120,10 +1317,10 @@ function Start-PSRPMEngine {
 
                 if ($seq -eq 1) {
                     $svcCount = if ($svcArr) { $svcArr.Count } else { 0 }
-                    [void]$sbLog.AppendLine("[$ts] [SYNC #1] Full Snapshot from '$($stateContainer.TargetDisplayName)' ($($stateContainer.TransportBadge)) | RTT: $($stateContainer.PollLatencyMs)ms | Wire: ${wireKB} KB -> Raw: ${rawKB} KB (GZIP ${gzipSavedPct}% saved) | Procs: $metaCount, Services: $svcCount")
+                    [void]$sbLog.AppendLine("[$ts] [SYNC #1] Full Snapshot from '$($stateContainer.TargetDisplayName)' ($($stateContainer.TransportBadge)) | RTT: $($stateContainer.PollLatencyMs)ms | Wire: $($wireKB.ToString('F2')) KB -> Raw: $($rawKB.ToString('F2')) KB (GZIP ${gzipSavedPct}% saved) | Procs: $metaCount, Services: $svcCount")
                 } elseif ($stateContainer.VerboseTelemetryLog) {
                     $svcTag = if ($svcArr) { ", SvcSync: $($svcArr.Count)" } else { "" }
-                    [void]$sbLog.AppendLine("[$ts] [TELEM]   Seq #$($seq.ToString().PadLeft(4)) | RTT: $($stateContainer.PollLatencyMs.ToString().PadLeft(3))ms (Avg: ${avgRtt}ms) | Wire: $($wireKB.ToString('F2').PadLeft(5)) KB -> Raw: $($rawKB.ToString('F2').PadLeft(5)) KB (GZIP ${gzipSavedPct}%) | BW: $($bwKBs.ToString('F2')) KB/s (RX: ${totRxKB} KB) | Dyn: $dynCount, +Meta: $metaCount, -Exit: $deadCount$svcTag")
+                    [void]$sbLog.AppendLine("[$ts] [TELEM]   Seq #$($seq.ToString().PadLeft(4)) | RTT: $($stateContainer.PollLatencyMs.ToString().PadLeft(3))ms (Avg: $($avgRtt.ToString('F1'))ms) | Wire: $($wireKB.ToString('F2').PadLeft(5)) KB -> Raw: $($rawKB.ToString('F2').PadLeft(5)) KB (GZIP ${gzipSavedPct}%) | BW: $($bwKBs.ToString('F2')) KB/s (RX: $($totRxKB.ToString('F1')) KB) | Dyn: $dynCount, +Meta: $metaCount, -Exit: $deadCount$svcTag")
                 }
 
                 foreach ($spName in $spawnedLogNames) {

@@ -4,7 +4,7 @@
 
 # PSRPM -- PowerShell Remote Process Manager
 
-[![Version: 1.5.0](https://img.shields.io/badge/version-1.5.0-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.6.0](https://img.shields.io/badge/version-1.6.0-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 
@@ -33,9 +33,10 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
 
 ## Key Capabilities & Highlights
 
-- **100% Fileless & EDR-Safe Engine**:
+- **100% Fileless In-Memory Architecture (Zero Disk Binaries, Zero `csc.exe`)**:
   - Uses pure PowerShell 5.1 native classes ([`ViewModelClasses.ps1`](PSRPM/Private/ViewModelClasses.ps1)) and in-memory `.NET Reflection.Emit` (`AssemblyBuilderAccess.Run`) P/Invoke bindings.
-  - **Zero `Add-Type -TypeDefinition`**, **zero `csc.exe` child processes**, and **zero temporary `.dll` or `.cs` files** written to `%TEMP%`.
+  - **Zero `Add-Type -TypeDefinition`**, **zero `csc.exe` child processes**, and **zero temporary `.dll` or `.cs` files** written to disk or `%TEMP%`.
+  - *EDR Visibility Notice*: In-memory Win32 and NTAPI operations remain fully visible and observable to endpoint telemetry sensors (ETW, Sysmon, and enterprise EDR).
 - **Single-Call Native Kernel Telemetry (`< 2-5 ms` collection time)**:
   - Queries `ntdll.dll!NtQuerySystemInformation(SystemProcessInformation = 5)` and `kernel32.dll!GlobalMemoryStatusEx` into a persistent unmanaged buffer ([`DataCollector.ps1`](PSRPM/Private/DataCollector.ps1)).
   - Eliminates `WmiPrvSE.exe` CPU spikes, N+1 `Win32_Process.GetOwner()` RPC storms, `$p.Responding` 5-second UI hangs, and first-chance `AccessDenied` exception storms.
@@ -299,7 +300,7 @@ PSRPM/
 |       +-- ConnectDialog.xaml             # In-App Remote Host / LocalOnly Switcher Modal
 |       \-- HelpWindow.xaml                # 4-Tab Help, Shortcuts & Runtime Diagnostics Modal
 \-- Tests/
-    \-- Test-PSRPMEngine.ps1               # Automated 7-Suite Verification & Benchmark Script
+    \-- Test-PSRPMEngine.ps1               # Automated 11-Suite Verification & Benchmark Script
 ```
 
 - **[Engineering Playbook: Mission, Guardrails, "Never-To-Do's" & Roadmap (`docs/ENGINEERING_PLAYBOOK.md`)](docs/ENGINEERING_PLAYBOOK.md)**
@@ -310,6 +311,17 @@ PSRPM/
 - **[Design System & Visual Specifications (`DESIGN.md`)](DESIGN.md)**
 - **[Release Notes & Version History (`CHANGELOG.md`)](CHANGELOG.md)**
 - **[License (`LICENSE`)](LICENSE)**
+
+---
+
+## Security & Least Privilege Access Model (RBAC)
+
+PSRPM is designed with a strict two-tier privilege separation architecture:
+
+| Tier | Required Permissions | Supported Capabilities | Access Control Behavior |
+| :--- | :--- | :--- | :--- |
+| **Tier 1: Read-Only Monitoring** | Standard User member of `Remote Management Users` (No Local Administrator required) | Real-time CPU, RAM, Disk I/O & IOPS, network telemetry, hierarchical process tree, running services, loaded DLLs for owned processes | Non-owned processes report sanitized `[Access Denied / Protected]` command lines, environment blocks, and handles without throwing exceptions or hanging. |
+| **Tier 2: Administrative Operations** | Local Administrator or `SeDebugPrivilege` enabled | Process termination (`KillProcess`, `KillTree`), process suspension/resumption, priority adjustment, kernel handle closure (`CloseHandle`), and secure memory dump generation (`CreateDump`) | Mutating actions validate live target identity (`PID`, `CreationTime`, and `ImageName`) before executing to prevent PID-reuse collateral damage. Memory dumps are written with non-inherited ACLs (`SYSTEM`, `Administrators`, and invoking user only). |
 
 ---
 

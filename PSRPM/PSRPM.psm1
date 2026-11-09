@@ -1001,14 +1001,15 @@ function Start-PSRPM {
         &$writeAuditLog "ACTION" "Dispatching $actionName on '$tName' (PID $tPid)..."
 
         $cmdPayload = @{
-            CommandType  = "ProcessAction"
-            Action       = $actionName
-            TargetPid    = $tPid
-            ExpectedName = $tName
-            ServiceName  = ""
-            Priority     = $priorityVal
-            HandleId     = $handleId
-            DumpType     = $dumpType
+            CommandType        = "ProcessAction"
+            Action             = $actionName
+            TargetPid          = $tPid
+            ExpectedName       = $tName
+            ExpectedCreateTime = if ($procVm.CreateTime) { [long]$procVm.CreateTime } else { 0L }
+            ServiceName        = ""
+            Priority           = $priorityVal
+            HandleId           = $handleId
+            DumpType           = $dumpType
         }
 
         $localJss   = $jssAction
@@ -1797,7 +1798,7 @@ function Start-PSRPM {
                     }
 
                     if ($mode -eq "Handles" -or $mode -eq "All") {
-                        $hndList = [System.Collections.Generic.List[Object]]::new()
+                        $hndList = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
                         if ($d['Handles']) {
                             foreach ($hItem in $d['Handles']) {
                                 $hndList.Add([PSCustomObject]@{
@@ -1976,6 +1977,89 @@ function Start-PSRPM {
         $menuPropFull = $propWin.FindName("MenuPropFullDump")
         if ($menuPropFull) {
             $menuPropFull.add_Click({ &$actionCreateDump "Full" $selectedVm })
+        }
+
+        $gridPropHandles = $propWin.FindName("GridPropHandles")
+        $ctxPropClose = $propWin.FindName("CtxPropCloseHandle")
+        $ctxPropCopyName = $propWin.FindName("CtxPropCopyHandleName")
+        $ctxPropCopyVal = $propWin.FindName("CtxPropCopyHandleValue")
+
+        $closePropSelectedHandle = {
+            if (-not $gridPropHandles -or -not $gridPropHandles.SelectedItem) { return }
+            $sel = $gridPropHandles.SelectedItem
+            $hVal = [string]$sel.Handle
+            $tVal = [string]$sel.Type
+            $nVal = [string]$sel.Name
+            $pName = [string]$selectedVm.Name
+            $pidVal = [int]$selectedVm.PID
+
+            if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or $tVal -like "[*") {
+                [System.Windows.MessageBox]::Show(
+                    "Cannot close this handle entry ($($tVal): $nVal).",
+                    "PSRPM - Close Handle",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Information
+                ) | Out-Null
+                return
+            }
+
+            $warnMsg = "WARNING: Forcibly closing an active handle in '$pName' (PID $pidVal) can cause the target process to crash or become unstable.`n`nAre you sure you want to close handle $hVal ($nVal)?"
+            $confirm = [System.Windows.MessageBox]::Show(
+                $warnMsg,
+                "PSRPM - Confirm Close Handle",
+                [System.Windows.MessageBoxButton]::YesNo,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+            if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
+
+            $localGrid = $gridPropHandles
+            $localSel = $sel
+            $localHVal = $hVal
+            $closeCallback = {
+                param($actionSuccess)
+                if ($actionSuccess -eq $false) { return }
+                if ($localGrid -and $localGrid.ItemsSource) {
+                    $items = $localGrid.ItemsSource
+                    $removeIdx = -1
+                    for ($i = $items.Count - 1; $i -ge 0; $i--) {
+                        if ($items[$i] -eq $localSel -or ($items[$i].Handle -eq $localHVal)) {
+                            $removeIdx = $i
+                            break
+                        }
+                    }
+                    if ($removeIdx -ge 0) {
+                        $items.RemoveAt($removeIdx)
+                    }
+                }
+            }.GetNewClosure()
+
+            &$invokeProcessAction "CloseHandle" $selectedVm "Normal" $closeCallback $hVal
+        }.GetNewClosure()
+
+        if ($ctxPropClose) {
+            $ctxPropClose.add_Click({ & $closePropSelectedHandle })
+        }
+        if ($ctxPropCopyName) {
+            $ctxPropCopyName.add_Click({
+                if ($gridPropHandles.SelectedItem -and $gridPropHandles.SelectedItem.Name) {
+                    [System.Windows.Clipboard]::SetText([string]$gridPropHandles.SelectedItem.Name)
+                }
+            })
+        }
+        if ($ctxPropCopyVal) {
+            $ctxPropCopyVal.add_Click({
+                if ($gridPropHandles.SelectedItem -and $gridPropHandles.SelectedItem.Handle) {
+                    [System.Windows.Clipboard]::SetText([string]$gridPropHandles.SelectedItem.Handle)
+                }
+            })
+        }
+        if ($gridPropHandles) {
+            $gridPropHandles.add_KeyDown({
+                param($s, $e)
+                if ($e.Key -eq [System.Windows.Input.Key]::Delete) {
+                    & $closePropSelectedHandle
+                }
+            })
         }
 
         $propWin.FindName("BtnPropEndProcess").add_Click({

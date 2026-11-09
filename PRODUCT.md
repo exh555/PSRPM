@@ -39,7 +39,7 @@ flowchart TD
     P1["1. Seamless Connectivity<br/>* Persistent WinRM PSSession (-ComputerName)<br/>* Zero-privilege local mode (-LocalOnly)<br/>* Unlocked background runspaces (-NoWait)"]
     P2["2. Ultra-Low Overhead<br/>* < 0.25% Remote CPU (2-8ms NtQuerySystemInformation)<br/>* ~1.1-1.8 KB/s Steady-State GZIP Wire<br/>* < 12 KB Ring Buffer RAM per Host"]
     P3["3. Process Explorer UX<br/>* Single-surface Hierarchical Tree-Grid<br/>* Semantic Row Colors & Column Tints<br/>* 7-Tab Inspector & 4-Tab System Graphs<br/>* Multi-Host Warm Standby Tabs"]
-    P4["4. 100% Fileless Security<br/>* Zero Add-Type -TypeDefinition / csc.exe<br/>* Zero disk writes to %TEMP%<br/>* Pure Reflection.Emit & PS 5.1 Classes"]
+    P4["4. 100% Fileless Architecture<br/>* Zero Add-Type -TypeDefinition / csc.exe<br/>* Zero disk writes to %TEMP%<br/>* Pure In-Memory Reflection.Emit & PS 5.1 Classes"]
 
     P1 --- P2 --- P3 --- P4
 ```
@@ -54,9 +54,17 @@ flowchart TD
    - Historical metrics use fixed-capacity circular `Queue[double]` ring buffers (30 samples for sparklines, 120 samples for System Information).
    - Dead processes are evicted synchronously from tracking hashtables on every tick.
    - Closed modals generate zero background string or geometry allocations.
-4. **100% Fileless EDR Safety**:
+4. **100% Fileless In-Memory Architecture**:
    - Zero temporary `.cs` or `.dll` files on disk; zero `csc.exe` invocations.
    - All P/Invoke bindings are created via `.NET Reflection.Emit` (`AssemblyBuilderAccess.Run`).
+   - *EDR Transparency Notice*: In-memory Win32 and NTAPI operations remain fully visible and observable to endpoint sensors (ETW, Sysmon, EDR).
+
+### 4.1 Security & Least Privilege Access Model (RBAC)
+
+| Tier | Required Permissions | Supported Capabilities | Access Control Behavior |
+| :--- | :--- | :--- | :--- |
+| **Tier 1: Read-Only Monitoring** | Standard User member of `Remote Management Users` (No Local Administrator required) | Real-time CPU, RAM, Disk I/O & IOPS, network telemetry, hierarchical process tree, running services, loaded DLLs for owned processes | Non-owned processes report sanitized `[Access Denied / Protected]` command lines, environment blocks, and handles without throwing exceptions or hanging. |
+| **Tier 2: Administrative Operations** | Local Administrator or `SeDebugPrivilege` enabled | Process termination (`KillProcess`, `KillTree`), process suspension/resumption, priority adjustment, kernel handle closure (`CloseHandle`), and secure memory dump generation (`CreateDump`) | Mutating actions validate live target identity (`PID`, `CreationTime`, and `ImageName`) before executing to prevent PID-reuse collateral damage. Memory dumps are written with non-inherited ACLs (`SYSTEM`, `Administrators`, and invoking user only). |
 
 ---
 

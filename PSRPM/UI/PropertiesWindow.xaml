@@ -338,6 +338,14 @@
             <!-- TAB 4: Handles (Open Kernel Objects - Sysinternals Process Explorer Handle View) -->
             <TabItem Header="Handles">
                 <DataGrid x:Name="GridPropHandles" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem x:Name="CtxPropCloseHandle" Header="Close Selected Handle..." InputGestureText="Del"/>
+                            <Separator/>
+                            <MenuItem x:Name="CtxPropCopyHandleName" Header="Copy Object Name" InputGestureText="Ctrl+C"/>
+                            <MenuItem x:Name="CtxPropCopyHandleValue" Header="Copy Handle Value"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="115" FontWeight="SemiBold"/>
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>

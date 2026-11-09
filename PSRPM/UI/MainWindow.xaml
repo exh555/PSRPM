@@ -586,7 +586,7 @@
                     <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="3,0,0,0" VerticalAlignment="Center">
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock x:Name="TxtTelemNetRate" Text="{Binding NetThroughputFormatted}" Foreground="#0284C7" FontSize="9.5" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" ToolTip="Real-Time Network Interface Throughput (Rx / Tx)"/>
-                            <TextBlock x:Name="TxtTelemDiskRate" Text="{Binding DiskActivityFormatted}" Foreground="{DynamicResource BrushTextSecondary}" FontSize="9.5" Typography.NumeralAlignment="Tabular" Margin="0,1,0,0" ToolTip="Real-Time Storage Activity &amp; Queue Depth"/>
+                            <TextBlock x:Name="TxtTelemDiskRate" Text="{Binding DiskActivityFormatted}" Foreground="{DynamicResource BrushTextSecondary}" FontSize="9.5" Typography.NumeralAlignment="Tabular" Margin="0,1,0,0" ToolTip="Real-Time Storage &amp; System I/O Activity (Throughput &amp; IOPS)"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>

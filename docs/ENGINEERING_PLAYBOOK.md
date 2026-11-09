@@ -22,8 +22,9 @@ Every design decision is governed by four pillars, in strict priority order:
    - Local workstation memory for historical graphs must remain strictly bounded (`< 12 KB` via fixed-size circular ring buffers).
 3. **UX & Visual Fidelity (Process Explorer Ergonomics)**:
    - Single-surface hierarchical **Tree-Grid** with pixel-snapped vector connectors (`|`, `+-`, `\-`), semantic row colors, instant ancestor-preserving search, auto-flat column sorting, a lazy-loaded **7-tab Process Properties Inspector**, a live **4-tab System Information** window, and a real-time **Audit & Network Telemetry Console**.
-4. **100% Fileless & EDR-Safe Security Posture**:
+4. **100% Fileless In-Memory Architecture**:
    - **Zero `csc.exe` invocations** and **zero temporary `.dll` or `.cs` files** dropped to disk on either the local workstation or the remote target.
+   - *EDR Transparency Notice*: In-memory Win32 and NTAPI operations remain fully observable and transparent to endpoint telemetry (ETW, Sysmon, EDR).
 
 ---
 
@@ -153,11 +154,15 @@ PSRPM is designed for multi-day uninterrupted operations. Any persistent monitor
    - Once a `Reflection.Emit` type (e.g., `PSRPM.NativeCollectorV2` or `PSRPM.NativeInspectorV2`) is loaded into an `AppDomain`, it cannot be unloaded without restarting PowerShell. If you add a new P/Invoke method during development, increment the suffix (`V3`) so `Import-Module -Force` compiles the updated signature immediately in existing sessions.
 2. **Maintain Backward Compatibility in the Differential Wire Array**:
    - Keep existing index positions in `"sys":[...]` and `"dyn":[...]` stable; always append new metrics to the end of the array and check `$sysArr.Count` before reading extended indices.
-3. **Run the Automated 7-Suite Verification Script Before Every Commit**:
+3. **Run the Automated 11-Suite Verification Script Before Every Commit**:
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-PSRPMEngine.ps1
    ```
-   All 7 test suites (Fileless EDR Audit, Manifest Exports, Collector Delta Benchmark, DeepInspector Lazy Modes, ProcessActions, XAML Template Integrity, and End-to-End RunspaceEngine Reconciliation) must pass with `exit 0`.
+   All 11 test suites (Fileless EDR Audit, Manifest Exports, Collector Delta Benchmark & Statistical Gates, DeepInspector Lazy Modes, ProcessActions, XAML Template Integrity, End-to-End RunspaceEngine Reconciliation, PID-Reuse Prevention, Fault-Injection Resilience, Protected Process Traps, and Multi-Session Lifecycle & Visual States) must pass with `exit 0`.
+
+4. **Adhere to the 2-Tier Least Privilege Access Model (RBAC)**:
+   - **Tier 1 (Read-Only Monitoring / Non-Admin)**: Standard User member of `Remote Management Users` (No Local Administrator required). Real-time CPU/RAM/IOPS graphs, differential process tree, running services, loaded DLLs for owned processes. Non-owned processes report sanitized access-denied status without throwing exceptions.
+   - **Tier 2 (Administrative Operations / SeDebugPrivilege)**: Local Administrator or `SeDebugPrivilege` enabled. Required only for `KillProcess`, `KillTree`, `SuspendProcess`, `SetPriority`, `CloseHandle`, and `CreateDump`. Mutating operations must validate live target identity (`PID`, `CreationTime`, `ImageName`) before taking action. Memory dumps must enforce non-inherited ACLs.
 
 ---
 

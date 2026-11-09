@@ -802,7 +802,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.DiskWriteKBs             = 0.0
         $this.DiskQueueDepth           = 0.0
         $this.NetThroughputFormatted   = "NET: 0.0 KB/s"
-        $this.DiskActivityFormatted    = "DISK: 0.0 KB/s Q: 0.0"
+        $this.DiskActivityFormatted    = "I/O: 0.0 KB/s | 0 IOPS"
 
         $this.CpuUsage               = 0.0
         $this.KernelCpuUsage         = 0.0
@@ -964,9 +964,9 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     hidden [string] FormatBytesCompact([double]$bytes) {
         if ($bytes -le 0.0) { return "0" }
-        if ($bytes -ge 1073741824.0) { return "$([Math]::Round($bytes / 1073741824.0, 2)) GB" }
-        if ($bytes -ge 1048576.0)    { return "$([Math]::Round($bytes / 1048576.0, 1)) MB" }
-        if ($bytes -ge 1024.0)       { return "$([Math]::Round($bytes / 1024.0, 1)) KB" }
+        if ($bytes -ge 1073741824.0) { return "$(([Math]::Round($bytes / 1073741824.0, 2)).ToString('F2')) GB" }
+        if ($bytes -ge 1048576.0)    { return "$(([Math]::Round($bytes / 1048576.0, 1)).ToString('F1')) MB" }
+        if ($bytes -ge 1024.0)       { return "$(([Math]::Round($bytes / 1024.0, 1)).ToString('F1')) KB" }
         return "$([Math]::Round($bytes, 0)) B"
     }
 
@@ -1224,13 +1224,13 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.DiskWriteKBs   = if ($sysArr.Count -gt 30) { [double]$sysArr[30] } else { 0.0 }
             $this.DiskQueueDepth = if ($sysArr.Count -gt 31) { [double]$sysArr[31] } else { 0.0 }
 
-            $rxStr = if ($this.NetRxKBs -ge 1024.0) { "$([Math]::Round($this.NetRxKBs / 1024.0, 1)) MB/s" } else { "$([Math]::Round($this.NetRxKBs, 1)) KB/s" }
-            $txStr = if ($this.NetTxKBs -ge 1024.0) { "$([Math]::Round($this.NetTxKBs / 1024.0, 1)) MB/s" } else { "$([Math]::Round($this.NetTxKBs, 1)) KB/s" }
+            $rxStr = if ($this.NetRxKBs -ge 1024.0) { "$(([Math]::Round($this.NetRxKBs / 1024.0, 1)).ToString('F1')) MB/s" } else { "$(([Math]::Round($this.NetRxKBs, 1)).ToString('F1')) KB/s" }
+            $txStr = if ($this.NetTxKBs -ge 1024.0) { "$(([Math]::Round($this.NetTxKBs / 1024.0, 1)).ToString('F1')) MB/s" } else { "$(([Math]::Round($this.NetTxKBs, 1)).ToString('F1')) KB/s" }
             $this.NetThroughputFormatted = "NET: v $rxStr ^ $txStr"
 
             $dTotKB = $this.DiskReadKBs + $this.DiskWriteKBs
-            $dStr = if ($dTotKB -ge 1024.0) { "$([Math]::Round($dTotKB / 1024.0, 1)) MB/s" } else { "$([Math]::Round($dTotKB, 1)) KB/s" }
-            $this.DiskActivityFormatted = "DISK: $dStr Q: $($this.DiskQueueDepth.ToString('F1'))"
+            $dStr = if ($dTotKB -ge 1024.0) { "$(([Math]::Round($dTotKB / 1024.0, 1)).ToString('F1')) MB/s" } else { "$(([Math]::Round($dTotKB, 1)).ToString('F1')) KB/s" }
+            $this.DiskActivityFormatted = "I/O: $dStr | $([int]$this.DiskQueueDepth) IOPS"
 
             if ($this.NetRxHistory120.Count -ge 120) { [void]$this.NetRxHistory120.Dequeue() }
             if ($this.NetTxHistory120.Count -ge 120) { [void]$this.NetTxHistory120.Dequeue() }
@@ -1493,9 +1493,15 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             } elseif ($connState -in @("Connected", "LocalMode")) {
                 $this.StatusDotFill = "#16A34A"
                 $this.LatencyText   = "${rttMs}ms"
+            } elseif ($connState -eq "Degraded") {
+                $this.StatusDotFill = "#EAB308"
+                $this.LatencyText   = "Degraded"
+            } elseif ($connState -eq "Reconnecting") {
+                $this.StatusDotFill = "#EA580C"
+                $this.LatencyText   = "Reconnecting"
             } else {
                 $this.StatusDotFill = "#DC2626"
-                $this.LatencyText   = "${rttMs}ms"
+                $this.LatencyText   = "Offline"
             }
             if ($isDark) {
                 $this.TabBackground   = "#0F172A"

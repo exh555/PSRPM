@@ -9,13 +9,13 @@ $script:PSRPMCollectorScriptBlock = {
     )
 
     # 1. One-Time In-Memory Native P/Invoke & State Initialization (0 Disk Writes, 0 csc.exe)
-    if (-not ('PSRPM.NativeCollectorV2' -as [type])) {
+    if (-not ('PSRPM.NativeCollectorV3' -as [type])) {
         $dynAsm = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
-            [System.Reflection.AssemblyName]::new("PSRPMNativeCollectorV2Asm"),
+            [System.Reflection.AssemblyName]::new("PSRPMNativeCollectorV3Asm"),
             [System.Reflection.Emit.AssemblyBuilderAccess]::Run
         )
-        $dynMod = $dynAsm.DefineDynamicModule("PSRPMNativeCollectorV2Mod")
-        $tb = $dynMod.DefineType("PSRPM.NativeCollectorV2", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
+        $dynMod = $dynAsm.DefineDynamicModule("PSRPMNativeCollectorV3Mod")
+        $tb = $dynMod.DefineType("PSRPM.NativeCollectorV3", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
 
         $addPInvoke = {
             param($name, $dll, $retType, [type[]]$paramTypes)
@@ -39,7 +39,8 @@ $script:PSRPMCollectorScriptBlock = {
         &$addPInvoke "OpenProcessToken"           "advapi32.dll" ([int])    @([IntPtr], [uint32], [IntPtr].MakeByRefType())
         &$addPInvoke "GetTokenInformation"        "advapi32.dll" ([int])    @([IntPtr], [int], [IntPtr], [int], [int].MakeByRefType())
         &$addPInvoke "GetPerformanceInfo"         "psapi.dll"    ([int])    @([IntPtr], [uint32])
-        &$addPInvoke "GetIfTable"                 "iphlpapi.dll" ([int])    @([IntPtr], [int].MakeByRefType(), [bool])
+        &$addPInvoke "GetIfTable2"                "iphlpapi.dll" ([int])    @([IntPtr].MakeByRefType())
+        &$addPInvoke "FreeMibTable"               "iphlpapi.dll" ([void])   @([IntPtr])
 
         [void]$tb.CreateType()
     }
@@ -69,14 +70,14 @@ $script:PSRPMCollectorScriptBlock = {
         $script:LastIoReadBytes    = 0L
         $script:LastIoWriteBytes   = 0L
         $script:LastIoOtherBytes   = 0L
+        $script:LastIoReadOps      = 0L
+        $script:LastIoWriteOps     = 0L
         $script:HasKernelBaseline  = $false
 
         # Network & Storage Hardware Throughput Tracking
         $script:LastNetRx          = 0L
         $script:LastNetTx          = 0L
         $script:LastNetTicks       = 0L
-        $script:IfBufSize          = 32768
-        $script:IfBufPtr           = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:IfBufSize)
 
         # One-Time Static System & Storage Metadata (Registry + DriveInfo, 0 WMI)
         $machineStr = "Windows PC"
@@ -367,12 +368,27 @@ $script:PSRPMCollectorScriptBlock = {
 
     # 2. Query SystemProcessInformation (Class 5) in a Single Kernel Transition
     $retLen = 0
-    $status = [PSRPM.NativeCollectorV2]::NtQuerySystemInformation(5, $script:SysBufPtr, $script:SysBufSize, [ref]$retLen)
-    while ($status -eq -1073741820) { # STATUS_INFO_LENGTH_MISMATCH (0xC0000004)
+    $status = [PSRPM.NativeCollectorV3]::NtQuerySystemInformation(5, $script:SysBufPtr, $script:SysBufSize, [ref]$retLen)
+    $maxSysBufSize = 16777216 # 16 MB ceiling (prevents unbounded memory growth)
+    $reallocAttempts = 0
+    while ($status -eq -1073741820 -and $reallocAttempts -lt 5 -and $script:SysBufSize -lt $maxSysBufSize) { # STATUS_INFO_LENGTH_MISMATCH (0xC0000004)
+        $reallocAttempts++
+        $newSize = [Math]::Min($maxSysBufSize, [Math]::Max($script:SysBufSize * 2, $retLen + 65536))
+        if ($newSize -le $script:SysBufSize) { break }
+        $newPtr = [IntPtr]::Zero
+        try {
+            $newPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($newSize)
+        } catch {
+            break
+        }
         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:SysBufPtr)
-        $script:SysBufSize = [Math]::Max($script:SysBufSize * 2, $retLen + 65536)
-        $script:SysBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:SysBufSize)
-        $status = [PSRPM.NativeCollectorV2]::NtQuerySystemInformation(5, $script:SysBufPtr, $script:SysBufSize, [ref]$retLen)
+        $script:SysBufPtr  = $newPtr
+        $script:SysBufSize = $newSize
+        $status = [PSRPM.NativeCollectorV3]::NtQuerySystemInformation(5, $script:SysBufPtr, $script:SysBufSize, [ref]$retLen)
+    }
+
+    if ($status -ne 0) {
+        return $null
     }
 
     $currKeys     = [System.Collections.Generic.HashSet[string]]::new()
@@ -394,15 +410,16 @@ $script:PSRPMCollectorScriptBlock = {
     $offPpid      = if ($is64) { 88 }  else { 72 }
     $offHandles   = if ($is64) { 96 }  else { 76 }
     $offSession   = if ($is64) { 100 } else { 80 }
-    $offWsBytes   = if ($is64) { 144 } else { 112 }
+    $offWsBytes   = if ($is64) { 144 } else { 104 } # Fixed: x86 WorkingSetSize is at offset 104
     $offPrivBytes = if ($is64) { 184 } else { 132 }
     $spiSize      = if ($is64) { 256 } else { 184 }
     $stiSize      = if ($is64) { 80 }  else { 64 }
     $offThState   = if ($is64) { 68 }  else { 52 }
     $offThWait    = if ($is64) { 72 }  else { 56 }
 
+    $validLen = if ($retLen -gt 0 -and $retLen -le $script:SysBufSize) { $retLen } else { $script:SysBufSize }
     $offset = 0
-    while ($true) {
+    while (($offset + $spiSize) -le $validLen) {
         $curPtr     = [IntPtr]::Add($script:SysBufPtr, $offset)
         $nextOffset = [System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, 0)
         $numThreads = [System.Runtime.InteropServices.Marshal]::ReadInt32($curPtr, 4)
@@ -438,17 +455,24 @@ $script:PSRPMCollectorScriptBlock = {
             # Exact Suspended Status Detection via SYSTEM_THREAD_INFORMATION array (0ms overhead)
             $isSuspended = $false
             if ($numThreads -gt 0) {
-                $allSusp = $true
-                for ($t = 0; $t -lt $numThreads; $t++) {
-                    $tPtr   = [IntPtr]::Add($curPtr, $spiSize + ($t * $stiSize))
-                    $tState = [System.Runtime.InteropServices.Marshal]::ReadInt32($tPtr, $offThState)
-                    $tWait  = [System.Runtime.InteropServices.Marshal]::ReadInt32($tPtr, $offThWait)
-                    if ($tState -ne 5 -or $tWait -ne 5) { # 5 = Waiting, 5 = Suspended
-                        $allSusp = $false
-                        break
+                $recEnd = if ($nextOffset -gt 0) { $offset + $nextOffset } else { $validLen }
+                if ($recEnd -gt $validLen) { $recEnd = $validLen }
+                $availBytes = $recEnd - ($offset + $spiSize)
+                $safeThreads = [Math]::Min($numThreads, [int]($availBytes / $stiSize))
+
+                if ($safeThreads -gt 0) {
+                    $allSusp = $true
+                    for ($t = 0; $t -lt $safeThreads; $t++) {
+                        $tPtr   = [IntPtr]::Add($curPtr, $spiSize + ($t * $stiSize))
+                        $tState = [System.Runtime.InteropServices.Marshal]::ReadInt32($tPtr, $offThState)
+                        $tWait  = [System.Runtime.InteropServices.Marshal]::ReadInt32($tPtr, $offThWait)
+                        if ($tState -ne 5 -or $tWait -ne 5) { # 5 = Waiting, 5 = Suspended
+                            $allSusp = $false
+                            break
+                        }
                     }
+                    $isSuspended = $allSusp
                 }
-                $isSuspended = $allSusp
             }
             $statusFlags = if ($isSuspended) { 1 } else { 0 }
 
@@ -487,19 +511,19 @@ $script:PSRPMCollectorScriptBlock = {
 
                 # Open PROCESS_QUERY_LIMITED_INFORMATION (0x1000) once for this new PID
                 if ($pidVal -gt 4) {
-                    $hProc = [PSRPM.NativeCollectorV2]::OpenProcess(0x1000, 0, $pidVal)
+                    $hProc = [PSRPM.NativeCollectorV3]::OpenProcess(0x1000, 0, $pidVal)
                     if ($hProc -ne [IntPtr]::Zero) {
                         try {
                             # A. Executable Path via QueryFullProcessImageNameW
                             $script:ExePathSb.Length = 0
                             $cap = $script:ExePathSb.Capacity
-                            if ([PSRPM.NativeCollectorV2]::QueryFullProcessImageNameW($hProc, 0, $script:ExePathSb, [ref]$cap) -ne 0) {
+                            if ([PSRPM.NativeCollectorV3]::QueryFullProcessImageNameW($hProc, 0, $script:ExePathSb, [ref]$cap) -ne 0) {
                                 $exePath = $script:ExePathSb.ToString()
                             }
 
                             # B. Command Line via NtQueryInformationProcess(ProcessCommandLineInformation = 60)
                             $cmdRet = 0
-                            if ([PSRPM.NativeCollectorV2]::NtQueryInformationProcess($hProc, 60, $script:ScratchBufPtr, 8192, [ref]$cmdRet) -eq 0) {
+                            if ([PSRPM.NativeCollectorV3]::NtQueryInformationProcess($hProc, 60, $script:ScratchBufPtr, 8192, [ref]$cmdRet) -eq 0) {
                                 $cLen = [System.Runtime.InteropServices.Marshal]::ReadInt16($script:ScratchBufPtr, 0)
                                 $cPtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($script:ScratchBufPtr, $script:PtrSize)
                                 if ($cPtr -ne [IntPtr]::Zero -and $cLen -gt 0) {
@@ -510,17 +534,17 @@ $script:PSRPMCollectorScriptBlock = {
                             # C. Architecture via IsWow64Process
                             if ($script:Is64BitOS) {
                                 $wow64 = 0
-                                if ([PSRPM.NativeCollectorV2]::IsWow64Process($hProc, [ref]$wow64) -ne 0 -and $wow64 -ne 0) {
+                                if ([PSRPM.NativeCollectorV3]::IsWow64Process($hProc, [ref]$wow64) -ne 0 -and $wow64 -ne 0) {
                                     $archStr = "x86"
                                 }
                             }
 
                             # D. User Account via OpenProcessToken + SidCache (Zero WMI GetOwner)
                             $hTok = [IntPtr]::Zero
-                            if ([PSRPM.NativeCollectorV2]::OpenProcessToken($hProc, 0x0008, [ref]$hTok) -ne 0) {
+                            if ([PSRPM.NativeCollectorV3]::OpenProcessToken($hProc, 0x0008, [ref]$hTok) -ne 0) {
                                 try {
                                     $tokRet = 0
-                                    if ([PSRPM.NativeCollectorV2]::GetTokenInformation($hTok, 1, $script:ScratchBufPtr, 256, [ref]$tokRet) -ne 0) {
+                                    if ([PSRPM.NativeCollectorV3]::GetTokenInformation($hTok, 1, $script:ScratchBufPtr, 256, [ref]$tokRet) -ne 0) {
                                         $sidPtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($script:ScratchBufPtr, 0)
                                         $sidObj = [System.Security.Principal.SecurityIdentifier]::new($sidPtr)
                                         $sidVal = $sidObj.Value
@@ -536,11 +560,11 @@ $script:PSRPMCollectorScriptBlock = {
                                         }
                                     }
                                 } finally {
-                                    [void][PSRPM.NativeCollectorV2]::CloseHandle($hTok)
+                                    [void][PSRPM.NativeCollectorV3]::CloseHandle($hTok)
                                 }
                             }
                         } finally {
-                            [void][PSRPM.NativeCollectorV2]::CloseHandle($hProc)
+                            [void][PSRPM.NativeCollectorV3]::CloseHandle($hProc)
                         }
                     }
                 }
@@ -631,7 +655,7 @@ $script:PSRPMCollectorScriptBlock = {
             }
         }
 
-        if ($nextOffset -eq 0) { break }
+        if ($nextOffset -le 0 -or ($offset + $nextOffset) -gt $validLen) { break }
         $offset += $nextOffset
     }
 
@@ -669,7 +693,7 @@ $script:PSRPMCollectorScriptBlock = {
 
     $perfCb = if ($is64) { 104 } else { 56 }
     [System.Runtime.InteropServices.Marshal]::WriteInt32($script:ScratchBufPtr, 0, $perfCb)
-    $perfSuccess = ([PSRPM.NativeCollectorV2]::GetPerformanceInfo($script:ScratchBufPtr, [uint32]$perfCb) -ne 0)
+    $perfSuccess = ([PSRPM.NativeCollectorV3]::GetPerformanceInfo($script:ScratchBufPtr, [uint32]$perfCb) -ne 0)
 
     if ($perfSuccess) {
         if ($is64) {
@@ -730,7 +754,7 @@ $script:PSRPMCollectorScriptBlock = {
     # A. SystemProcessorPerformanceInformation (Class 8: 48 bytes per logical CPU)
     $sppiLen = $script:CoreCount * 48
     $sppiRet = 0
-    if ($sppiLen -le 8192 -and [PSRPM.NativeCollectorV2]::NtQuerySystemInformation(8, $script:ScratchBufPtr, $sppiLen, [ref]$sppiRet) -eq 0) {
+    if ($sppiLen -le 8192 -and [PSRPM.NativeCollectorV3]::NtQuerySystemInformation(8, $script:ScratchBufPtr, $sppiLen, [ref]$sppiRet) -eq 0) {
         $totIdle = 0L
         $totKern = 0L
         $totUser = 0L
@@ -795,33 +819,41 @@ $script:PSRPMCollectorScriptBlock = {
     $ioReadDelta  = 0L
     $ioWriteDelta = 0L
     $ioOtherDelta = 0L
+    $ioOpsDelta   = 0L
     $spi2Ret = 0
-    if ([PSRPM.NativeCollectorV2]::NtQuerySystemInformation(2, $script:ScratchBufPtr, 512, [ref]$spi2Ret) -eq 0 -and $spi2Ret -ge 312) {
-        $curIoR = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 8)
-        $curIoW = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 16)
-        $curIoO = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 24)
-        $curPf  = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 60)  -band 0xFFFFFFFFL)
-        $curPr  = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 80)  -band 0xFFFFFFFFL)
-        $curPfw = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 96)  -band 0xFFFFFFFFL)
-        $curMfw = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 104) -band 0xFFFFFFFFL)
-        $curCs  = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 296) -band 0xFFFFFFFFL)
-        $curSc  = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 308) -band 0xFFFFFFFFL)
+    if ([PSRPM.NativeCollectorV3]::NtQuerySystemInformation(2, $script:ScratchBufPtr, 512, [ref]$spi2Ret) -eq 0 -and $spi2Ret -ge 312) {
+        $curIoR   = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 8)
+        $curIoW   = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 16)
+        $curIoO   = [System.Runtime.InteropServices.Marshal]::ReadInt64($script:ScratchBufPtr, 24)
+        $curIoROp = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 32) -band 0xFFFFFFFFL)
+        $curIoWOp = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 36) -band 0xFFFFFFFFL)
+        $curPf    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 60)  -band 0xFFFFFFFFL)
+        $curPr    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 80)  -band 0xFFFFFFFFL)
+        $curPfw   = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 96)  -band 0xFFFFFFFFL)
+        $curMfw   = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 104) -band 0xFFFFFFFFL)
+        $curCs    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 296) -band 0xFFFFFFFFL)
+        $curSc    = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:ScratchBufPtr, 308) -band 0xFFFFFFFFL)
 
         if ($script:HasKernelBaseline) {
-            if ($curIoR -ge $script:LastIoReadBytes)    { $ioReadDelta  = $curIoR - $script:LastIoReadBytes }
-            if ($curIoW -ge $script:LastIoWriteBytes)   { $ioWriteDelta = $curIoW - $script:LastIoWriteBytes }
-            if ($curIoO -ge $script:LastIoOtherBytes)   { $ioOtherDelta = $curIoO - $script:LastIoOtherBytes }
-            if ($curPf  -ge $script:LastPageFaults)     { $pfDelta      = $curPf  - $script:LastPageFaults }
-            if ($curPr  -ge $script:LastPageReads)      { $prDelta      = $curPr  - $script:LastPageReads }
-            if ($curPfw -ge $script:LastPageFileWrites) { $pfwDelta     = $curPfw - $script:LastPageFileWrites }
-            if ($curMfw -ge $script:LastMappedWrites)   { $mfwDelta     = $curMfw - $script:LastMappedWrites }
-            if ($curCs  -ge $script:LastCtxSwitches)    { $csDelta      = $curCs  - $script:LastCtxSwitches }
-            if ($curSc  -ge $script:LastSysCalls)       { $scDelta      = $curSc  - $script:LastSysCalls }
+            if ($curIoR   -ge $script:LastIoReadBytes)  { $ioReadDelta  = $curIoR - $script:LastIoReadBytes }
+            if ($curIoW   -ge $script:LastIoWriteBytes) { $ioWriteDelta = $curIoW - $script:LastIoWriteBytes }
+            if ($curIoO   -ge $script:LastIoOtherBytes) { $ioOtherDelta = $curIoO - $script:LastIoOtherBytes }
+            if ($curIoROp -ge $script:LastIoReadOps -and $curIoWOp -ge $script:LastIoWriteOps) {
+                $ioOpsDelta = ($curIoROp - $script:LastIoReadOps) + ($curIoWOp - $script:LastIoWriteOps)
+            }
+            if ($curPf    -ge $script:LastPageFaults)     { $pfDelta      = $curPf  - $script:LastPageFaults }
+            if ($curPr    -ge $script:LastPageReads)      { $prDelta      = $curPr  - $script:LastPageReads }
+            if ($curPfw   -ge $script:LastPageFileWrites) { $pfwDelta     = $curPfw - $script:LastPageFileWrites }
+            if ($curMfw   -ge $script:LastMappedWrites)   { $mfwDelta     = $curMfw - $script:LastMappedWrites }
+            if ($curCs    -ge $script:LastCtxSwitches)    { $csDelta      = $curCs  - $script:LastCtxSwitches }
+            if ($curSc    -ge $script:LastSysCalls)       { $scDelta      = $curSc  - $script:LastSysCalls }
         }
 
         $script:LastIoReadBytes    = $curIoR
         $script:LastIoWriteBytes   = $curIoW
         $script:LastIoOtherBytes   = $curIoO
+        $script:LastIoReadOps      = $curIoROp
+        $script:LastIoWriteOps     = $curIoWOp
         $script:LastPageFaults     = $curPf
         $script:LastPageReads      = $curPr
         $script:LastPageFileWrites = $curPfw
@@ -840,23 +872,34 @@ $script:PSRPMCollectorScriptBlock = {
     $diskWriteKBs   = 0.0
     $diskQueueDepth = 0.0
 
+    # D. Extended Hardware Counters (iphlpapi!GetIfTable2 64-bit Network & Storage Activity)
+    $netRxKBs       = 0.0
+    $netTxKBs       = 0.0
+    $diskReadKBs    = 0.0
+    $diskWriteKBs   = 0.0
+    $diskQueueDepth = 0.0
+
     try {
-        if ($script:IfBufPtr -ne [IntPtr]::Zero) {
-            $ifRet = [PSRPM.NativeCollectorV2]::GetIfTable($script:IfBufPtr, [ref]$script:IfBufSize, $false)
-            if ($ifRet -eq 122 -and $script:IfBufSize -gt 0) {
-                $script:IfBufPtr = [System.Runtime.InteropServices.Marshal]::ReAllocHGlobal($script:IfBufPtr, [IntPtr]$script:IfBufSize)
-                $ifRet = [PSRPM.NativeCollectorV2]::GetIfTable($script:IfBufPtr, [ref]$script:IfBufSize, $false)
-            }
-            if ($ifRet -eq 0) {
-                $numIf = [System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, 0)
+        [IntPtr]$tblPtr = [IntPtr]::Zero
+        $ifRet = [PSRPM.NativeCollectorV3]::GetIfTable2([ref]$tblPtr)
+        if ($ifRet -eq 0 -and $tblPtr -ne [IntPtr]::Zero) {
+            try {
+                $numIf = [System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, 0)
                 $totRx = 0L
                 $totTx = 0L
+                $startOff = 8
+                $rowSize  = 1352
+
                 for ($ifIdx = 0; $ifIdx -lt $numIf; $ifIdx++) {
-                    $ifOff = 4 + ($ifIdx * 860)
-                    $ifType = [System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, $ifOff + 516)
+                    $rowPtr = [IntPtr]::Add($tblPtr, $startOff + ($ifIdx * $rowSize))
+                    $ifType = [System.Runtime.InteropServices.Marshal]::ReadInt32($rowPtr, 1128)
                     if ($ifType -eq 24) { continue } # skip loopback
-                    $totRx += ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, $ifOff + 552) -band 0xFFFFFFFFL)
-                    $totTx += ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($script:IfBufPtr, $ifOff + 576) -band 0xFFFFFFFFL)
+
+                    $flagsByte = [System.Runtime.InteropServices.Marshal]::ReadByte($rowPtr, 1152)
+                    if (($flagsByte -band 2) -ne 0) { continue } # skip NDIS filter drivers (prevents duplicate counting)
+
+                    $totRx += [System.Runtime.InteropServices.Marshal]::ReadInt64($rowPtr, 1208)
+                    $totTx += [System.Runtime.InteropServices.Marshal]::ReadInt64($rowPtr, 1280)
                 }
 
                 $curNetTicks = [DateTime]::UtcNow.Ticks
@@ -864,17 +907,23 @@ $script:PSRPMCollectorScriptBlock = {
                     $netSec = [Math]::Max(0.1, ($curNetTicks - $script:LastNetTicks) / 10000000.0)
                     if ($totRx -ge $script:LastNetRx) {
                         $netRxKBs = [Math]::Round((($totRx - $script:LastNetRx) / 1024.0) / $netSec, 1)
+                    } else {
+                        $netRxKBs = [Math]::Round(($totRx / 1024.0) / $netSec, 1)
                     }
                     if ($totTx -ge $script:LastNetTx) {
                         $netTxKBs = [Math]::Round((($totTx - $script:LastNetTx) / 1024.0) / $netSec, 1)
+                    } else {
+                        $netTxKBs = [Math]::Round(($totTx / 1024.0) / $netSec, 1)
                     }
                     $diskReadKBs    = [Math]::Round(($ioReadDelta / 1024.0) / $netSec, 1)
                     $diskWriteKBs   = [Math]::Round(($ioWriteDelta / 1024.0) / $netSec, 1)
-                    $diskQueueDepth = [Math]::Round([Math]::Min(99.0, (($diskReadKBs + $diskWriteKBs) / 5000.0)), 2)
+                    $diskQueueDepth = [Math]::Round(($ioOpsDelta / $netSec), 1)
                 }
                 $script:LastNetRx    = $totRx
                 $script:LastNetTx    = $totTx
                 $script:LastNetTicks = $curNetTicks
+            } finally {
+                [PSRPM.NativeCollectorV3]::FreeMibTable($tblPtr)
             }
         }
     } catch {}
@@ -895,7 +944,7 @@ $script:PSRPMCollectorScriptBlock = {
     $svcJson    = if ($null -ne $servicesPayload) { $jss.Serialize($servicesPayload) } else { 'null' }
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.5.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"sys":[').Append("$sysCpuStr,$ramUsedMB,$ramTotalMB,$totalProcs,$totalThreads,$totalHandles,$commitUsedMB,$commitLimitMB,$kernCpuStr,$commitCurKB,$commitLimKB,$commitPeakKB,$physTotalKB,$physAvailKB,$sysCacheKB,$kernelPagedKB,$kernelNonPagedKB,$pfDelta,$prDelta,$pfwDelta,$mfwDelta,$csDelta,$intrDelta,$scDelta,$ioReadDelta,$ioWriteDelta,$ioOtherDelta,$($netRxKBs.ToString($inv)),$($netTxKBs.ToString($inv)),$($diskReadKBs.ToString($inv)),$($diskWriteKBs.ToString($inv)),$($diskQueueDepth.ToString($inv))").Append(']')
     [void]$sb.Append(',"cores":[').Append(($coreTuples -join ',')).Append(']')

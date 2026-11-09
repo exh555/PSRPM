@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-08
+
+### Added
+- **Interactive Handle Closure in 7-Tab Process Properties (`PropertiesWindow.xaml`, `PSRPM.psm1`)**:
+  - Added right-click context menu (`Close Selected Handle`, `Copy Handle Name`, `Copy Handle Value`) and `Delete` keyboard shortcut directly on the `Handles` tab DataGrid (`GridPropHandles`).
+  - Added safety confirmation dialog displaying target process name, PID, handle type, and object path.
+  - Implemented in-place observable collection removal (`RemoveAt`) to instantly update the UI without reloading the inspector.
+- **Protocol Versioning & Sequence Gap Detection (`DataCollector.ps1`, `RunspaceEngine.ps1`)**:
+  - Added protocol version headers (`"ver": 1, "colVer": "1.6.0"`) to telemetry payloads.
+  - Implemented sequence number tracking (`Seq #`) with automatic baseline resynchronization upon detecting sequence gaps or collector restarts.
+- **WinRM 4-State Lifecycle Machine (`RunspaceEngine.ps1`, `ViewModelClasses.ps1`, `MainWindow.xaml`)**:
+  - Formalized session states: `Connected`, `Degraded`, `Reconnecting`, and `Disconnected`.
+  - Added 2-stage transparent auto-recovery attempting fast `Connect-PSSession` before falling back to `New-PSSession` with bounded exponential backoff (1s, 2s, 4s, 8s, up to 16s).
+  - Added visual connection status indicators and audit trail logging across all state transitions.
+- **Wall-Clock Anchored Drift-Compensating Scheduler & Telemetry Freshness (`RunspaceEngine.ps1`, `ViewModelClasses.ps1`)**:
+  - Replaced uncompensated `Thread.Sleep` loops with a wall-clock anchored scheduler tracking target interval boundaries to eliminate cumulative polling drift.
+  - Added telemetry freshness tracking (`Fresh` <= 2.5s, `Stale` 2.5s-6s, `Frozen` > 6s) with visual status dot indicators.
+- **Expanded 11-Suite Engine Verification Suite (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added Tests 8 through 11 covering PID reuse race prevention, memory dump non-inherited ACL validation, atomic tree termination hierarchy, and telemetry freshness/reconnect transitions.
+  - Added statistical benchmark gates: Mean collection latency <= 25 ms, P95 latency <= 35 ms, and wire payload <= 3.5 KB.
+- **Two-Tier Least Privilege Architecture & RBAC Documentation (`PRODUCT.md`, `README.md`, `ENGINEERING_PLAYBOOK.md`)**:
+  - Documented explicit privileges required for Tier 1 (Read-Only Monitoring) vs Tier 2 (Mutating Administrative Actions: Terminate, Suspend, Handle Closure, Dumps).
+  - Qualified "100% Fileless" architecture documentation with security product visibility disclosures.
+
+### Changed
+- **Honest Kernel System I/O Throughput & IOPS (`DataCollector.ps1`, `MainWindow.xaml`, `SystemInfoWindow.xaml`)**:
+  - Re-scoped telemetry indices 29-31 to genuine kernel System I/O Throughput (Read KB/s, Write KB/s) and System IOPS from Class 2 `SYSTEM_PERFORMANCE_INFORMATION`, replacing simulated queue depth.
+  - Updated summary bar pills and tooltips to clearly reflect `SYS I/O: 12.4 MB/s | IOPS: 1,842`.
+- **64-Bit Network Interface Polling (`DataCollector.ps1`)**:
+  - Upgraded network throughput calculation from 32-bit `iphlpapi.dll!GetIfTable` to modern 64-bit `iphlpapi.dll!GetIfTable2` / `FreeMibTable`, eliminating persistent 32 KB unmanaged scratch buffers.
+- **Consistent Telemetry Number Formatting (`RunspaceEngine.ps1`, `ViewModelClasses.ps1`)**:
+  - Enforced single-decimal fixed-point (`F1`) formatting across all network rates, disk throughput, and cumulative wire transfer metrics (`(RX: 686.0 KB)`), eliminating fluctuating decimal places.
+
+### Fixed
+- **Process Identity Verification & PID Reuse Guard (`ProcessActions.ps1`)**:
+  - Validated target process identity in `KillProcess` using dual `StartTime` FILETIME ticks and `QueryFullProcessImageNameW`, preventing collateral termination if a PID was recycled by the OS.
+- **Atomic Pinned Process Tree Termination (`ProcessActions.ps1`)**:
+  - Replaced slow WMI queries in `KillTree` with sub-millisecond `NtQuerySystemInformation(5)`.
+  - Pinned target process handles during discovery and executed a strict two-phase protocol: top-down process suspension followed by bottom-up termination, guaranteeing supervisor processes cannot respawn child workers during termination.
+- **Hardened Memory Dump Creation (`ProcessActions.ps1`)**:
+  - Enforced atomic non-inherited `FileSecurity` ACLs on memory dump files at creation time using `[System.IO.FileStream]::new`, strictly restricting access to `SYSTEM`, `Administrators`, and the current user.
+- **Dual-Phase Handle Closure Verification (`ProcessActions.ps1`)**:
+  - Added a non-destructive verification probe using `DuplicateHandle(DUPLICATE_SAME_ACCESS)` prior to calling `DUPLICATE_CLOSE_SOURCE`, eliminating race conditions and accidental invalidation of newly recycled handle values.
+- **x86 WOW64 Structure Offset Correction (`DataCollector.ps1`)**:
+  - Corrected `WorkingSetSize` structure offset from 112 to 104 in 32-bit mode and added a 16 MB buffer ceiling check to prevent buffer overflow exceptions.
+
 ## [1.5.0] - 2026-11-08
 
 ### Added

@@ -49,7 +49,7 @@ if ($readmeContent -notmatch "badge/version-$modVer") {
 Write-Host "  [PASS] README.md version badge matches version $modVer." -ForegroundColor Green
 
 # 5. Run Automated Engine Verification Suite
-Write-Host "[CHECK 5] Running Automated 7-Suite Verification..." -ForegroundColor Yellow
+Write-Host "[CHECK 5] Running Automated 11-Suite Verification..." -ForegroundColor Yellow
 & powershell -NoProfile -ExecutionPolicy Bypass -File $testScript
 if ($LASTEXITCODE -ne 0) {
     throw "Automated verification suite failed with exit code $LASTEXITCODE"
