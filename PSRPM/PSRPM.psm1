@@ -218,7 +218,7 @@ function Start-PSRPM {
     $appIconFrame = $null
     $resolvedIconPath = $null
     if ($IconPath -and [System.IO.File]::Exists($IconPath)) {
-        $resolvedIconPath = (Resolve-Path $IconPath).Path
+        $resolvedIconPath = (Resolve-Path -LiteralPath $IconPath).Path
     } else {
         $defaultIco = Join-Path $PSScriptRoot "Assets\psrpm.ico"
         if ([System.IO.File]::Exists($defaultIco)) {
@@ -2590,9 +2590,9 @@ function Start-PSRPM {
                         }
                         Processes     = $rows
                     }
-                    $exportPkg | ConvertTo-Json -Depth 6 | Set-Content -Path $dlg.FileName -Encoding UTF8
+                    $exportPkg | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $dlg.FileName -Encoding UTF8
                 } else {
-                    $rows | Export-Csv -Path $dlg.FileName -NoTypeInformation -Encoding UTF8
+                    $rows | Export-Csv -LiteralPath $dlg.FileName -NoTypeInformation -Encoding UTF8
                 }
                 &$writeAuditLog "EXPORT" "Exported $($rows.Count) processes ($format) to '$($dlg.FileName)'."
             } catch {

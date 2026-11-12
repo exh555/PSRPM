@@ -433,7 +433,8 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             $props = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue
                             if ($props) {
                                 foreach ($p in $props.PSObject.Properties) {
-                                    if ($p.Name -notmatch '^PS' -and ([string]$p.Value) -like "*$leafName*") {
+                                    $pval = [string]$p.Value
+                                    if ($p.Name -notmatch '^PS' -and $pval.IndexOf($leafName, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
                                         $autostartHits.Add("$rp\$($p.Name)")
                                     }
                                 }

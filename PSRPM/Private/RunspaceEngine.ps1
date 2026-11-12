@@ -768,6 +768,19 @@ function Start-PSRPMEngine {
         $directMatches = [System.Collections.Generic.HashSet[int]]::new()
         $ancestorSet   = [System.Collections.Generic.HashSet[int]]::new()
 
+        $wcPattern = $null
+        if ($filterTxt.Length -gt 0) {
+            # Escape bracket and backtick metacharacters to guard against WildcardPatternException on unclosed brackets while preserving * and ? wildcards
+            $safePattern = "*" + $filterTxt.Replace('`', '``').Replace('[', '`[').Replace(']', '`]') + "*"
+            try {
+                $wc = [System.Management.Automation.WildcardPattern]::new($safePattern, [System.Management.Automation.WildcardOptions]::IgnoreCase)
+                [void]$wc.IsMatch("")
+                $wcPattern = $wc
+            } catch {
+                $wcPattern = $null
+            }
+        }
+
         foreach ($kvp in $processMap.GetEnumerator()) {
             $vm = $kvp.Value
             $vm.Children.Clear()
@@ -777,13 +790,23 @@ function Start-PSRPMEngine {
                 $isMatch = $false
             }
             if ($isMatch -and $filterTxt.Length -gt 0) {
-                $isMatch = ($vm.Name -like "*$filterTxt*") -or
-                           ($vm.PIDDisplay -like "*$filterTxt*") -or
-                           ($vm.Description -like "*$filterTxt*") -or
-                           ($vm.CompanyName -like "*$filterTxt*") -or
-                           ($vm.User -like "*$filterTxt*") -or
-                           ($vm.CommandLine -like "*$filterTxt*") -or
-                           ($vm.HostedServices -like "*$filterTxt*")
+                if ($wcPattern) {
+                    $isMatch = $wcPattern.IsMatch([string]$vm.Name) -or
+                               $wcPattern.IsMatch([string]$vm.PIDDisplay) -or
+                               $wcPattern.IsMatch([string]$vm.Description) -or
+                               $wcPattern.IsMatch([string]$vm.CompanyName) -or
+                               $wcPattern.IsMatch([string]$vm.User) -or
+                               $wcPattern.IsMatch([string]$vm.CommandLine) -or
+                               $wcPattern.IsMatch([string]$vm.HostedServices)
+                } else {
+                    $isMatch = ([string]$vm.Name).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                               ([string]$vm.PIDDisplay).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                               ([string]$vm.Description).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                               ([string]$vm.CompanyName).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                               ([string]$vm.User).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                               ([string]$vm.CommandLine).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                               ([string]$vm.HostedServices).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                }
             }
             if ($isMatch) {
                 [void]$directMatches.Add($vm.PID)
@@ -1339,7 +1362,7 @@ function Start-PSRPMEngine {
                 }
             }
 
-            # G. Update Tree / Flat View Order
+            # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting)
             $needsOrderPass = $structureChanged -or (-not $stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles")) -or ($stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles"))
             if ($needsOrderPass -or $ProcessCollection.Count -eq 0) {
                 & $updateViewCollections

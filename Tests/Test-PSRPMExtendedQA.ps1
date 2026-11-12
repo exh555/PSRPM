@@ -472,13 +472,16 @@ $searchTestVmA.SetStaticMetadata(@{ id = 1111; ct = 10; n = "service[host].exe";
 $searchTestVmB = [ProcessItemViewModel]::new()
 $searchTestVmB.SetStaticMetadata(@{ id = 2222; ct = 20; n = "regex+test.exe"; p = 1111; u = "SYSTEM"; arch = "x64"; path = ""; cmd = "regex+test.exe"; desc = "Plus Regex"; comp = ""; start = ""; sid = 0; prio = 8; cat = "Service" }, $false)
 
-$filterTokens = @("[host]", "regex+", "*test*", "c:\windows")
+$filterTokens = @("[host]", "spe[", "[", "*spe[*", "regex+", "*test*", "c:\windows")
 $filterSuccess = $true
 foreach ($ft in $filterTokens) {
     try {
         # Emulate RunspaceEngine string matching
-        $matchA = ($searchTestVmA.Name -like "*$ft*") -or ($searchTestVmA.CommandLine -like "*$ft*")
-        $matchB = ($searchTestVmB.Name -like "*$ft*") -or ($searchTestVmB.CommandLine -like "*$ft*")
+        $safePattern = "*" + $ft.Replace('`', '``').Replace('[', '`[').Replace(']', '`]') + "*"
+        $wc = [System.Management.Automation.WildcardPattern]::new($safePattern, [System.Management.Automation.WildcardOptions]::IgnoreCase)
+        [void]$wc.IsMatch("")
+        $matchA = $wc.IsMatch([string]$searchTestVmA.Name) -or $wc.IsMatch([string]$searchTestVmA.CommandLine)
+        $matchB = $wc.IsMatch([string]$searchTestVmB.Name) -or $wc.IsMatch([string]$searchTestVmB.CommandLine)
     } catch {
         $filterSuccess = $false
         break

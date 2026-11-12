@@ -378,7 +378,8 @@ $script:PSRPMActionScriptBlock = {
                 }
 
                 $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
-                $dumpFileName = "PSRPM_Dump_${pName}_PID${TargetPid}_${DumpType}_${ts}.dmp"
+                $cleanPName = ($pName -replace '[\<\>\:\"\/\\\|\?\*]', '_')
+                $dumpFileName = "PSRPM_Dump_${cleanPName}_PID${TargetPid}_${DumpType}_${ts}.dmp"
                 $dumpFilePath = [System.IO.Path]::Combine($tempDir, $dumpFileName)
 
                 # Open process with PROCESS_QUERY_INFORMATION (0x0400) | PROCESS_VM_READ (0x0010)

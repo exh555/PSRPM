@@ -485,6 +485,16 @@ try {
     $eng.StateContainer.FilterText = ""
     & $eng.RefreshTree
 
+    # Test Bracket & Wildcard Metacharacter Resilience (spe[, [, *spe[*, [host], regex+, etc.)
+    $testFilterInputs = @("spe[", "[", "*spe[*", "[[", "][", "[]", "[host]", "regex+", "c:\windows")
+    foreach ($tfi in $testFilterInputs) {
+        $eng.StateContainer.FilterText = $tfi
+        & $eng.RefreshTree
+    }
+    $eng.StateContainer.FilterText = ""
+    & $eng.RefreshTree
+    Write-Host "  Verified Search Metacharacter & Bracket Resilience (Zero WildcardPatternException on 'spe[', '[', etc.)." -ForegroundColor Gray
+
     # Test SendCommand Async Command Bus (InspectPid Modules with .GetNewClosure() UI callback)
     $cbState  = @{ Fired = $false; Count = 0; Err = "" }
     $localJss = $jss
