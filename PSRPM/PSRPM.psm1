@@ -810,6 +810,52 @@ function Start-PSRPM {
     if ($btnLegendPackaged) { $btnLegendPackaged.add_Click({ &$setCategoryFilter "Packaged" }) }
     &$updateLegendFilterUi
 
+    # 9B. Status Bar Responsive Overflow Sync
+    $scrollStatusLegend = $window.FindName("ScrollStatusLegend")
+    $btnStatusOverflow  = $window.FindName("BtnStatusOverflow")
+
+    $syncStatusOverflow = {
+        if ($scrollStatusLegend -and $btnStatusOverflow) {
+            $scrollable = $scrollStatusLegend.ScrollableWidth
+            if ($scrollable -gt 2) {
+                $btnStatusOverflow.Visibility = [System.Windows.Visibility]::Visible
+                $atEnd = ($scrollStatusLegend.HorizontalOffset -ge ($scrollable - 8))
+                $btnStatusOverflow.Content = if ($atEnd) { "<< Start" } else { ">> More" }
+                $btnStatusOverflow.ToolTip = if ($atEnd) {
+                    "Showing scrolled status items. Click to return to beginning of legend."
+                } else {
+                    "More status items hidden (window is narrow). Click to scroll right, or use mouse wheel."
+                }
+            } else {
+                $btnStatusOverflow.Visibility = [System.Windows.Visibility]::Collapsed
+            }
+        }
+    }
+
+    if ($scrollStatusLegend) {
+        $scrollStatusLegend.add_ScrollChanged({ &$syncStatusOverflow })
+        $scrollStatusLegend.add_PreviewMouseWheel({
+            param($sender, $e)
+            if ($scrollStatusLegend.ScrollableWidth -gt 0) {
+                $newOff = $scrollStatusLegend.HorizontalOffset - ($e.Delta / 3)
+                $scrollStatusLegend.ScrollToHorizontalOffset($newOff)
+                $e.Handled = $true
+            }
+        })
+    }
+    if ($btnStatusOverflow) {
+        $btnStatusOverflow.add_Click({
+            if ($scrollStatusLegend) {
+                if ($scrollStatusLegend.HorizontalOffset -ge ($scrollStatusLegend.ScrollableWidth - 8)) {
+                    $scrollStatusLegend.ScrollToHorizontalOffset(0)
+                } else {
+                    $scrollStatusLegend.ScrollToHorizontalOffset($scrollStatusLegend.HorizontalOffset + 140)
+                }
+            }
+        })
+    }
+    $window.add_SizeChanged({ &$syncStatusOverflow })
+
     # 10. Polling Rate & Pause/Resume Controls
     $menuRefresh      = $window.FindName("MenuRefresh")
     $btnToolbarRef    = $window.FindName("BtnToolbarRefresh")

@@ -680,41 +680,63 @@
         </Border>
 
         <!-- 3. Bottom Status Bar & Interactive Semantic Color Legend -->
-        <StatusBar DockPanel.Dock="Bottom" Background="{DynamicResource BrushHeaderBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,1,0,0" Padding="6,2">
-            <!-- Fixed-width left telemetry section eliminates horizontal jitter across ticks -->
-            <StatusBarItem Width="610">
+        <StatusBar DockPanel.Dock="Bottom" Background="{DynamicResource BrushHeaderBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,1,0,0" Padding="4,2">
+            <StatusBar.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MaxWidth="440"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                </ItemsPanelTemplate>
+            </StatusBar.ItemsPanel>
+
+            <!-- Col 0: Left Elastic Telemetry Section -->
+            <StatusBarItem Grid.Column="0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border x:Name="BadgePaused" Background="#F59E0B" CornerRadius="2" Padding="5,1" Margin="0,0,6,0" Visibility="Collapsed" VerticalAlignment="Center">
                         <TextBlock Text="PAUSED" Foreground="#0F172A" FontSize="9.5" FontWeight="Bold"/>
                     </Border>
-                    <TextBlock x:Name="StatusText" Text="Initializing Telemetry Engine..." FontSize="11" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StatusText" Text="Initializing Telemetry Engine..." FontSize="11" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" ToolTip="Target Telemetry &amp; Status (Full string preserved on hover)"/>
                 </StackPanel>
             </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
+
+            <!-- Col 1: Center Scrollable Legend with Auto-Overflow -->
+            <StatusBarItem Grid.Column="1" HorizontalContentAlignment="Stretch">
+                <ScrollViewer x:Name="ScrollStatusLegend" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PanningMode="HorizontalOnly" VerticalAlignment="Center" Focusable="False">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="4,2"/>
+                        <TextBlock x:Name="TxtFilterLegendLabel" Text="Filter Legend:" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <Button x:Name="BtnLegendAll" Content="All" FontSize="10" FontWeight="SemiBold" Padding="6,1" Margin="0,0,4,0" Background="#E2E8F0" Foreground="#0F172A" BorderBrush="#0284C7" BorderThickness="2" Cursor="Hand" ToolTip="Show All Process Categories"/>
+                        <Button x:Name="BtnLegendService" Content="Services" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#FFE4E6" Foreground="#0F172A" BorderBrush="#FDA4AF" BorderThickness="1" Cursor="Hand" ToolTip="Filter Service Processes (Click to toggle)"/>
+                        <Button x:Name="BtnLegendOwn" Content="Own / User" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#E0E7FF" Foreground="#0F172A" BorderBrush="#A5B4FC" BorderThickness="1" Cursor="Hand" ToolTip="Filter User Session Processes (Click to toggle)"/>
+                        <Button x:Name="BtnLegendPackaged" Content="Packaged / WebView" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#67E8F9" Foreground="#0F172A" BorderBrush="#06B6D4" BorderThickness="1" Cursor="Hand" ToolTip="Filter Packaged / WebView2 Processes (Click to toggle)"/>
+                        <Button x:Name="BtnLegendClear" Content="Clear Filter" FontSize="9" FontWeight="Bold" Padding="5,1" Margin="2,0,6,0" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" BorderThickness="1" Cursor="Hand" Visibility="Collapsed" ToolTip="Clear active category filter and show all processes"/>
+                        <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
+                        <TextBlock Text="Lifecycle Badges:" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                        <Border Background="#94A3B8" BorderBrush="#64748B" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
+                            <TextBlock Text="Suspended" Foreground="#0F172A" FontSize="10"/>
+                        </Border>
+                        <Border Background="#86EFAC" BorderBrush="#22C55E" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
+                            <TextBlock Text="New" Foreground="#0F172A" FontSize="10"/>
+                        </Border>
+                        <Border Background="#FCA5A5" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="2" Padding="5,1">
+                            <TextBlock Text="Exiting" Foreground="#0F172A" FontSize="10"/>
+                        </Border>
+                        <Button x:Name="BtnToggleHighlights" Content="Colors: Standard" FontSize="9.5" FontWeight="SemiBold" Padding="5,1" Margin="6,0,0,0" Background="{DynamicResource BrushToolbarBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Cursor="Hand" ToolTip="Toggle static category coloring on/off (New &amp; Exiting flashes remain active)"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </StatusBarItem>
+
+            <!-- Col 2: Right Pinned Actions & Overflow Indicator (Always Visible) -->
+            <StatusBarItem Grid.Column="2">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtFilterLegendLabel" Text="Filter Legend:" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <Button x:Name="BtnLegendAll" Content="All" FontSize="10" FontWeight="SemiBold" Padding="6,1" Margin="0,0,4,0" Background="#E2E8F0" Foreground="#0F172A" BorderBrush="#0284C7" BorderThickness="2" Cursor="Hand" ToolTip="Show All Process Categories"/>
-                    <Button x:Name="BtnLegendService" Content="Services" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#FFE4E6" Foreground="#0F172A" BorderBrush="#FDA4AF" BorderThickness="1" Cursor="Hand" ToolTip="Filter Service Processes (Click to toggle)"/>
-                    <Button x:Name="BtnLegendOwn" Content="Own / User" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#E0E7FF" Foreground="#0F172A" BorderBrush="#A5B4FC" BorderThickness="1" Cursor="Hand" ToolTip="Filter User Session Processes (Click to toggle)"/>
-                    <Button x:Name="BtnLegendPackaged" Content="Packaged / WebView" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#67E8F9" Foreground="#0F172A" BorderBrush="#06B6D4" BorderThickness="1" Cursor="Hand" ToolTip="Filter Packaged / WebView2 Processes (Click to toggle)"/>
-                    <Button x:Name="BtnLegendClear" Content="Clear Filter" FontSize="9" FontWeight="Bold" Padding="5,1" Margin="2,0,6,0" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" BorderThickness="1" Cursor="Hand" Visibility="Collapsed" ToolTip="Clear active category filter and show all processes"/>
-                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
-                    <TextBlock Text="Lifecycle Badges:" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                    <Border Background="#94A3B8" BorderBrush="#64748B" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
-                        <TextBlock Text="Suspended" Foreground="#0F172A" FontSize="10"/>
-                    </Border>
-                    <Border Background="#86EFAC" BorderBrush="#22C55E" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
-                        <TextBlock Text="New" Foreground="#0F172A" FontSize="10"/>
-                    </Border>
-                    <Border Background="#FCA5A5" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="2" Padding="5,1">
-                        <TextBlock Text="Exiting" Foreground="#0F172A" FontSize="10"/>
-                    </Border>
-                    <Button x:Name="BtnToggleHighlights" Content="Colors: Standard" FontSize="9.5" FontWeight="SemiBold" Padding="5,1" Margin="6,0,0,0" Background="{DynamicResource BrushToolbarBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Cursor="Hand" ToolTip="Toggle static category coloring on/off (New &amp; Exiting flashes remain active)"/>
+                    <Button x:Name="BtnStatusOverflow" Content="&gt;&gt; More" Style="{StaticResource ToolbarButtonStyle}" FontSize="10" FontWeight="SemiBold" Padding="5,1" Margin="2,0,4,0" Visibility="Collapsed" Cursor="Hand" ToolTip="Additional status and legend items are hidden due to narrow window. Click to scroll right."/>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2,2"/>
+                    <Button x:Name="BtnShowLog" Content="Audit Console (Ctrl+L)" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Padding="6,1"/>
                 </StackPanel>
-            </StatusBarItem>
-            <StatusBarItem HorizontalAlignment="Right">
-                <Button x:Name="BtnShowLog" Content="Audit Console (Ctrl+L)" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Padding="6,1"/>
             </StatusBarItem>
         </StatusBar>
 
