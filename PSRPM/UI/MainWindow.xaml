@@ -86,6 +86,81 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
 
+        <!-- Modern Global DataGridColumnHeader Style -->
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource BrushHeaderBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="SeparatorVisibility" Value="Collapsed"/>
+        </Style>
+
+        <!-- Modern Global TabControl Style -->
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="{DynamicResource BrushHeaderBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,0,0,1" Padding="4,2,4,0">
+                                <TabPanel IsItemsHost="True"/>
+                            </Border>
+                            <Border Grid.Row="1" Background="{TemplateBinding Background}">
+                                <ContentPresenter ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Modern Segmented Workspace TabItem Style -->
+        <Style TargetType="TabItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="14,4"/>
+            <Setter Property="Margin" Value="2,0,2,0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4,4,0,0" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#0284C7"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="0,0,0,2"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Menu &amp; ContextMenu Separator Style -->
         <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
             <Setter Property="Height" Value="1"/>
@@ -541,7 +616,7 @@
                 <!-- Col 2: Sysinternals Mini Telemetry Sparkline Strip (Double-Click for System Information) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- CPU Sparkline Box -->
-                    <Border x:Name="CardMiniCpu" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,5,0" Cursor="Hand" ToolTip="Double-click to open System Information - CPU (Ctrl+I)">
+                    <Border x:Name="CardMiniCpu" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,5,0" Cursor="Hand" ToolTip="Double-click to open System Information - CPU (Ctrl+I)">
                         <Grid Width="86" Height="26" ClipToBounds="True">
                             <Polygon Points="{Binding CpuFillPoints}" Fill="#3322C55E"/>
                             <Polyline Points="{Binding CpuPoints}" Stroke="#16A34A" StrokeThickness="1.3"/>
@@ -551,7 +626,7 @@
                     </Border>
 
                     <!-- Commit Charge Sparkline Box -->
-                    <Border x:Name="CardMiniCommit" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,5,0" Cursor="Hand" ToolTip="Double-click to open System Information - Commit &amp; Memory (Ctrl+I)">
+                    <Border x:Name="CardMiniCommit" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,5,0" Cursor="Hand" ToolTip="Double-click to open System Information - Commit &amp; Memory (Ctrl+I)">
                         <Grid Width="90" Height="26" ClipToBounds="True">
                             <Polygon Points="{Binding CommitFillPoints}" Fill="#33EAB308"/>
                             <Polyline Points="{Binding CommitPoints}" Stroke="#CA8A04" StrokeThickness="1.3"/>
@@ -561,7 +636,7 @@
                     </Border>
 
                     <!-- Physical RAM Sparkline Box -->
-                    <Border x:Name="CardMiniRam" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,8,0" Cursor="Hand" ToolTip="Double-click to open System Information - Physical Memory (Ctrl+I)">
+                    <Border x:Name="CardMiniRam" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,8,0" Cursor="Hand" ToolTip="Double-click to open System Information - Physical Memory (Ctrl+I)">
                         <Grid Width="96" Height="26" ClipToBounds="True">
                             <Polygon Points="{Binding RamFillPoints}" Fill="#33F97316"/>
                             <Polyline Points="{Binding RamPoints}" Stroke="#EA580C" StrokeThickness="1.3"/>

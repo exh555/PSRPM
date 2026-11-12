@@ -108,6 +108,13 @@ function Start-PSRPM {
         [switch]$NoWait,
 
         [Parameter(Mandatory = $false)]
+        [ValidateSet("Light", "Dark", "Classic", "HighContrast")]
+        [string]$Theme,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Dark,
+
+        [Parameter(Mandatory = $false)]
         [string]$IconPath
     )
 
@@ -463,6 +470,9 @@ function Start-PSRPM {
     if ($btnToolbarTheme) {
         $btnToolbarTheme.add_Click({ &$cycleTheme })
     }
+
+    $initialTheme = if ($Dark.IsPresent) { "Dark" } elseif ($Theme) { $Theme } else { "Light" }
+    &$applyTheme $initialTheme
 
     # 5B. Row Highlighting Engine (Standard Sysinternals Semantic Categories vs Minimal Flashes-Only)
     $menuHighlightCategories = $window.FindName("MenuHighlightCategories")
@@ -3287,6 +3297,13 @@ function Start-RemoteProcessManager {
         [Parameter(Mandatory = $false)]
         [Alias("Background")]
         [switch]$NoWait,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("Light", "Dark", "Classic", "HighContrast")]
+        [string]$Theme,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Dark,
 
         [Parameter(Mandatory = $false)]
         [string]$IconPath
