@@ -153,7 +153,7 @@
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#0284C7"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="0,0,0,2"/>
                                 <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
-                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -621,7 +621,7 @@
                             <Polygon Points="{Binding CpuFillPoints}" Fill="#3322C55E"/>
                             <Polyline Points="{Binding CpuPoints}" Stroke="#16A34A" StrokeThickness="1.3"/>
                             <TextBlock Text="CPU" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="TxtCpuSummary" Text="{Binding CpuSummaryFormatted}" FontSize="10" FontWeight="Bold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TxtCpuSummary" Text="{Binding CpuSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
                         </Grid>
                     </Border>
 
@@ -631,7 +631,7 @@
                             <Polygon Points="{Binding CommitFillPoints}" Fill="#33EAB308"/>
                             <Polyline Points="{Binding CommitPoints}" Stroke="#CA8A04" StrokeThickness="1.3"/>
                             <TextBlock Text="Commit" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="TxtCommitSummary" Text="{Binding CommitSummaryFormatted}" FontSize="10" FontWeight="Bold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TxtCommitSummary" Text="{Binding CommitSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
                         </Grid>
                     </Border>
 
@@ -641,7 +641,7 @@
                             <Polygon Points="{Binding RamFillPoints}" Fill="#33F97316"/>
                             <Polyline Points="{Binding RamPoints}" Stroke="#EA580C" StrokeThickness="1.3"/>
                             <TextBlock Text="Phys RAM" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="TxtRamSummary" Text="{Binding RamPctFormatted}" FontSize="10" FontWeight="Bold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TxtRamSummary" Text="{Binding RamPctFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
                         </Grid>
                     </Border>
 
@@ -649,11 +649,11 @@
                     <StackPanel VerticalAlignment="Center" Margin="2,0,4,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Procs: " Foreground="{DynamicResource BrushTextMuted}" FontSize="10"/>
-                            <TextBlock x:Name="TxtProcCount" Text="{Binding ProcessCount}" FontWeight="Bold" FontSize="10" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TxtProcCount" Text="{Binding ProcessCount}" FontWeight="SemiBold" FontSize="10" Typography.NumeralAlignment="Tabular"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
                             <TextBlock Text="Handles: " Foreground="{DynamicResource BrushTextMuted}" FontSize="10"/>
-                            <TextBlock x:Name="TxtHandleCount" Text="{Binding HandleCount}" FontWeight="Bold" FontSize="10" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TxtHandleCount" Text="{Binding HandleCount}" FontWeight="SemiBold" FontSize="10" Typography.NumeralAlignment="Tabular"/>
                         </StackPanel>
                     </StackPanel>
 
@@ -694,7 +694,7 @@
             <StatusBarItem>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtFilterLegendLabel" Text="Filter Legend:" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <Button x:Name="BtnLegendAll" Content="All" FontSize="10" FontWeight="Bold" Padding="6,1" Margin="0,0,4,0" Background="#E2E8F0" Foreground="#0F172A" BorderBrush="#0284C7" BorderThickness="2" Cursor="Hand" ToolTip="Show All Process Categories"/>
+                    <Button x:Name="BtnLegendAll" Content="All" FontSize="10" FontWeight="SemiBold" Padding="6,1" Margin="0,0,4,0" Background="#E2E8F0" Foreground="#0F172A" BorderBrush="#0284C7" BorderThickness="2" Cursor="Hand" ToolTip="Show All Process Categories"/>
                     <Button x:Name="BtnLegendService" Content="Services" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#FFE4E6" Foreground="#0F172A" BorderBrush="#FDA4AF" BorderThickness="1" Cursor="Hand" ToolTip="Filter Service Processes (Click to toggle)"/>
                     <Button x:Name="BtnLegendOwn" Content="Own / User" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#E0E7FF" Foreground="#0F172A" BorderBrush="#A5B4FC" BorderThickness="1" Cursor="Hand" ToolTip="Filter User Session Processes (Click to toggle)"/>
                     <Button x:Name="BtnLegendPackaged" Content="Packaged / WebView" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#67E8F9" Foreground="#0F172A" BorderBrush="#06B6D4" BorderThickness="1" Cursor="Hand" ToolTip="Filter Packaged / WebView2 Processes (Click to toggle)"/>
