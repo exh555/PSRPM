@@ -18,6 +18,8 @@
             <Setter Property="Padding" Value="4,0,6,0"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
             <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <!-- Modern Clean GroupBox Style with subtle border and restrained header -->
@@ -49,6 +51,8 @@
         <Style TargetType="DataGridRow">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <!-- TextBoxes and Inputs -->
@@ -78,8 +82,8 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Padding" Value="12,5"/>
             <Setter Property="Margin" Value="2,0,2,0"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -88,7 +92,7 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="3,3,0,0" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ContentPresenter x:Name="HeaderContent" ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.FontWeight="SemiBold" TextElement.FontSize="11.5"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">

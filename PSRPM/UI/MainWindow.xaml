@@ -77,6 +77,8 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="4,0,6,0"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <!-- Single-Line Truncated Text Cell Style -->
@@ -84,6 +86,8 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="6,0,4,0"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <!-- Modern Global DataGridColumnHeader Style -->
@@ -131,8 +135,8 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Padding" Value="14,4"/>
             <Setter Property="Margin" Value="2,0,2,0"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -141,7 +145,7 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="4,4,0,0" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ContentPresenter x:Name="HeaderContent" ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.FontWeight="SemiBold" TextElement.FontSize="11.5"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -153,7 +157,7 @@
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#0284C7"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="0,0,0,2"/>
                                 <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="HeaderContent" Property="TextElement.FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -823,6 +827,8 @@
                             <Setter Property="Background" Value="{Binding RowBackground}"/>
                             <Setter Property="Foreground" Value="{Binding RowForeground}"/>
                             <Setter Property="Opacity" Value="{Binding RowOpacity}"/>
+                            <Setter Property="FontWeight" Value="Normal"/>
+                            <Setter Property="FontSize" Value="12"/>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
@@ -1031,6 +1037,8 @@
                                 <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
                                 <Setter Property="Height" Value="22"/>
                                 <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                <Setter Property="FontWeight" Value="Normal"/>
+                                <Setter Property="FontSize" Value="12"/>
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
