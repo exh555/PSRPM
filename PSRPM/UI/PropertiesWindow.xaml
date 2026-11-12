@@ -418,7 +418,7 @@
             <TabItem Header="DLLs">
                 <DataGrid x:Name="GridPropDlls" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="145" FontWeight="SemiBold"/>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="145"/>
                         <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="195"/>
                         <DataGridTextColumn Header="Company Name" Binding="{Binding CompanyName}" Width="140"/>
                         <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="105"/>
@@ -441,7 +441,7 @@
                         </ContextMenu>
                     </DataGrid.ContextMenu>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="115" FontWeight="SemiBold"/>
+                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="115"/>
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
                         <DataGridTextColumn Header="Handle" Binding="{Binding Handle}" Width="85" ElementStyle="{StaticResource RightTabularText}"/>
                         <DataGridTextColumn Header="Access" Binding="{Binding Access}" Width="95" ElementStyle="{StaticResource RightTabularText}"/>
@@ -465,7 +465,7 @@
             <TabItem Header="Services">
                 <DataGrid x:Name="GridPropServices" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150" FontWeight="SemiBold"/>
+                        <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150"/>
                         <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="260"/>
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90"/>
                         <DataGridTextColumn Header="Startup Type" Binding="{Binding StartType}" Width="95"/>
@@ -478,7 +478,7 @@
             <TabItem Header="Environment">
                 <DataGrid x:Name="GridPropEnv" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Variable" Binding="{Binding Key}" Width="210" FontWeight="SemiBold"/>
+                        <DataGridTextColumn Header="Variable" Binding="{Binding Key}" Width="210"/>
                         <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
                     </DataGrid.Columns>
                 </DataGrid>

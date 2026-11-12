@@ -27,6 +27,8 @@
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="4,0,6,0"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
         </Style>
 
@@ -34,6 +36,8 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <Style x:Key="ActionButtonStyle" TargetType="Button">
@@ -101,6 +105,8 @@
                 <Style TargetType="DataGridRow">
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                    <Setter Property="FontWeight" Value="Normal"/>
+                    <Setter Property="FontSize" Value="12"/>
                     <Style.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
@@ -126,9 +132,9 @@
                 </Style>
             </DataGrid.CellStyle>
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="150" FontWeight="SemiBold"/>
+                <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="150"/>
                 <DataGridTextColumn Header="PID" Binding="{Binding PID}" Width="70" ElementStyle="{StaticResource RightTabularText}"/>
-                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="85" FontWeight="SemiBold"/>
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="85"/>
                 <DataGridTextColumn Header="Handle" Binding="{Binding Handle}" Width="90" ElementStyle="{StaticResource RightTabularText}"/>
                 <DataGridTextColumn Header="Object Name / Path" Binding="{Binding Name}" Width="*" ElementStyle="{StaticResource EllipsisCellText}"/>
             </DataGrid.Columns>

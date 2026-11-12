@@ -1292,6 +1292,16 @@ function Start-PSRPM {
             $targetVm = $engineHandle.ProcessMap[$selSvc.PID]
             $mainTabs = $window.FindName("MainTabControl")
             if ($mainTabs) { $mainTabs.SelectedIndex = 0 }
+            $currPid = $targetVm.ParentPID
+            $guard = 0
+            while ($currPid -gt 0 -and $engineHandle.ProcessMap.ContainsKey($currPid) -and $guard -lt 30) {
+                $parentVm = $engineHandle.ProcessMap[$currPid]
+                $parentVm.IsExpanded = $true
+                $parentVm.UpdateExpanderGeometry()
+                $currPid = $parentVm.ParentPID
+                $guard++
+            }
+            if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
             $gridProcesses.SelectedItem = $targetVm
             $gridProcesses.ScrollIntoView($targetVm)
         }
@@ -2822,6 +2832,14 @@ function Start-PSRPM {
         if ($btnSysOk) {
             $btnSysOk.add_Click({ $sysWin.Close() }.GetNewClosure())
         }
+
+        $sysWin.add_KeyDown({
+            param($s, $e)
+            if ($e.Key -eq [System.Windows.Input.Key]::Escape) {
+                $sysWin.Close()
+                $e.Handled = $true
+            }
+        }.GetNewClosure())
 
         $localCloseSumm = $activeSumm
         $sysWin.add_Closed({

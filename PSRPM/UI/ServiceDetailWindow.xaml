@@ -25,6 +25,8 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="6,0,4,0"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <Style x:Key="DialogButtonStyle" TargetType="Button">
@@ -147,6 +149,8 @@
                                 <Style TargetType="DataGridRow">
                                     <Setter Property="Background" Value="Transparent"/>
                                     <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Setter Property="FontWeight" Value="Normal"/>
+                                    <Setter Property="FontSize" Value="12"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
@@ -203,6 +207,8 @@
                                 <Style TargetType="DataGridRow">
                                     <Setter Property="Background" Value="Transparent"/>
                                     <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Setter Property="FontWeight" Value="Normal"/>
+                                    <Setter Property="FontSize" Value="12"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>

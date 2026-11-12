@@ -807,7 +807,7 @@
 
         <!-- Bottom Action Bar -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button x:Name="BtnSysInfoOk" Content="OK" Width="88" Height="26" IsDefault="True" IsCancel="True" Background="#FFFFFF" BorderBrush="#0284C7" BorderThickness="1.5" Cursor="Hand"/>
+            <Button x:Name="BtnSysInfoOk" Content="OK" Width="88" Height="26" IsDefault="True" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="#0284C7" BorderThickness="1.5" Cursor="Hand"/>
         </StackPanel>
     </Grid>
 </Window>
