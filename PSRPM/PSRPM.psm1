@@ -1193,7 +1193,7 @@ function Start-PSRPM {
 
     # Wire Service Toolbar & ContextMenu Actions
     $invokeServiceAction = {
-        param([string]$svcOp, [Object]$targetSvc = $null)
+        param([string]$svcOp, [Object]$targetSvc = $null, [scriptblock]$onComplete = $null)
         $selSvc = if ($targetSvc) { $targetSvc } else { $gridServices.SelectedItem }
         if (-not $selSvc) { return }
         $sName = [string]$selSvc.Name
@@ -1212,6 +1212,7 @@ function Start-PSRPM {
         $localState = $stateContainer
         $localSvcOp = $svcOp
         $localSName = $sName
+        $localCb    = $onComplete
 
         & $engineHandle.SendCommand $cmdPayload ({
             param($res)
@@ -1222,6 +1223,9 @@ function Start-PSRPM {
                 &$localLog "SERVICE" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
             } else {
                 &$localLog "ERROR" "Service action '$localSvcOp' on '$localSName' failed: $($res.Error)"
+            }
+            if ($localCb) {
+                try { &$localCb $res } catch {}
             }
         }.GetNewClosure())
     }
@@ -1411,41 +1415,117 @@ function Start-PSRPM {
         $btnDlgStop    = $svcWin.FindName("BtnDlgStop")
         $btnDlgRestart = $svcWin.FindName("BtnDlgRestart")
         $btnDlgClose   = $svcWin.FindName("BtnDlgClose")
+        $txtDlgPid     = $svcWin.FindName("TxtDlgPid")
+        $localSvcWin   = $svcWin
+        $localInvoke   = $invokeServiceAction
+        $targetSvc     = $selSvc
 
-        $canStart = ($selSvc.Status -ne "Running")
-        $canStop = ($selSvc.Status -eq "Running" -or $selSvc.Status -eq "Paused")
-        $canRestart = ($selSvc.Status -eq "Running" -or $selSvc.Status -eq "Paused")
+        $updateSvcDialogUi = {
+            param([string]$statusOverride = "", [int]$pidOverride = -1)
+            $liveSvc = if ($engineHandle.ServicesMap.ContainsKey($targetSvc.Name)) {
+                $engineHandle.ServicesMap[$targetSvc.Name]
+            } else {
+                $targetSvc
+            }
 
-        $localSvcWin = $svcWin
-        $localInvoke = $invokeServiceAction
-        $targetSvc   = $selSvc
+            $curStatus = if ($statusOverride) { $statusOverride } else { [string]$liveSvc.Status }
+            $curPid    = if ($pidOverride -ge 0) { $pidOverride } else { [int]$liveSvc.PID }
+
+            if ($txtStatus) {
+                $txtStatus.Text = $curStatus.ToUpper()
+            }
+            if ($badgeStatus) {
+                if ($curStatus -eq "Running") {
+                    $badgeStatus.Background = $bc.ConvertFromString("#16A34A")
+                } elseif ($curStatus -eq "Paused") {
+                    $badgeStatus.Background = $bc.ConvertFromString("#D97706")
+                } elseif ($curStatus.EndsWith("...")) {
+                    $badgeStatus.Background = $bc.ConvertFromString("#EAB308")
+                } else {
+                    $badgeStatus.Background = $bc.ConvertFromString("#64748B")
+                }
+            }
+            if ($txtDlgPid) {
+                $txtDlgPid.Text = if ($curPid -gt 0) { [string]$curPid } else { "None" }
+            }
+
+            $isTransitioning = $curStatus.EndsWith("...")
+            if ($btnDlgStart) {
+                $btnDlgStart.IsEnabled = (-not $isTransitioning -and $curStatus -ne "Running")
+            }
+            if ($btnDlgStop) {
+                $btnDlgStop.IsEnabled = (-not $isTransitioning -and ($curStatus -eq "Running" -or $curStatus -eq "Paused"))
+            }
+            if ($btnDlgRestart) {
+                $btnDlgRestart.IsEnabled = (-not $isTransitioning -and ($curStatus -eq "Running" -or $curStatus -eq "Paused"))
+            }
+        }
+
+        $executeDlgAction = {
+            param([string]$op)
+            $inFlightText = switch ($op) {
+                "Start"   { "Starting..." }
+                "Stop"    { "Stopping..." }
+                "Restart" { "Restarting..." }
+                default   { "$op..." }
+            }
+            &$updateSvcDialogUi $inFlightText
+
+            &$localInvoke $op $targetSvc ({
+                param($res)
+                if ($engineHandle.ServicesMap.ContainsKey($targetSvc.Name)) {
+                    $live = $engineHandle.ServicesMap[$targetSvc.Name]
+                    &$updateSvcDialogUi $live.Status $live.PID
+                } else {
+                    $exp = if ($op -eq "Start") { "Running" } elseif ($op -eq "Stop") { "Stopped" } else { "Running" }
+                    &$updateSvcDialogUi $exp
+                }
+            })
+        }
 
         if ($btnDlgStart) {
-            $btnDlgStart.IsEnabled = $canStart
             $btnDlgStart.add_Click({
-                &$localInvoke "Start" $targetSvc
-                $localSvcWin.Close()
-            }.GetNewClosure())
+                &$executeDlgAction "Start"
+            })
         }
         if ($btnDlgStop) {
-            $btnDlgStop.IsEnabled = $canStop
             $btnDlgStop.add_Click({
-                &$localInvoke "Stop" $targetSvc
-                $localSvcWin.Close()
-            }.GetNewClosure())
+                &$executeDlgAction "Stop"
+            })
         }
         if ($btnDlgRestart) {
-            $btnDlgRestart.IsEnabled = $canRestart
             $btnDlgRestart.add_Click({
-                &$localInvoke "Restart" $targetSvc
-                $localSvcWin.Close()
-            }.GetNewClosure())
+                &$executeDlgAction "Restart"
+            })
         }
         if ($btnDlgClose) {
             $btnDlgClose.add_Click({
                 $localSvcWin.Close()
-            }.GetNewClosure())
+            })
         }
+
+        # Initialize UI button states and status
+        &$updateSvcDialogUi
+
+        # Lightweight background poll so live telemetry updates status and PID automatically
+        $svcTimer = [System.Windows.Threading.DispatcherTimer]::new(
+            [System.Windows.Threading.DispatcherPriority]::Background,
+            $svcWin.Dispatcher
+        )
+        $svcTimer.Interval = [TimeSpan]::FromMilliseconds(1000)
+        $svcTimer.add_Tick({
+            if ($engineHandle.ServicesMap.ContainsKey($targetSvc.Name)) {
+                $live = $engineHandle.ServicesMap[$targetSvc.Name]
+                if ($txtStatus -and -not $txtStatus.Text.EndsWith("...")) {
+                    &$updateSvcDialogUi $live.Status $live.PID
+                }
+            }
+        })
+        $svcTimer.Start()
+
+        $svcWin.add_Closed({
+            if ($svcTimer) { $svcTimer.Stop() }
+        })
 
         [void]$svcWin.ShowDialog()
     }
