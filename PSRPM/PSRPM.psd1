@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.6.2'
+    ModuleVersion     = '1.6.3'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,14 +77,9 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.6.2 - UI Ergonomics, Typography Refinement, Responsive Status Bar & Modeless Safety
-- Persistent Process Action Bar: Integrated persistent bottom action controls (Suspend/Resume, Create Dump, Kill Process, Kill Tree) across all 7 tabs of the Deep Process Inspector.
-- Responsive Status Bar & Overflow Engine: Refactored bottom status bar into elastic left telemetry, scrollable center legend with horizontal wheel support, right-pinned Audit Console, and dynamic auto-overflow button.
-- In-Place Service Control Lifecycle: Maintained Service Details & Dependencies modal open across Start/Stop/Restart operations with live in-flight status transitions and background refresh timers.
-- Typography & Font-Weight Anti-Cascade Hardening: Eliminated accidental bold text cascading across DataGrids in MainWindow, PropertiesWindow, FindHandleWindow, and ServiceDetailWindow, ensuring clean, restrained tabular typography.
-- Modeless Dialog Safety & Crash Prevention: Removed hazardous IsCancel="True" from modeless System Information window and added clean Escape key event dispatch.
-- Process Tree Unrolling: Enhanced service-to-process navigation to traverse and expand collapsed ancestor nodes up to root before selecting target host processes.
-- Launch Options: Added -Dark and -Theme parameters to Start-PSRPM for direct dark-mode and custom theme execution.
+PSRPM v1.6.3 - Automated Release Management Tooling
+- Release Synchronization Tooling: Added tools/Set-ReleaseVersion.ps1 to automate single-command version synchronization across module manifests, changelogs, badges, Help window views, and collector protocol headers.
+- Release Protocol Hardening: Updated release skill to automatically enforce branch reconciliation, 5-asset version synchronization, visual screenshot refresh, and quality gates.
 '@
         }
     }
