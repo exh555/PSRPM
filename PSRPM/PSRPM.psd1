@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.6.1'
+    ModuleVersion     = '1.6.2'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,13 +77,14 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.6.1 - 4-Minute Telemetry History, Dynamic Version Resolution & Handle Dispatch Hardening
-- Extended Telemetry History Depth: Expanded circular ring buffer capacity from 120 samples (2 minutes) to 240 samples (4 minutes) across all 8 system telemetry streams (CPU, Kernel, Commit, RAM, I/O Total, I/O Write, Net Rx, Net Tx) with backward-compatibility aliases.
-- Chart Geometry & UI Window: Dynamically scaled SVG area curve coordinate interpolation for 240 samples on standard 360x120 canvases; updated System Information peak rate label to a 4-minute observation window.
-- Forensic Snapshot Export: Extended JSON forensic export (Ctrl+S) to include full 240-second time series under both History240 and History120 packages.
-- Handle Closure Dispatch & Multi-Threading Hardening: Dispatched handle row removal via WPF Dispatcher to prevent cross-thread collection modification exceptions; guarded bracketed entries against wildcard interpretation errors.
-- Dynamic Module Versioning: Implemented single-source-of-truth version resolution in PSRPM.psm1 loaded directly from PSRPM.psd1; dynamically bound Help & About version badges at runtime.
-- Verification & Test Enhancements: Added automated HelpWindow version synchronization gate in Test-ReleaseReadiness.ps1 and 240-sample buffer cap verification in Test-PSRPMEngine.ps1.
+PSRPM v1.6.2 - UI Ergonomics, Typography Refinement, Responsive Status Bar & Modeless Safety
+- Persistent Process Action Bar: Integrated persistent bottom action controls (Suspend/Resume, Create Dump, Kill Process, Kill Tree) across all 7 tabs of the Deep Process Inspector.
+- Responsive Status Bar & Overflow Engine: Refactored bottom status bar into elastic left telemetry, scrollable center legend with horizontal wheel support, right-pinned Audit Console, and dynamic auto-overflow button.
+- In-Place Service Control Lifecycle: Maintained Service Details & Dependencies modal open across Start/Stop/Restart operations with live in-flight status transitions and background refresh timers.
+- Typography & Font-Weight Anti-Cascade Hardening: Eliminated accidental bold text cascading across DataGrids in MainWindow, PropertiesWindow, FindHandleWindow, and ServiceDetailWindow, ensuring clean, restrained tabular typography.
+- Modeless Dialog Safety & Crash Prevention: Removed hazardous IsCancel="True" from modeless System Information window and added clean Escape key event dispatch.
+- Process Tree Unrolling: Enhanced service-to-process navigation to traverse and expand collapsed ancestor nodes up to root before selecting target host processes.
+- Launch Options: Added -Dark and -Theme parameters to Start-PSRPM for direct dark-mode and custom theme execution.
 '@
         }
     }

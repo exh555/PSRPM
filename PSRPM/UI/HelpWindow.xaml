@@ -69,7 +69,7 @@
         <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="#0284C7" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.6.1" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.6.2" Foreground="White" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -378,7 +378,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
                                         <Border Background="#E0F2FE" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.6.1" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.6.2" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="#475569" FontSize="11" Margin="0,2,0,4"/>

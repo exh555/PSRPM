@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-11-11
+
+### Added
+- **Persistent Bottom Action Bar Across All Inspector Tabs (`PropertiesWindow.xaml`)**:
+  - Pinned core process actions (`Suspend`/`Resume`, `Create Dump`, `Kill Process`, `Kill Tree`) to the bottom dock of the Process Properties Inspector, keeping them accessible across all 7 tabs (Image, Performance, DLLs, Handles, TCP/IP, Services, Environment).
+- **Responsive Status Bar Layout & Overflow Indicator (`MainWindow.xaml`, `PSRPM.psm1`)**:
+  - Restructured status bar into a 3-column elastic grid: left telemetry clamped to `440px` with ellipsis truncation, center scrollable legend with horizontal mouse-wheel panning, and right-pinned `Audit Console (Ctrl+L)` button.
+  - Implemented automatic overflow detection with dynamic `[>> More]` / `[<< Start]` button appearing when window width is narrow.
+- **Direct Dark Theme & Palette Launch Parameters (`PSRPM.psm1`, `PRODUCT.md`)**:
+  - Added `-Dark` switch and `-Theme <String>` parameter to `Start-PSRPM` and `Start-RemoteProcessManager`, allowing immediate launch into Precision Dark or custom palettes.
+
+### Changed
+- **Modern Segmented Workspace Tabs & Mini Sparkline Cards (`MainWindow.xaml`)**:
+  - Elevated Processes and Services tab headers with clean segmented indicators.
+  - Styled CPU, Commit Charge, and Physical RAM toolbar sparklines with rounded borders and hover states.
+- **In-Place Service Actions Lifecycle (`ServiceDetailWindow.xaml`, `PSRPM.psm1`)**:
+  - Kept Service Details & Dependencies modal open when clicking Start, Stop, or Restart Service, displaying amber in-flight badges (`STARTING...`, `STOPPING...`, `RESTARTING...`) and automatically refreshing status in place via a 1-second timer.
+
+### Fixed
+- **Typography & Font-Weight Anti-Cascade Hardening (`MainWindow.xaml`, `PropertiesWindow.xaml`, `FindHandleWindow.xaml`, `ServiceDetailWindow.xaml`)**:
+  - Eliminated accidental bold font-weight inheritance caused by WPF `TabItem` dependency property cascading.
+  - Removed hardcoded `FontWeight="SemiBold"` on columns in Find Handle (Process, Type) and Properties (DLL Name, Handle Type, Service Name, Variable Name).
+  - Explicitly set `FontWeight="Normal"` and `FontSize="12"` on `DataGridRow`, `RightTabularText`, and `EllipsisCellText` across all DataGrids.
+- **Modeless Window Crash Hazard (`SystemInfoWindow.xaml`, `PSRPM.psm1`)**:
+  - Removed `IsCancel="True"` on `BtnSysInfoOk` in modeless System Information window, preventing `InvalidOperationException` when pressing Escape.
+  - Replaced hardcoded `#FFFFFF` button background with dynamic theme brush and wired an explicit Escape `KeyDown` handler to close cleanly.
+- **Service-to-Process Parent Tree Expansion (`PSRPM.psm1`)**:
+  - Fixed "Select Host Process in Tree" action by traversing and expanding collapsed parent nodes up to root before selecting target host processes in the tree-grid.
+
+
 ## [1.6.1] - 2026-11-08
 
 ### Added
