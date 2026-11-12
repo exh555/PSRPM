@@ -3,34 +3,46 @@
         Title="System Information"
         Width="790" Height="640" MinWidth="680" MinHeight="540"
         WindowStartupLocation="CenterOwner"
-        Background="#F4F5F7" Foreground="#0F172A"
+        Background="{DynamicResource BrushWindowBg}" Foreground="{DynamicResource BrushTextPrimary}"
         FontFamily="Segoe UI" FontSize="11.5"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType">
 
     <Window.Resources>
+        <!-- Default Clean Light Fallback Brushes -->
+        <SolidColorBrush x:Key="BrushWindowBg" Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="BrushToolbarBg" Color="#F1F5F9"/>
+        <SolidColorBrush x:Key="BrushSurfaceBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushHeaderBg" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushSparkBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushSparkBorder" Color="#94A3B8"/>
+
         <Style x:Key="LblMuted" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,1.5,8,1.5"/>
         </Style>
         <Style x:Key="ValText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,1.5,0,1.5"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style x:Key="ValNum" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="Margin" Value="8,1.5,0,1.5"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
         </Style>
         <Style x:Key="ChartBorder" TargetType="Border">
-            <Setter Property="Background" Value="#ECEEF1"/>
-            <Setter Property="BorderBrush" Value="#9CA3AF"/>
+            <Setter Property="Background" Value="{DynamicResource BrushSparkBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushSparkBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
     </Window.Resources>
@@ -41,7 +53,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="SysInfoTabControl" Grid.Row="0" Background="#FFFFFF" BorderBrush="#CBD5E1">
+        <TabControl x:Name="SysInfoTabControl" Grid.Row="0" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}">
             <!-- TAB 1: SUMMARY -->
             <TabItem Header="Summary" Padding="10,3">
                 <Grid Margin="10,8">
@@ -59,7 +71,7 @@
                             <ColumnDefinition Width="1*"/>
                         </Grid.ColumnDefinitions>
 
-                        <GroupBox Grid.Column="0" Header="System" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="0" Header="System" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="92"/>
@@ -74,26 +86,26 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Machine" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMachine}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMachine}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Host" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwHost}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwHost}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Operating" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwOS}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwOS}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="CPU" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HwCpuName}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HwCpuName}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Architecture" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding HwArch}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding HwArch}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="5" Grid.Column="0" Text="Cores" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding HwCoresText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding HwCoresText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Grid.Column="2" Header="Storage" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="2" Header="Storage" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="72"/>
@@ -110,24 +122,24 @@
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Memory" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMemoryGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMemoryGBText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
                                 <TextBlock Grid.Row="0" Grid.Column="3" Text="Commit Lim" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="0" Grid.Column="4" Text="{Binding HwCommitLimitGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="0" Grid.Column="4" Text="{Binding HwCommitLimitGBText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Boot" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwBootDrive}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwBootDrive}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
                                 <TextBlock Grid.Row="1" Grid.Column="3" Text="Type" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="4" Text="{Binding HwDriveType}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="4" Text="{Binding HwDriveType}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Capacity" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwCapacityGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwCapacityGBText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
                                 <TextBlock Grid.Row="2" Grid.Column="3" Text="Available" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="4" Text="{Binding HwAvailableGBText}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="4" Text="{Binding HwAvailableGBText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="File System" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HwFileSystem}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HwFileSystem}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
                                 <TextBlock Grid.Row="3" Grid.Column="3" Text="Read-Only" Style="{StaticResource LblMuted}"/>
-                                <TextBlock Grid.Row="3" Grid.Column="4" Text="{Binding HwReadOnly}" Style="{StaticResource ValText}" Background="#F8FAFC" Padding="4,0"/>
+                                <TextBlock Grid.Row="3" Grid.Column="4" Text="{Binding HwReadOnly}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
                             </Grid>
                         </GroupBox>
                     </Grid>
@@ -416,7 +428,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <GroupBox Grid.Column="0" Header="Totals" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="0" Header="Totals" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -436,7 +448,7 @@
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Grid.Column="2" Header="CPU" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="2" Header="CPU" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -456,7 +468,7 @@
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Grid.Column="4" Header="Topology" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="4" Header="Topology" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -582,7 +594,7 @@
 
                         <!-- Column 0: Commit Charge (K) + Physical Memory (K) -->
                         <StackPanel Grid.Column="0">
-                            <GroupBox Header="Commit Charge (K)" BorderBrush="#E2E8F0" Padding="8,4" Margin="0,0,0,6">
+                            <GroupBox Header="Commit Charge (K)" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4" Margin="0,0,0,6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -610,7 +622,7 @@
                                 </Grid>
                             </GroupBox>
 
-                            <GroupBox Header="Physical Memory (K)" BorderBrush="#E2E8F0" Padding="8,4">
+                            <GroupBox Header="Physical Memory (K)" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -636,7 +648,7 @@
 
                         <!-- Column 2: Kernel Memory (K) -->
                         <StackPanel Grid.Column="2">
-                            <GroupBox Header="Kernel Memory (K)" BorderBrush="#E2E8F0" Padding="8,4" Margin="0,0,0,6">
+                            <GroupBox Header="Kernel Memory (K)" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4" Margin="0,0,0,6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -664,7 +676,7 @@
 
                         <!-- Column 4: Paging -->
                         <StackPanel Grid.Column="4">
-                            <GroupBox Header="Paging" BorderBrush="#E2E8F0" Padding="8,4">
+                            <GroupBox Header="Paging" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -749,7 +761,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <GroupBox Grid.Column="0" Header="I/O Transfer Delta (Per Tick)" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="0" Header="I/O Transfer Delta (Per Tick)" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -772,7 +784,7 @@
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Grid.Column="2" Header="I/O Scaling &amp; Session Totals" BorderBrush="#E2E8F0" Padding="8,4">
+                        <GroupBox Grid.Column="2" Header="I/O Scaling &amp; Session Totals" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

@@ -35,7 +35,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ### 3. System Information Dashboard - Summary & Hardware
 **File**: [`03_system_information_dashboard.png`](03_system_information_dashboard.png) (1840 x 1400 @ 2x DPI)
 - Hardware metadata: `Dell PowerEdge R750 Enterprise Cloud Node` (16 Cores, 32 Threads, 64 GB RAM)
-- 120-sample real-time CPU chart with kernel time red overlay and green grid
+- 240-sample real-time CPU chart with kernel time red overlay and green grid
 - Memory commit charge gauge, physical memory meters, and I/O delta charts
 - Kernel performance counters: Context switches/s, Interrupts/s, System calls/s, DPCs/s, Page faults/s
 

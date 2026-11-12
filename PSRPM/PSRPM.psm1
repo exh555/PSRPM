@@ -431,10 +431,12 @@ function Start-PSRPM {
         }
         if ($updatePauseUi) { &$updatePauseUi ([bool]$stateContainer.IsPaused) }
 
-        if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded) {
-            foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
-                if ($window.Resources.Contains($key)) {
-                    $script:ActiveFindHandleWin.Resources[$key] = $window.Resources[$key]
+        foreach ($activeModal in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
+            if ($activeModal -and $activeModal.IsLoaded) {
+                foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+                    if ($window.Resources.Contains($key)) {
+                        $activeModal.Resources[$key] = $window.Resources[$key]
+                    }
                 }
             }
         }
@@ -1503,6 +1505,15 @@ function Start-PSRPM {
         $msProp.Close()
         $propWin.Owner = $window
         if ($appIconFrame) { $propWin.Icon = $appIconFrame }
+
+        # Propagate active theme resources from main window
+        foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+            if ($window.Resources.Contains($key)) {
+                $propWin.Resources[$key] = $window.Resources[$key]
+            }
+        }
+        $script:ActivePropWin = $propWin
+        $propWin.add_Closed({ $script:ActivePropWin = $null })
 
         $targetPid = [int]$selectedVm.PID
         $propWin.Title = "$($selectedVm.Name):$targetPid Properties [$($stateContainer.TargetDisplayName)]"
@@ -2628,6 +2639,13 @@ function Start-PSRPM {
         if ($appIconFrame) { $sysWin.Icon = $appIconFrame }
         $sysWin.Title       = "System Information [$($stateContainer.TargetDisplayName)]"
         $sysWin.DataContext = $activeSumm
+
+        # Propagate active theme resources from main window
+        foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+            if ($window.Resources.Contains($key)) {
+                $sysWin.Resources[$key] = $window.Resources[$key]
+            }
+        }
 
         $activeSumm.IsSysInfoOpen = $true
         $activeSumm.RefreshSysInfoGraphs()
