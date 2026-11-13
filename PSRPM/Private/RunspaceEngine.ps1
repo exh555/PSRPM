@@ -81,6 +81,11 @@ function Start-PSRPMEngine {
         LastErr             = $null
         VerboseTelemetryLog = $true
         IsStopping          = $false
+        EnableNetEtw        = $false
+        NetEtwCap           = 0
+        NetEtwEventsPerSec  = 0
+        ResetNetBreaker     = $false
+        OnNetEtwStateChanged = $null
         LastSampleUtcTicks  = 0L
         TelemetryAgeMs      = 0
         FreshnessState      = "Fresh"
@@ -141,11 +146,32 @@ function Start-PSRPMEngine {
             ReconnectAttempts   = 0
             NextReconnectTicks  = 0L
             BackoffSec          = 1
+            NetEtwStarted       = $false
         }
         $activeTabId = $initTabId
 
         $lastPollUtcTicks = 0L
         $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
+        $prevPausedState = [bool]$stateContainer.IsPaused
+
+        $stopSessionNetEtw = {
+            param($sessObj)
+            if (-not $sessObj -or -not $sessObj.NetEtwStarted) { return }
+            try {
+                if ($sessObj.IsLocal) {
+                    if ($sessObj.CollectorSb) {
+                        & $sessObj.CollectorSb $false $false "Stop" | Out-Null
+                    }
+                } elseif ($sessObj.Session -and $sessObj.Session.State -eq 'Opened' -and $sessObj.CollectorInitialized) {
+                    Invoke-Command -Session $sessObj.Session -ScriptBlock {
+                        if ($script:PSRPMCollectorInvoker) {
+                            & $script:PSRPMCollectorInvoker $false $false "Stop" | Out-Null
+                        }
+                    } -ErrorAction SilentlyContinue
+                }
+            } catch {}
+            $sessObj.NetEtwStarted = $false
+        }
 
         $setFullSync = {
             param([bool]$val)
@@ -271,6 +297,66 @@ function Start-PSRPMEngine {
                             })
                         }
 
+                        "BatchProcessAction" {
+                            $actName  = [string]$cmd.Action
+                            $prio     = if ($cmd.Priority) { [string]$cmd.Priority } else { "Normal" }
+                            $dType    = if ($cmd.DumpType) { [string]$cmd.DumpType } else { "Mini" }
+                            $targets  = @($cmd.Targets)
+                            $useLocal = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
+                            $useSess  = if ($activeSessObj) { $activeSessObj.Session } else { $session }
+
+                            $tPids  = [int[]]::new($targets.Count)
+                            $tNames = [string[]]::new($targets.Count)
+                            $tTimes = [long[]]::new($targets.Count)
+                            for ($ti = 0; $ti -lt $targets.Count; $ti++) {
+                                $tObj = $targets[$ti]
+                                $tPids[$ti]  = [int]$tObj.TargetPid
+                                $tNames[$ti] = [string]$tObj.ExpectedName
+                                $tTimes[$ti] = if ($tObj.ExpectedCreateTime) { [long]$tObj.ExpectedCreateTime } else { 0L }
+                            }
+
+                            $jsonRes = if ($useLocal) {
+                                $resItems = [System.Collections.Generic.List[string]]::new()
+                                for ($ti = 0; $ti -lt $tPids.Count; $ti++) {
+                                    $oneJson = & $actionSb $actName $tPids[$ti] $tNames[$ti] "" $prio "" $dType $tTimes[$ti]
+                                    if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
+                                        [void]$resItems.Add([string]$oneJson)
+                                    }
+                                }
+                                "[" + ($resItems -join ",") + "]"
+                            } else {
+                                if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($code)
+                                        $script:PSRPMActionInvoker = [scriptblock]::Create($code)
+                                    } -ArgumentList @($actionCode) -ErrorAction Stop
+                                    $activeSessObj.ActionInitialized = $true
+                                }
+                                Invoke-Command -Session $useSess -ScriptBlock {
+                                    param($a, $pids, $names, $times, $pr, $dt)
+                                    $resItems = [System.Collections.Generic.List[string]]::new()
+                                    if ($script:PSRPMActionInvoker) {
+                                        for ($ti = 0; $ti -lt $pids.Count; $ti++) {
+                                            $oneJson = & $script:PSRPMActionInvoker $a ([int]$pids[$ti]) ([string]$names[$ti]) "" $pr "" $dt ([long]$times[$ti])
+                                            if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
+                                                [void]$resItems.Add([string]$oneJson)
+                                            }
+                                        }
+                                    }
+                                    "[" + ($resItems -join ",") + "]"
+                                } -ArgumentList @($actName, $tPids, $tNames, $tTimes, $prio, $dType) -ErrorAction Stop
+                            }
+                            $swCmd.Stop()
+                            $stateContainer.ResultQueue.Enqueue(@{
+                                RequestId   = $cmd.RequestId
+                                CommandType = "BatchProcessAction"
+                                Action      = $actName
+                                Success     = $true
+                                PayloadJson = [string]$jsonRes
+                                ElapsedMs   = $swCmd.ElapsedMilliseconds
+                            })
+                        }
+
                         "FindHandles" {
                             $query       = [string]$cmd.Query
                             $useLocal    = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
@@ -354,13 +440,18 @@ function Start-PSRPMEngine {
                                 ReconnectAttempts   = 0
                                 NextReconnectTicks  = 0L
                                 BackoffSec          = 1
+                                NetEtwStarted       = $false
                             }
 
+                            if ($sessions.ContainsKey($activeTabId) -and $activeTabId -ne $newTabId) {
+                                &$stopSessionNetEtw $sessions[$activeTabId]
+                            }
                             $activeTabId = $newTabId
                             $stateContainer.ActiveTabId       = $newTabId
                             $stateContainer.TargetDisplayName = $targetName
                             $stateContainer.TransportBadge    = $badge
                             $stateContainer.ConnectionState   = if ($newLocal) { "LocalMode" } else { "Connected" }
+                            $stateContainer.EnableNetEtw      = $false
                             &$setFullSync $true
 
                             $swCmd.Stop()
@@ -380,12 +471,24 @@ function Start-PSRPMEngine {
                         "SelectTabSession" {
                             $selTabId = [string]$cmd.TabId
                             if ($sessions.ContainsKey($selTabId)) {
+                                if ($activeTabId -ne $selTabId -and $sessions.ContainsKey($activeTabId)) {
+                                    &$stopSessionNetEtw $sessions[$activeTabId]
+                                }
                                 $activeTabId = $selTabId
                                 $curr = $sessions[$selTabId]
                                 $stateContainer.ActiveTabId       = $selTabId
                                 $stateContainer.TargetDisplayName = $curr.Target
                                 $stateContainer.TransportBadge    = $curr.Badge
                                 $stateContainer.ConnectionState   = $curr.ConnState
+                                if ($cmd.ContainsKey('EnableNetEtw')) {
+                                    $stateContainer.EnableNetEtw = [bool]$cmd.EnableNetEtw
+                                }
+                                if ($cmd.ContainsKey('NetEtwCap')) {
+                                    $stateContainer.NetEtwCap = [int]$cmd.NetEtwCap
+                                }
+                                if ($cmd.ContainsKey('NetEtwEventsPerSec')) {
+                                    $stateContainer.NetEtwEventsPerSec = [int]$cmd.NetEtwEventsPerSec
+                                }
                                 &$setFullSync ([bool]$cmd.ForceFullSync)
                             }
                             $swCmd.Stop()
@@ -397,10 +500,54 @@ function Start-PSRPMEngine {
                             })
                         }
 
+                        "SetNetEtw" {
+                            $reqEnable = [bool]$cmd.Enable
+                            $reqReset  = if ($cmd.ContainsKey('ResetBreaker')) { [bool]$cmd.ResetBreaker } else { $false }
+                            $stateContainer.EnableNetEtw = $reqEnable
+                            if ($reqReset) {
+                                $stateContainer.ResetNetBreaker = $true
+                                if ($stateContainer.NetEtwCap -eq 2) { $stateContainer.NetEtwCap = 0 }
+                            }
+                            if (-not $reqEnable) {
+                                if ($sessions.ContainsKey($activeTabId)) {
+                                    &$stopSessionNetEtw $sessions[$activeTabId]
+                                }
+                                $stateContainer.NetEtwCap = 0
+                                $stateContainer.NetEtwEventsPerSec = 0
+                                $stateContainer.ResetNetBreaker = $false
+                            } else {
+                                &$setFullSync $false
+                                $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
+                            }
+                            $swCmd.Stop()
+                            $stateContainer.ResultQueue.Enqueue(@{
+                                RequestId   = $cmd.RequestId
+                                CommandType = "SetNetEtw"
+                                Success     = $true
+                                Enabled     = $reqEnable
+                            })
+                        }
+
+                        "StopNetEtw" {
+                            $stateContainer.EnableNetEtw = $false
+                            foreach ($sItem in $sessions.Values) {
+                                &$stopSessionNetEtw $sItem
+                            }
+                            $stateContainer.NetEtwCap = 0
+                            $stateContainer.NetEtwEventsPerSec = 0
+                            $swCmd.Stop()
+                            $stateContainer.ResultQueue.Enqueue(@{
+                                RequestId   = $cmd.RequestId
+                                CommandType = "StopNetEtw"
+                                Success     = $true
+                            })
+                        }
+
                         "CloseTabSession" {
                             $closeTabId = [string]$cmd.TabId
                             if ($sessions.ContainsKey($closeTabId)) {
                                 $sessToClose = $sessions[$closeTabId]
+                                &$stopSessionNetEtw $sessToClose
                                 if ($sessToClose.Session) {
                                     Remove-PSSession -Session $sessToClose.Session -ErrorAction SilentlyContinue
                                 }
@@ -436,6 +583,9 @@ function Start-PSRPMEngine {
                             $newPort  = [int]$cmd.Port
                             $newSsl   = [bool]$cmd.UseSSL
 
+                            if ($sessions.ContainsKey($activeTabId)) {
+                                &$stopSessionNetEtw $sessions[$activeTabId]
+                            }
                             $oldSess = if ($sessions.ContainsKey($activeTabId)) { $sessions[$activeTabId].Session } else { $null }
                             if ($oldSess) {
                                 Remove-PSSession -Session $oldSess -ErrorAction SilentlyContinue
@@ -488,7 +638,9 @@ function Start-PSRPMEngine {
                                 ReconnectAttempts   = 0
                                 NextReconnectTicks  = 0L
                                 BackoffSec          = 1
+                                NetEtwStarted       = $false
                             }
+                            $stateContainer.EnableNetEtw = $false
 
                             $stateContainer.ClearHostMaps = $true
                             &$setFullSync $true
@@ -519,12 +671,19 @@ function Start-PSRPMEngine {
             $isDue = ($nowTicks -ge $nextScheduledUtcTicks) -or [bool]$stateContainer.ForceFullSync
             $canPollSession = $sessions.ContainsKey($activeTabId)
             $activeSessObj = if ($canPollSession) { $sessions[$activeTabId] } else { $null }
+
+            $curPaused = [bool]$stateContainer.IsPaused
+            if ($curPaused -and -not $prevPausedState -and $activeSessObj -and $activeSessObj.NetEtwStarted) {
+                &$stopSessionNetEtw $activeSessObj
+            }
+            $prevPausedState = $curPaused
+
             $isReconnectingBackoff = $false
             if ($activeSessObj -and -not $activeSessObj.IsLocal -and $activeSessObj.ConnState -eq "Reconnecting" -and $nowTicks -lt $activeSessObj.NextReconnectTicks) {
                 $isReconnectingBackoff = $true
             }
 
-            if (-not $stateContainer.IsPaused -and $activeSessObj -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
+            if (-not $curPaused -and $activeSessObj -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
                 $swPoll = [System.Diagnostics.Stopwatch]::StartNew()
                 try {
                     [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
@@ -535,8 +694,15 @@ function Start-PSRPMEngine {
                         [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
                     }
 
+                    $effEnableNetEtw = [bool]$stateContainer.EnableNetEtw
+                    $netEtwAction = if ($stateContainer.ResetNetBreaker) {
+                        $stateContainer.ResetNetBreaker = $false
+                        "ResetBreaker"
+                    } else { "" }
+                    if ($effEnableNetEtw) { $activeSessObj.NetEtwStarted = $true }
+
                     $rawResult = if ($activeSessObj.IsLocal) {
-                        & $activeSessObj.CollectorSb $forceFull
+                        & $activeSessObj.CollectorSb $forceFull $effEnableNetEtw $netEtwAction
                     } else {
                         $sRef = $activeSessObj.Session
                         if (-not $sRef -or $sRef.State -ne 'Opened') {
@@ -551,13 +717,13 @@ function Start-PSRPMEngine {
                         }
 
                         $resTick = Invoke-Command -Session $sRef -ScriptBlock {
-                            param($f)
+                            param($f, $enNet, $netAct)
                             if ($script:PSRPMCollectorInvoker) {
-                                & $script:PSRPMCollectorInvoker $f
+                                & $script:PSRPMCollectorInvoker $f $enNet $netAct
                             } else {
                                 $null
                             }
-                        } -ArgumentList @($forceFull) -ErrorAction Stop
+                        } -ArgumentList @($forceFull, $effEnableNetEtw, $netEtwAction) -ErrorAction Stop
 
                         if (-not $resTick) {
                             $activeSessObj.CollectorInitialized = $false
@@ -690,6 +856,7 @@ function Start-PSRPMEngine {
         }
         } finally {
             foreach ($sItem in $sessions.Values) {
+                &$stopSessionNetEtw $sItem
                 if ($sItem.Session) {
                     Remove-PSSession -Session $sItem.Session -ErrorAction SilentlyContinue
                 }
@@ -774,7 +941,19 @@ function Start-PSRPMEngine {
             [System.Windows.Controls.DataGrid]$grid
         )
 
-        $savedSelected = if ($grid) { $grid.SelectedItem } else { $null }
+        $savedPrimary = $null
+        $savedMulti = $null
+        $isMultiGrid = $false
+        if ($grid) {
+            $savedPrimary = $grid.SelectedItem
+            if ($grid.SelectionMode -ne [System.Windows.Controls.DataGridSelectionMode]::Single -and $null -ne $grid.SelectedItems -and $grid.SelectedItems.Count -gt 0) {
+                $isMultiGrid = $true
+                $savedMulti = [System.Collections.Generic.List[Object]]::new($grid.SelectedItems.Count)
+                foreach ($selObj in @($grid.SelectedItems)) {
+                    if ($null -ne $selObj) { [void]$savedMulti.Add($selObj) }
+                }
+            }
+        }
 
         $targetSet = [System.Collections.Generic.HashSet[Object]]::new()
         foreach ($item in $desiredList) { [void]$targetSet.Add($item) }
@@ -805,8 +984,43 @@ function Start-PSRPMEngine {
             $collection.RemoveAt($collection.Count - 1)
         }
 
-        if ($grid -and $savedSelected -and $targetSet.Contains($savedSelected) -and $grid.SelectedItem -ne $savedSelected) {
-            $grid.SelectedItem = $savedSelected
+        if ($grid) {
+            if ($isMultiGrid -and $savedMulti -and $savedMulti.Count -gt 0) {
+                $surviving = [System.Collections.Generic.List[Object]]::new()
+                $survivingSet = [System.Collections.Generic.HashSet[Object]]::new()
+                foreach ($s in $savedMulti) {
+                    if ($targetSet.Contains($s) -and $survivingSet.Add($s)) {
+                        [void]$surviving.Add($s)
+                    }
+                }
+
+                $currSel = $grid.SelectedItems
+                $needsRestore = ($currSel.Count -ne $surviving.Count)
+                if (-not $needsRestore) {
+                    foreach ($s in $surviving) {
+                        if (-not $currSel.Contains($s)) {
+                            $needsRestore = $true
+                            break
+                        }
+                    }
+                }
+
+                if ($needsRestore) {
+                    for ($si = $currSel.Count - 1; $si -ge 0; $si--) {
+                        $curItem = $currSel[$si]
+                        if (-not $survivingSet.Contains($curItem)) {
+                            $currSel.RemoveAt($si)
+                        }
+                    }
+                    foreach ($s in $surviving) {
+                        if (-not $currSel.Contains($s)) {
+                            [void]$currSel.Add($s)
+                        }
+                    }
+                }
+            } elseif ($savedPrimary -and $targetSet.Contains($savedPrimary) -and $grid.SelectedItem -ne $savedPrimary) {
+                $grid.SelectedItem = $savedPrimary
+            }
         }
     }.GetNewClosure()
 
@@ -816,14 +1030,21 @@ function Start-PSRPMEngine {
 
     $treeCpuVisited = [System.Collections.Generic.HashSet[int]]::new()
     $recalculateTreeCpu = {
+        $netTreeActive = ([int]$stateContainer.NetEtwCap -eq 1)
         foreach ($kvp in $processMap.GetEnumerator()) {
             $kvp.Value.PendingTreeCPU = $kvp.Value.CPU
+            if ($netTreeActive) {
+                $kvp.Value.PendingTreeNetRx = $kvp.Value.NetRxBps
+                $kvp.Value.PendingTreeNetTx = $kvp.Value.NetTxBps
+            }
         }
 
         foreach ($kvp in $processMap.GetEnumerator()) {
             $vm = $kvp.Value
             $ownCpu = $vm.CPU
-            if ($ownCpu -le 0.0) { continue }
+            $ownRx  = if ($netTreeActive) { $vm.NetRxBps } else { 0L }
+            $ownTx  = if ($netTreeActive) { $vm.NetTxBps } else { 0L }
+            if ($ownCpu -le 0.0 -and $ownRx -le 0L -and $ownTx -le 0L) { continue }
 
             $treeCpuVisited.Clear()
             [void]$treeCpuVisited.Add($vm.PID)
@@ -836,7 +1057,11 @@ function Start-PSRPMEngine {
                 if ($parentVm.CreateTime -gt 0 -and $curr.CreateTime -gt 0 -and $parentVm.CreateTime -gt $curr.CreateTime) {
                     break
                 }
-                $parentVm.PendingTreeCPU += $ownCpu
+                if ($ownCpu -gt 0.0) { $parentVm.PendingTreeCPU += $ownCpu }
+                if ($netTreeActive) {
+                    if ($ownRx -gt 0L) { $parentVm.PendingTreeNetRx += $ownRx }
+                    if ($ownTx -gt 0L) { $parentVm.PendingTreeNetTx += $ownTx }
+                }
                 $curr = $parentVm
                 $guard++
             }
@@ -845,6 +1070,9 @@ function Start-PSRPMEngine {
         foreach ($kvp in $processMap.GetEnumerator()) {
             $vm = $kvp.Value
             $vm.UpdateTreeCpu($vm.PendingTreeCPU)
+            if ($netTreeActive) {
+                $vm.UpdateTreeNetwork($vm.PendingTreeNetRx, $vm.PendingTreeNetTx)
+            }
         }
     }.GetNewClosure()
 
@@ -992,7 +1220,7 @@ function Start-PSRPMEngine {
         }
 
         # Fast Array.Sort helper (avoids PowerShell pipeline Sort-Object overhead)
-        $isNumericSort = $sortProp -in @("PID", "CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles")
+        $isNumericSort = $sortProp -in @("PID", "CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
         $sortNodes = {
             param($list)
             $cnt = $list.Count
@@ -1001,13 +1229,19 @@ function Start-PSRPMEngine {
             if ($isNumericSort) {
                 $keys = [double[]]::new($cnt)
                 switch ($sortProp) {
-                    "CPU"          { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].CPU } }
-                    "TreeCPU"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeCPU } }
-                    "MemoryBytes"  { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].MemoryBytes } }
-                    "PrivateBytes" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PrivateBytes } }
-                    "Threads"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Threads } }
-                    "Handles"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Handles } }
-                    default        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PID } }
+                    "CPU"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].CPU } }
+                    "TreeCPU"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeCPU } }
+                    "NetTotalBps"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].NetTotalBps } }
+                    "TreeNetTotalBps" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeNetTotalBps } }
+                    "NetRxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].NetRxBps } }
+                    "NetTxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].NetTxBps } }
+                    "TreeNetRxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeNetRxBps } }
+                    "TreeNetTxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeNetTxBps } }
+                    "MemoryBytes"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].MemoryBytes } }
+                    "PrivateBytes"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PrivateBytes } }
+                    "Threads"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Threads } }
+                    "Handles"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Handles } }
+                    default           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PID } }
                 }
                 [Array]::Sort([Array]$keys, [Array]$arr)
                 if ($sortDesc) {
@@ -1313,6 +1547,45 @@ function Start-PSRPMEngine {
             $enableCatHighlights = if ($stateContainer.ContainsKey('EnableCategoryHighlights')) { [bool]$stateContainer.EnableCategoryHighlights } else { $true }
             $structureChanged = $false
 
+            # Opt-In Kernel Network ETW Status Transition
+            $prevNetCap = [int]$stateContainer.NetEtwCap
+            $prevNetEv  = [int]$stateContainer.NetEtwEventsPerSec
+            $newNetCap  = if ($data.ContainsKey('netCap')) { [int]$data['netCap'] } else { 0 }
+            $newNetEv   = if ($data.ContainsKey('netEv'))  { [int]$data['netEv'] }  else { 0 }
+            $stateContainer.NetEtwCap = $newNetCap
+            $stateContainer.NetEtwEventsPerSec = $newNetEv
+
+            if ($prevNetCap -ne $newNetCap) {
+                if ($newNetCap -ne 1) {
+                    foreach ($kvp in $processMap.GetEnumerator()) {
+                        $kvp.Value.UpdateNetwork(0L, 0L)
+                        $kvp.Value.UpdateTreeNetwork(0L, 0L)
+                    }
+                    if ($newNetCap -in @(2, 3, 4)) {
+                        $stateContainer.EnableNetEtw = $false
+                    }
+                    $structureChanged = $true
+                }
+                if ($LogConsole) {
+                    $tsNet = (Get-Date).ToString("HH:mm:ss.fff")
+                    if ($newNetCap -eq 1) {
+                        &$appendLogSafe "[$tsNet] [NET-ETW] Enabled per-process kernel network monitoring (Microsoft-Windows-Kernel-Network).`r`n"
+                    } elseif ($newNetCap -eq 2) {
+                        &$appendLogSafe "[$tsNet] [NET-ETW] [WARN] Circuit breaker tripped ($newNetEv ev/s > 25,000/s threshold). Remote ETW session auto-paused.`r`n"
+                    } elseif ($newNetCap -eq 3) {
+                        &$appendLogSafe "[$tsNet] [NET-ETW] [INFO] Access denied starting ETW trace (Tier 1 fallback: system-wide NET rate active).`r`n"
+                    } elseif ($newNetCap -eq 4) {
+                        $errSuffix = if ($data.ContainsKey('netErr') -and -not [string]::IsNullOrWhiteSpace([string]$data['netErr'])) { " ($($data['netErr']))" } else { "" }
+                        &$appendLogSafe "[$tsNet] [NET-ETW] [WARN] Kernel network ETW session unavailable on target host${errSuffix}.`r`n"
+                    } elseif ($prevNetCap -eq 1) {
+                        &$appendLogSafe "[$tsNet] [NET-ETW] Disabled per-process kernel network monitoring.`r`n"
+                    }
+                }
+            }
+            if (($prevNetCap -ne $newNetCap -or ($newNetCap -eq 1 -and $prevNetEv -ne $newNetEv)) -and $stateContainer.OnNetEtwStateChanged) {
+                & $stateContainer.OnNetEtwStateChanged $newNetCap $newNetEv
+            }
+
             # A. Clear Previous Tick's 1-Tick Lifecycle Flashes (New -> Normal, Exiting -> Remove)
             $exitingPidsToRemove = [System.Collections.Generic.List[int]]::new()
             foreach ($kvp in $processMap.GetEnumerator()) {
@@ -1338,6 +1611,7 @@ function Start-PSRPMEngine {
                         $exitedLogNames.Add("$($deadVm.Name) ($deadPidInt)")
                         $deadVm.SetLifecycleState(2)
                         $deadVm.UpdateDynamic(0.0, $deadVm.MemoryBytes, $deadVm.PrivateBytes, 0, 0, 0)
+                        $deadVm.UpdateNetwork(0L, 0L)
                     }
                 }
             }
@@ -1484,7 +1758,7 @@ function Start-PSRPMEngine {
                 }
             }
 
-            # E. Ingest Differential Dynamic Tuples: [pid, cpu, wsBytes, privBytes, threads, handles, statusFlags]
+            # E. Ingest Differential Dynamic Tuples: [pid, cpu, wsBytes, privBytes, threads, handles, statusFlags (, netRxBps, netTxBps)]
             $dynArr = $data['dyn']
             if ($dynArr -and $dynArr.Count -gt 0) {
                 foreach ($tuple in $dynArr) {
@@ -1499,6 +1773,9 @@ function Start-PSRPMEngine {
                             [int]$tuple[5],
                             [int]$tuple[6]
                         )
+                        if ($tuple.Count -ge 9 -and $newNetCap -eq 1) {
+                            $vm.UpdateNetwork([long]$tuple[7], [long]$tuple[8])
+                        }
                     }
                 }
             }
@@ -1564,7 +1841,13 @@ function Start-PSRPMEngine {
 
                 if ($statusText) {
                     $netTag = if ($curSummaryVm.NetThroughputFormatted -and $curSummaryVm.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($curSummaryVm.NetThroughputFormatted)" } else { "" }
-                    $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag | Wire: $($wireKB.ToString('F2')) KB ($($stateContainer.PollLatencyMs) ms)"
+                    $etwTag = switch ($newNetCap) {
+                        1 { " | Net ETW: $newNetEv/s" }
+                        2 { " | Net ETW: AUTO-PAUSED" }
+                        3 { " | Net ETW: NON-ADMIN" }
+                        default { "" }
+                    }
+                    $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag$etwTag | Wire: $($wireKB.ToString('F2')) KB ($($stateContainer.PollLatencyMs) ms)"
                     $stateContainer.LastStatusText = $telemMsg
                     if ($stateContainer.IsPaused) {
                         $statusText.Text = "[PAUSED] $telemMsg"
@@ -1604,7 +1887,8 @@ function Start-PSRPMEngine {
             }
 
             # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting)
-            $needsOrderPass = $structureChanged -or (-not $stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles")) -or ($stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles"))
+            $dynSortProps = @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+            $needsOrderPass = $structureChanged -or ($stateContainer.SortProperty -in $dynSortProps)
             if ($needsOrderPass -or $ProcessCollection.Count -eq 0) {
                 & $updateViewCollections
             } elseif (($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
@@ -1655,6 +1939,7 @@ function Start-PSRPMEngine {
         SendCommand         = $enqueueCommand
         SetSummaryViewModel = $setSummaryViewModel
         ReconcileServices   = $reconcileServices
+        ReconcileCollection = $reconcileCollection
         RequestFullSync     = $requestFullSync
     }
 }

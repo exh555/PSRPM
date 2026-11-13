@@ -96,7 +96,7 @@ function Get-PSRPMNextColumnSortState {
         }
     }
 
-    $defaultDescending = $ClickedSortProperty -in @("CPU", "TreeCPU", "PrivateBytes", "MemoryBytes", "Handles")
+    $defaultDescending = $ClickedSortProperty -in @("CPU", "TreeCPU", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "Handles")
     if ($IsTreeMode -or $CurrentSortProperty -ne $ClickedSortProperty) {
         return @{
             IsTreeMode     = $false
@@ -410,6 +410,7 @@ function Start-PSRPM {
             &$setResourceBrush "BrushSparkBg"        "#000000"
             &$setResourceBrush "BrushSparkBorder"    "#FFFFFF"
             &$setResourceBrush "ColTint_CPU"          "#2200FF00"
+            &$setResourceBrush "ColTint_Net"          "#220088FF"
             &$setResourceBrush "ColTint_PrivateBytes" "#22FFFF00"
             &$setResourceBrush "ColTint_WorkingSet"   "#2200FFFF"
             &$setResourceBrush "BrushMenuBg"         "#000000"
@@ -436,6 +437,7 @@ function Start-PSRPM {
             &$setResourceBrush "BrushSparkBg"        "#ECE9D8"
             &$setResourceBrush "BrushSparkBorder"    "#808080"
             &$setResourceBrush "ColTint_CPU"          "#2222C55E"
+            &$setResourceBrush "ColTint_Net"          "#1A0284C7"
             &$setResourceBrush "ColTint_PrivateBytes" "#28EAB308"
             &$setResourceBrush "ColTint_WorkingSet"   "#22F97316"
             &$setResourceBrush "BrushMenuBg"         "#ECE9D8"
@@ -462,6 +464,7 @@ function Start-PSRPM {
             &$setResourceBrush "BrushSparkBg"        "#090D16"
             &$setResourceBrush "BrushSparkBorder"    "#334155"
             &$setResourceBrush "ColTint_CPU"          "#1422C55E"
+            &$setResourceBrush "ColTint_Net"          "#120284C7"
             &$setResourceBrush "ColTint_PrivateBytes" "#14EAB308"
             &$setResourceBrush "ColTint_WorkingSet"   "#14F97316"
             &$setResourceBrush "BrushMenuBg"         "#161F30"
@@ -488,6 +491,7 @@ function Start-PSRPM {
             &$setResourceBrush "BrushSparkBg"        "#FFFFFF"
             &$setResourceBrush "BrushSparkBorder"    "#94A3B8"
             &$setResourceBrush "ColTint_CPU"          "#2222C55E"
+            &$setResourceBrush "ColTint_Net"          "#1A0284C7"
             &$setResourceBrush "ColTint_PrivateBytes" "#28EAB308"
             &$setResourceBrush "ColTint_WorkingSet"   "#22F97316"
             &$setResourceBrush "BrushMenuBg"         "#FFFFFF"
@@ -509,10 +513,13 @@ function Start-PSRPM {
             $tVm.UpdateVisualState(($tVm -eq $script:ActiveHostTab), $isDark, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
         }
         if ($updatePauseUi) { &$updatePauseUi ([bool]$stateContainer.IsPaused) }
+        if ($script:UpdateNetEtwUi) {
+            &$script:UpdateNetEtwUi ([int]$stateContainer.NetEtwCap) ([int]$stateContainer.NetEtwEventsPerSec)
+        }
 
         foreach ($activeModal in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
             if ($activeModal -and $activeModal.IsLoaded) {
-                foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+                foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_Net","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
                     if ($window.Resources.Contains($key)) {
                         $activeModal.Resources[$key] = $window.Resources[$key]
                     }
@@ -592,6 +599,27 @@ function Start-PSRPM {
                     $vm.UpdateExpanderGeometry()
                     & $engineHandle.RefreshTree
                     $e.Handled = $true
+                }
+                break
+            }
+            if ($dep -is [System.Windows.Media.Visual] -or $dep -is [System.Windows.Media.Media3D.Visual3D]) {
+                $dep = [System.Windows.Media.VisualTreeHelper]::GetParent($dep)
+            } else {
+                $dep = [System.Windows.LogicalTreeHelper]::GetParent($dep)
+            }
+        }
+    })
+
+    # Preserve multi-selection when right-clicking an already-selected row; select target row otherwise
+    $gridProcesses.add_PreviewMouseRightButtonDown({
+        param($sender, $e)
+        $dep = [System.Windows.DependencyObject]$e.OriginalSource
+        while ($null -ne $dep -and $dep -ne $gridProcesses) {
+            if ($dep -is [System.Windows.Controls.DataGridRow]) {
+                if (-not $dep.IsSelected -and $null -ne $dep.Item) {
+                    $gridProcesses.SelectedItems.Clear()
+                    $dep.IsSelected = $true
+                    $gridProcesses.SelectedItem = $dep.Item
                 }
                 break
             }
@@ -1120,17 +1148,125 @@ function Start-PSRPM {
             [string]$handleId = "",
             [string]$dumpType = "Mini"
         )
-        if (-not $procVm) {
-            $procVm = $gridProcesses.SelectedItem
+
+        $selectedTargets = [System.Collections.Generic.List[Object]]::new()
+        if ($null -ne $procVm) {
+            [void]$selectedTargets.Add($procVm)
+        } else {
+            $seenPids = [System.Collections.Generic.HashSet[int]]::new()
+            if ($gridProcesses.SelectedItems -and $gridProcesses.SelectedItems.Count -gt 0) {
+                foreach ($item in @($gridProcesses.SelectedItems)) {
+                    if ($null -ne $item -and $seenPids.Add([int]$item.PID)) {
+                        [void]$selectedTargets.Add($item)
+                    }
+                }
+            } elseif ($gridProcesses.SelectedItem) {
+                [void]$selectedTargets.Add($gridProcesses.SelectedItem)
+            }
         }
-        if (-not $procVm) { return }
+        if ($selectedTargets.Count -eq 0) { return }
 
-        $tPid  = [int]$procVm.PID
-        $tName = [string]$procVm.Name
+        $batchCapable = $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "ResumeProcess", "SetPriority")
+        if ($selectedTargets.Count -eq 1 -or -not $batchCapable) {
+            $singleVm = $selectedTargets[0]
+            $tPid  = [int]$singleVm.PID
+            $tName = [string]$singleVm.Name
 
-        if ($tPid -le 4 -and $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "CreateDump")) {
+            if ($tPid -le 4 -and $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "CreateDump")) {
+                [System.Windows.MessageBox]::Show(
+                    "Cannot perform '$actionName' on critical Windows kernel process '$tName' (PID $tPid).",
+                    "PSRPM - Protected Kernel Process",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                ) | Out-Null
+                return
+            }
+
+            $confirmRequired = if ($menuConfirmKill) { [bool]$menuConfirmKill.IsChecked } else { $true }
+            if ($confirmRequired -and $actionName -in @("KillProcess", "KillTree")) {
+                $promptMsg = if ($actionName -eq "KillTree") {
+                    "Are you sure you want to terminate '$tName' (PID $tPid) and ALL of its descendant child processes on $($stateContainer.TargetDisplayName)?"
+                } else {
+                    "Are you sure you want to terminate '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?"
+                }
+                $confirm = [System.Windows.MessageBox]::Show(
+                    $promptMsg,
+                    "PSRPM - Confirm Process Termination",
+                    [System.Windows.MessageBoxButton]::YesNo,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+                if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
+            }
+
+            &$writeAuditLog "ACTION" "Dispatching $actionName on '$tName' (PID $tPid)..."
+
+            $cmdPayload = @{
+                CommandType        = "ProcessAction"
+                Action             = $actionName
+                TargetPid          = $tPid
+                ExpectedName       = $tName
+                ExpectedCreateTime = if ($singleVm.CreateTime) { [long]$singleVm.CreateTime } else { 0L }
+                ServiceName        = ""
+                Priority           = $priorityVal
+                HandleId           = $handleId
+                DumpType           = $dumpType
+            }
+
+            $localJss   = $jssAction
+            $localLog   = $writeAuditLog
+            $localState = $stateContainer
+            $localAfter = $afterCallback
+            $localAct   = $actionName
+
+            & $engineHandle.SendCommand $cmdPayload ({
+                param($res)
+                $actSuccess = $false
+                if ($res.Success -and $res.PayloadJson) {
+                    $parsed = $localJss.DeserializeObject($res.PayloadJson)
+                    if ($parsed['Success']) {
+                        $actSuccess = $true
+                        &$localLog "SUCCESS" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
+                        if ($localAct -eq "CreateDump" -and $parsed['DumpPath']) {
+                            $dPath = [string]$parsed['DumpPath']
+                            try { [System.Windows.Clipboard]::SetText($dPath) } catch { }
+                            [System.Windows.MessageBox]::Show(
+                                "Process memory dump created successfully!`n`nRemote Path:`n$dPath`n`n(The remote file path has been copied to your clipboard).",
+                                "PSRPM - Memory Dump Created",
+                                [System.Windows.MessageBoxButton]::OK,
+                                [System.Windows.MessageBoxImage]::Information
+                            ) | Out-Null
+                        }
+                    } else {
+                        &$localLog "WARN" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
+                        [System.Windows.MessageBox]::Show($parsed['Message'], "PSRPM - Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                    }
+                } else {
+                    &$localLog "ERROR" "$localAct failed: $($res.Error)"
+                    [System.Windows.MessageBox]::Show("Action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                }
+                [void]$localState.WakeEvent.Set()
+                if ($localAfter) { & $localAfter $actSuccess }
+            }.GetNewClosure())
+            return
+        }
+
+        # Multi-select batch path
+        $validTargets  = [System.Collections.Generic.List[Object]]::new()
+        $skippedKernel = [System.Collections.Generic.List[Object]]::new()
+        $protectKernel = $actionName -in @("KillProcess", "KillTree", "SuspendProcess")
+
+        foreach ($cand in $selectedTargets) {
+            if ($protectKernel -and ([int]$cand.PID -le 4)) {
+                [void]$skippedKernel.Add($cand)
+            } else {
+                [void]$validTargets.Add($cand)
+            }
+        }
+
+        if ($validTargets.Count -eq 0) {
+            $firstKern = $skippedKernel[0]
             [System.Windows.MessageBox]::Show(
-                "Cannot perform '$actionName' on critical Windows kernel process '$tName' (PID $tPid).",
+                "Cannot perform '$actionName' on critical Windows kernel process(es) such as '$($firstKern.Name)' (PID $($firstKern.PID)).",
                 "PSRPM - Protected Kernel Process",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Warning
@@ -1138,34 +1274,90 @@ function Start-PSRPM {
             return
         }
 
+        if ($skippedKernel.Count -gt 0) {
+            &$writeAuditLog "WARN" "Skipping $($skippedKernel.Count) protected kernel process(es) (PID <= 4) from batch $actionName."
+        }
+
+        # For KillTree, avoid dispatching redundant KillTree commands on descendants of an already-selected root
+        $dispatchTargets = $validTargets
+        if ($actionName -eq "KillTree" -and $engineHandle -and $engineHandle.ProcessMap) {
+            $selectedPidSet = [System.Collections.Generic.HashSet[int]]::new()
+            foreach ($vt in $validTargets) { [void]$selectedPidSet.Add([int]$vt.PID) }
+            $deduped = [System.Collections.Generic.List[Object]]::new()
+            $procMap = $engineHandle.ProcessMap
+            foreach ($vt in $validTargets) {
+                $hasSelectedAncestor = $false
+                $curPid = [int]$vt.ParentPID
+                $depth = 0
+                $visitedAnc = [System.Collections.Generic.HashSet[int]]::new()
+                [void]$visitedAnc.Add([int]$vt.PID)
+                while ($curPid -gt 0 -and $depth -lt 128 -and $visitedAnc.Add($curPid)) {
+                    if ($selectedPidSet.Contains($curPid)) {
+                        $hasSelectedAncestor = $true
+                        break
+                    }
+                    if ($procMap.ContainsKey($curPid)) {
+                        $curPid = [int]$procMap[$curPid].ParentPID
+                    } else {
+                        break
+                    }
+                    $depth++
+                }
+                if (-not $hasSelectedAncestor) {
+                    [void]$deduped.Add($vt)
+                }
+            }
+            if ($deduped.Count -gt 0) {
+                $dispatchTargets = $deduped
+            }
+        }
+
         $confirmRequired = if ($menuConfirmKill) { [bool]$menuConfirmKill.IsChecked } else { $true }
         if ($confirmRequired -and $actionName -in @("KillProcess", "KillTree")) {
-            $promptMsg = if ($actionName -eq "KillTree") {
-                "Are you sure you want to terminate '$tName' (PID $tPid) and ALL of its descendant child processes on $($stateContainer.TargetDisplayName)?"
+            $previewLines = [System.Collections.Generic.List[string]]::new()
+            $maxPreview = [Math]::Min(8, $validTargets.Count)
+            for ($pi = 0; $pi -lt $maxPreview; $pi++) {
+                $pv = $validTargets[$pi]
+                [void]$previewLines.Add("  - $($pv.Name) (PID $($pv.PID))")
+            }
+            if ($validTargets.Count -gt 8) {
+                [void]$previewLines.Add("  ...and $($validTargets.Count - 8) more.")
+            }
+            $actionVerb = if ($actionName -eq "KillTree") {
+                "terminate $($validTargets.Count) selected processes and ALL of their descendant child processes"
             } else {
-                "Are you sure you want to terminate '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?"
+                "terminate $($validTargets.Count) selected processes"
+            }
+            $promptMsg = "Are you sure you want to $actionVerb on $($stateContainer.TargetDisplayName)?`n`n" + ($previewLines -join "`n")
+            if ($skippedKernel.Count -gt 0) {
+                $promptMsg += "`n`nNote: $($skippedKernel.Count) protected kernel process(es) (PID <= 4) will be skipped."
             }
             $confirm = [System.Windows.MessageBox]::Show(
                 $promptMsg,
-                "PSRPM - Confirm Process Termination",
+                "PSRPM - Confirm Batch Process Termination",
                 [System.Windows.MessageBoxButton]::YesNo,
                 [System.Windows.MessageBoxImage]::Warning
             )
             if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
         }
 
-        &$writeAuditLog "ACTION" "Dispatching $actionName on '$tName' (PID $tPid)..."
+        $payloadTargets = [System.Collections.Generic.List[hashtable]]::new()
+        foreach ($dt in $dispatchTargets) {
+            [void]$payloadTargets.Add(@{
+                TargetPid          = [int]$dt.PID
+                ExpectedName       = [string]$dt.Name
+                ExpectedCreateTime = if ($dt.CreateTime) { [long]$dt.CreateTime } else { 0L }
+            })
+        }
+
+        &$writeAuditLog "ACTION" "Dispatching batch $actionName on $($dispatchTargets.Count) target(s)..."
 
         $cmdPayload = @{
-            CommandType        = "ProcessAction"
-            Action             = $actionName
-            TargetPid          = $tPid
-            ExpectedName       = $tName
-            ExpectedCreateTime = if ($procVm.CreateTime) { [long]$procVm.CreateTime } else { 0L }
-            ServiceName        = ""
-            Priority           = $priorityVal
-            HandleId           = $handleId
-            DumpType           = $dumpType
+            CommandType = "BatchProcessAction"
+            Action      = $actionName
+            Targets     = @($payloadTargets.ToArray())
+            Priority    = $priorityVal
+            DumpType    = $dumpType
         }
 
         $localJss   = $jssAction
@@ -1173,35 +1365,47 @@ function Start-PSRPM {
         $localState = $stateContainer
         $localAfter = $afterCallback
         $localAct   = $actionName
+        $localTotal = $dispatchTargets.Count
 
         & $engineHandle.SendCommand $cmdPayload ({
             param($res)
-            $actSuccess = $false
+            $okCount = 0
+            $failMsgs = [System.Collections.Generic.List[string]]::new()
             if ($res.Success -and $res.PayloadJson) {
-                $parsed = $localJss.DeserializeObject($res.PayloadJson)
-                if ($parsed['Success']) {
-                    $actSuccess = $true
-                    &$localLog "SUCCESS" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
-                    if ($localAct -eq "CreateDump" -and $parsed['DumpPath']) {
-                        $dPath = [string]$parsed['DumpPath']
-                        try { [System.Windows.Clipboard]::SetText($dPath) } catch { }
-                        [System.Windows.MessageBox]::Show(
-                            "Process memory dump created successfully!`n`nRemote Path:`n$dPath`n`n(The remote file path has been copied to your clipboard).",
-                            "PSRPM - Memory Dump Created",
-                            [System.Windows.MessageBoxButton]::OK,
-                            [System.Windows.MessageBoxImage]::Information
-                        ) | Out-Null
+                $parsedArr = $localJss.DeserializeObject($res.PayloadJson)
+                foreach ($item in $parsedArr) {
+                    if ($null -eq $item) { continue }
+                    if ($item['Success']) {
+                        $okCount++
+                        &$localLog "SUCCESS" "$($item['Message'])"
+                    } else {
+                        $msgText = [string]$item['Message']
+                        if ([string]::IsNullOrWhiteSpace($msgText)) { $msgText = "Unknown error on PID $($item['PID'])" }
+                        [void]$failMsgs.Add("PID $($item['PID']): $msgText")
+                        &$localLog "WARN" "$msgText"
                     }
+                }
+                if ($failMsgs.Count -eq 0) {
+                    &$localLog "SUCCESS" "Batch $localAct completed ($okCount/$localTotal succeeded, $($res.ElapsedMs)ms)."
                 } else {
-                    &$localLog "WARN" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
-                    [System.Windows.MessageBox]::Show($parsed['Message'], "PSRPM - Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                    &$localLog "WARN" "Batch $localAct finished: $okCount succeeded, $($failMsgs.Count) failed ($($res.ElapsedMs)ms)."
+                    $showLimit = [Math]::Min(10, $failMsgs.Count)
+                    $previewErr = [System.Collections.Generic.List[string]]::new()
+                    for ($ei = 0; $ei -lt $showLimit; $ei++) {
+                        [void]$previewErr.Add("  - $($failMsgs[$ei])")
+                    }
+                    if ($failMsgs.Count -gt 10) {
+                        [void]$previewErr.Add("  ...and $($failMsgs.Count - 10) more (see Audit Log).")
+                    }
+                    $summaryErr = "Batch '$localAct': $okCount succeeded, $($failMsgs.Count) failed:`n`n" + ($previewErr -join "`n")
+                    [System.Windows.MessageBox]::Show($summaryErr, "PSRPM - Batch Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
                 }
             } else {
-                &$localLog "ERROR" "$localAct failed: $($res.Error)"
-                [System.Windows.MessageBox]::Show("Action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                &$localLog "ERROR" "Batch $localAct failed: $($res.Error)"
+                [System.Windows.MessageBox]::Show("Batch action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
             }
             [void]$localState.WakeEvent.Set()
-            if ($localAfter) { & $localAfter $actSuccess }
+            if ($localAfter) { & $localAfter ($okCount -gt 0) }
         }.GetNewClosure())
     }
 
@@ -1276,6 +1480,58 @@ function Start-PSRPM {
             &$writeAuditLog "CLIPBOARD" "Copied executable path for $($sel.Name) (PID $($sel.PID))."
         }
     })
+
+    $menuProcessItem     = $window.FindName("MenuProcess")
+    $menuPropsItem       = $window.FindName("MenuProperties")
+    $menuSuspendItem     = $window.FindName("MenuSuspend")
+    $menuResumeItem      = $window.FindName("MenuResume")
+    $menuKillItem        = $window.FindName("MenuEndProcess")
+    $menuKillTreeItem    = $window.FindName("MenuEndProcessTree")
+    $menuCreateDumpItem  = $window.FindName("MenuCreateDump")
+    $ctxPropsItem        = $window.FindName("CtxProperties")
+    $ctxSuspendItem      = $window.FindName("CtxSuspend")
+    $ctxResumeItem       = $window.FindName("CtxResume")
+    $ctxKillItem         = $window.FindName("CtxEndProcess")
+    $ctxKillTreeItem     = $window.FindName("CtxEndTree")
+    $ctxCreateDumpItem   = $window.FindName("CtxCreateDump")
+    $ctxCopyCmdItem      = $window.FindName("CtxCopyCmdLine")
+    $ctxCopyPathItem     = $window.FindName("CtxCopyPath")
+
+    $updateProcessMenuState = {
+        $selCount = if ($gridProcesses.SelectedItems) { $gridProcesses.SelectedItems.Count } elseif ($gridProcesses.SelectedItem) { 1 } else { 0 }
+        $isMulti  = ($selCount -gt 1)
+        $singleEnabled = (-not $isMulti)
+
+        if ($menuPropsItem)      { $menuPropsItem.IsEnabled      = $singleEnabled }
+        if ($menuCreateDumpItem) { $menuCreateDumpItem.IsEnabled = $singleEnabled }
+        if ($ctxPropsItem)       { $ctxPropsItem.IsEnabled       = $singleEnabled }
+        if ($ctxCreateDumpItem)  { $ctxCreateDumpItem.IsEnabled  = $singleEnabled }
+        if ($ctxCopyCmdItem)     { $ctxCopyCmdItem.IsEnabled     = $singleEnabled }
+        if ($ctxCopyPathItem)    { $ctxCopyPathItem.IsEnabled    = $singleEnabled }
+
+        if ($isMulti) {
+            if ($menuKillItem)     { $menuKillItem.Header     = "_Kill $selCount Processes" }
+            if ($menuKillTreeItem) { $menuKillTreeItem.Header = "Kill $selCount Process _Trees" }
+            if ($menuSuspendItem)  { $menuSuspendItem.Header  = "_Suspend $selCount Processes" }
+            if ($menuResumeItem)   { $menuResumeItem.Header   = "R_esume $selCount Processes" }
+            if ($ctxKillItem)      { $ctxKillItem.Header      = "Kill $selCount Processes" }
+            if ($ctxKillTreeItem)  { $ctxKillTreeItem.Header  = "Kill $selCount Process Trees" }
+            if ($ctxSuspendItem)   { $ctxSuspendItem.Header   = "Suspend $selCount Processes" }
+            if ($ctxResumeItem)    { $ctxResumeItem.Header    = "Resume $selCount Processes" }
+        } else {
+            if ($menuKillItem)     { $menuKillItem.Header     = "_Kill Process" }
+            if ($menuKillTreeItem) { $menuKillTreeItem.Header = "Kill Process _Tree" }
+            if ($menuSuspendItem)  { $menuSuspendItem.Header  = "_Suspend Process" }
+            if ($menuResumeItem)   { $menuResumeItem.Header   = "R_esume Process" }
+            if ($ctxKillItem)      { $ctxKillItem.Header      = "Kill Process" }
+            if ($ctxKillTreeItem)  { $ctxKillTreeItem.Header  = "Kill Process Tree" }
+            if ($ctxSuspendItem)   { $ctxSuspendItem.Header   = "Suspend Process" }
+            if ($ctxResumeItem)    { $ctxResumeItem.Header    = "Resume Process" }
+        }
+    }
+
+    if ($gridProcesses.ContextMenu) { $gridProcesses.ContextMenu.add_Opened($updateProcessMenuState) }
+    if ($menuProcessItem)           { $menuProcessItem.add_SubmenuOpened($updateProcessMenuState) }
 
     # Wire Service Toolbar & ContextMenu Actions
     $invokeServiceAction = {
@@ -1731,6 +1987,7 @@ function Start-PSRPM {
 
     # 13. Deep Process Properties Inspector Modal (6-Tab Sysinternals Process Explorer Layout)
     $actionShowProperties = {
+        if ($gridProcesses.SelectedItems -and $gridProcesses.SelectedItems.Count -gt 1) { return }
         $selectedVm = $gridProcesses.SelectedItem
         if (-not $selectedVm) { return }
 
@@ -2372,8 +2629,12 @@ function Start-PSRPM {
 
         # 1. Snapshot current active tab state into its own viewmodel
         if ($script:ActiveHostTab -and $engine -and $engine.ProcessMap) {
-            $script:ActiveHostTab.ConnState      = [string]$stateContainer.ConnectionState
-            $script:ActiveHostTab.ProcessMap     = [System.Collections.Generic.Dictionary[int, Object]]::new($engine.ProcessMap)
+            $script:ActiveHostTab.ConnState          = [string]$stateContainer.ConnectionState
+            $script:ActiveHostTab.EnableNetEtw       = [bool]$stateContainer.EnableNetEtw
+            $script:ActiveHostTab.NetEtwCap          = [int]$stateContainer.NetEtwCap
+            $script:ActiveHostTab.NetEtwEventsPerSec = [int]$stateContainer.NetEtwEventsPerSec
+            $script:ActiveHostTab.NetBannerDismissedCap = [int]$script:NetBannerDismissedCap
+            $script:ActiveHostTab.ProcessMap         = [System.Collections.Generic.Dictionary[int, Object]]::new($engine.ProcessMap)
             $script:ActiveHostTab.ServicesMap    = [System.Collections.Generic.Dictionary[string, Object]]::new($engine.ServicesMap)
             $script:ActiveHostTab.PidServicesMap = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[string]]]::new($engine.PidServicesMap)
             if ($engine.TelemStats -and $script:ActiveHostTab.TelemStats) {
@@ -2391,6 +2652,11 @@ function Start-PSRPM {
         $stateContainer.TargetDisplayName = $targetTabVm.Title
         $stateContainer.TransportBadge    = $targetTabVm.Transport
         $stateContainer.ConnectionState   = if ($targetTabVm.ConnState) { $targetTabVm.ConnState } elseif ($targetTabVm.IsLocal) { "LocalMode" } else { "Connected" }
+        $stateContainer.EnableNetEtw       = [bool]$targetTabVm.EnableNetEtw
+        $stateContainer.NetEtwCap          = [int]$targetTabVm.NetEtwCap
+        $stateContainer.NetEtwEventsPerSec = [int]$targetTabVm.NetEtwEventsPerSec
+        $script:NetBannerDismissedCap      = [int]$targetTabVm.NetBannerDismissedCap
+        if ($updateNetEtwUi) { &$updateNetEtwUi $stateContainer.NetEtwCap $stateContainer.NetEtwEventsPerSec }
 
         # 3. Swap process maps and per-tab telemetry accumulators into engineHandle
         if ($engine -and $engine.TelemStats -and $targetTabVm.TelemStats) {
@@ -2471,9 +2737,12 @@ function Start-PSRPM {
         # 8. Notify Runspace to switch active poll target
         if ($engine -and $engine.SendCommand) {
             $cmdSelect = @{
-                CommandType   = "SelectTabSession"
-                TabId         = $targetTabVm.TabId
-                ForceFullSync = ($targetTabVm.ProcessMap.Count -eq 0)
+                CommandType        = "SelectTabSession"
+                TabId              = $targetTabVm.TabId
+                ForceFullSync      = ($targetTabVm.ProcessMap.Count -eq 0)
+                EnableNetEtw       = [bool]$targetTabVm.EnableNetEtw
+                NetEtwCap          = [int]$stateContainer.NetEtwCap
+                NetEtwEventsPerSec = [int]$stateContainer.NetEtwEventsPerSec
             }
             & $engine.SendCommand $cmdSelect $null
         }
@@ -2709,12 +2978,17 @@ function Start-PSRPM {
                 $localComp    = $compName
                 $localTabsCol = $hostTabsCollection
                 $curTab       = $script:ActiveHostTab
+                $localUpdNet  = $updateNetEtwUi
 
                 & $engineHandle.SendCommand $switchCmd ({
                     param($res)
                     try {
                         $localConnWin.IsEnabled = $true
                         if ($res.Success) {
+                            $localState.EnableNetEtw = $false
+                            $localState.NetEtwCap = 0
+                            $localState.NetEtwEventsPerSec = 0
+                            if ($localUpdNet) { & $localUpdNet 0 0 }
                             if ($curTab) {
                                 $curTab.ComputerName = $localState.TargetDisplayName
                                 $curTab.Title        = $localState.TargetDisplayName
@@ -2820,27 +3094,66 @@ function Start-PSRPM {
 
         if ($dlg.ShowDialog($window) -eq $true) {
             try {
+                $includeNetCols = ([int]$stateContainer.NetEtwCap -eq 1)
+                if (-not $includeNetCols) {
+                    foreach ($vmCheck in $engineHandle.ProcessMap.Values) {
+                        if ($vmCheck.NetTotalBps -gt 0L -or $vmCheck.TreeNetTotalBps -gt 0L) {
+                            $includeNetCols = $true
+                            break
+                        }
+                    }
+                }
                 $rows = foreach ($vm in $engineHandle.ProcessMap.Values) {
-                    [PSCustomObject]@{
-                        PID            = $vm.PID
-                        ParentPID      = $vm.ParentPID
-                        Name           = $vm.Name
-                        CPU            = $vm.CPU
-                        TreeCPU        = $vm.TreeCPU
-                        PrivateBytesKB = [Math]::Round($vm.PrivateBytes / 1024.0, 0)
-                        WorkingSetKB   = [Math]::Round($vm.MemoryBytes / 1024.0, 0)
-                        Threads        = $vm.Threads
-                        Handles        = $vm.Handles
-                        Status         = $vm.Status
-                        Category       = $vm.Category
-                        Arch           = $vm.Architecture
-                        User           = $vm.User
-                        Description    = $vm.Description
-                        CompanyName    = $vm.CompanyName
-                        HostedServices = $vm.HostedServices
-                        StartTime      = $vm.StartTime
-                        Path           = $vm.Path
-                        CommandLine    = $vm.CommandLine
+                    if ($includeNetCols) {
+                        [PSCustomObject]@{
+                            PID             = $vm.PID
+                            ParentPID       = $vm.ParentPID
+                            Name            = $vm.Name
+                            CPU             = $vm.CPU
+                            TreeCPU         = $vm.TreeCPU
+                            NetRxBps        = $vm.NetRxBps
+                            NetTxBps        = $vm.NetTxBps
+                            NetTotalBps     = $vm.NetTotalBps
+                            TreeNetRxBps    = $vm.TreeNetRxBps
+                            TreeNetTxBps    = $vm.TreeNetTxBps
+                            TreeNetTotalBps = $vm.TreeNetTotalBps
+                            PrivateBytesKB  = [Math]::Round($vm.PrivateBytes / 1024.0, 0)
+                            WorkingSetKB    = [Math]::Round($vm.MemoryBytes / 1024.0, 0)
+                            Threads         = $vm.Threads
+                            Handles         = $vm.Handles
+                            Status          = $vm.Status
+                            Category        = $vm.Category
+                            Arch            = $vm.Architecture
+                            User            = $vm.User
+                            Description     = $vm.Description
+                            CompanyName     = $vm.CompanyName
+                            HostedServices  = $vm.HostedServices
+                            StartTime       = $vm.StartTime
+                            Path            = $vm.Path
+                            CommandLine     = $vm.CommandLine
+                        }
+                    } else {
+                        [PSCustomObject]@{
+                            PID            = $vm.PID
+                            ParentPID      = $vm.ParentPID
+                            Name           = $vm.Name
+                            CPU            = $vm.CPU
+                            TreeCPU        = $vm.TreeCPU
+                            PrivateBytesKB = [Math]::Round($vm.PrivateBytes / 1024.0, 0)
+                            WorkingSetKB   = [Math]::Round($vm.MemoryBytes / 1024.0, 0)
+                            Threads        = $vm.Threads
+                            Handles        = $vm.Handles
+                            Status         = $vm.Status
+                            Category       = $vm.Category
+                            Arch           = $vm.Architecture
+                            User           = $vm.User
+                            Description    = $vm.Description
+                            CompanyName    = $vm.CompanyName
+                            HostedServices = $vm.HostedServices
+                            StartTime      = $vm.StartTime
+                            Path           = $vm.Path
+                            CommandLine    = $vm.CommandLine
+                        }
                     }
                 }
                 if ($format -eq "JSON") {
@@ -3401,6 +3714,212 @@ function Start-PSRPM {
     if ($menuFindHandle)     { $menuFindHandle.add_Click({ &$actionShowFindHandle }) }
     if ($btnFindHandleOrDll) { $btnFindHandleOrDll.add_Click({ &$actionShowFindHandle }) }
 
+    # 15B. Opt-In Per-Process Kernel Network Monitoring (ETW) Controls & Banner
+    $menuViewNetEtw       = $window.FindName("MenuViewNetEtw")
+    $menuColTreeNet       = $window.FindName("MenuColTreeNet")
+    $menuColNetRxTx       = $window.FindName("MenuColNetRxTx")
+    $btnToolbarNetEtw     = $window.FindName("BtnToolbarNetEtw")
+    $ellNetEtwDot         = $window.FindName("EllNetEtwDot")
+    $txtNetEtwBtn         = $window.FindName("TxtNetEtwBtn")
+    $btnToolbarNetRxTx    = $window.FindName("BtnToolbarNetRxTx")
+    $netEtwAlertBanner    = $window.FindName("NetEtwAlertBanner")
+    $bdNetEtwBannerBadge  = $window.FindName("BdNetEtwBannerBadge")
+    $txtNetEtwBannerBadge = $window.FindName("TxtNetEtwBannerBadge")
+    $txtNetEtwBannerMsg   = $window.FindName("TxtNetEtwBannerMsg")
+    $btnNetEtwResume      = $window.FindName("BtnNetEtwResume")
+    $btnNetEtwTurnOff     = $window.FindName("BtnNetEtwTurnOff")
+    $btnNetEtwDismiss     = $window.FindName("BtnNetEtwDismiss")
+    $colNetTotal          = $window.FindName("ColNetTotal")
+    $colTreeNet           = $window.FindName("ColTreeNet")
+    $colNetRx             = $window.FindName("ColNetRx")
+    $colNetTx             = $window.FindName("ColNetTx")
+
+    $script:ShowTreeNetCol = $true
+    $script:ShowRxTxCols   = $false
+    $script:NetBannerDismissedCap = 0
+
+    $syncNetColumnVisibility = {
+        $isActive = ([int]$stateContainer.NetEtwCap -eq 1)
+        $visMain  = if ($isActive) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+        $visTree  = if ($isActive -and $script:ShowTreeNetCol) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+        $visSplit = if ($isActive -and $script:ShowRxTxCols) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+
+        if ($colNetTotal) { $colNetTotal.Visibility = $visMain }
+        if ($colTreeNet)  { $colTreeNet.Visibility  = $visTree }
+        if ($colNetRx)    { $colNetRx.Visibility    = $visSplit }
+        if ($colNetTx)    { $colNetTx.Visibility    = $visSplit }
+
+        $curSort = [string]$stateContainer.SortProperty
+        if (($curSort -in @("NetTotalBps") -and -not $isActive) -or
+            ($curSort -in @("TreeNetTotalBps", "TreeNetRxBps", "TreeNetTxBps") -and -not ($isActive -and $script:ShowTreeNetCol)) -or
+            ($curSort -in @("NetRxBps", "NetTxBps") -and -not ($isActive -and $script:ShowRxTxCols))) {
+            &$setViewMode $true
+        }
+    }
+
+    $updateNetEtwUi = {
+        param([int]$cap, [int]$evRate)
+        if ($script:ActiveHostTab) {
+            $script:ActiveHostTab.NetEtwCap = $cap
+            $script:ActiveHostTab.NetEtwEventsPerSec = $evRate
+            $script:ActiveHostTab.EnableNetEtw = [bool]$stateContainer.EnableNetEtw
+        }
+        $isEnabled = [bool]$stateContainer.EnableNetEtw
+        if ($menuViewNetEtw) { $menuViewNetEtw.IsChecked = $isEnabled }
+
+        if ($ellNetEtwDot -and $txtNetEtwBtn) {
+            switch ($cap) {
+                1 {
+                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#0EA5E9")
+                    $txtNetEtwBtn.Text = if ($evRate -gt 0) { "Net ETW ($evRate/s)" } else { "Net ETW: ON" }
+                }
+                2 {
+                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F59E0B")
+                    $txtNetEtwBtn.Text = "Net ETW (Paused)"
+                }
+                3 {
+                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+                    $txtNetEtwBtn.Text = "Net ETW (Admin)"
+                }
+                default {
+                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
+                    $txtNetEtwBtn.Text = if ($isEnabled) { "Net ETW..." } else { "Net ETW" }
+                }
+            }
+        }
+        if ($btnToolbarNetRxTx) {
+            $btnToolbarNetRxTx.Visibility = if ($cap -eq 1) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+        }
+        if ($menuColTreeNet) { $menuColTreeNet.IsChecked = $script:ShowTreeNetCol }
+        if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $script:ShowRxTxCols }
+
+        &$syncNetColumnVisibility
+
+        if ($netEtwAlertBanner) {
+            if ($cap -eq 0 -or $cap -eq 1) {
+                $script:NetBannerDismissedCap = 0
+                if ($script:ActiveHostTab) { $script:ActiveHostTab.NetBannerDismissedCap = 0 }
+                $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Collapsed
+            } elseif ($script:NetBannerDismissedCap -ne $cap) {
+                $bcNet = [System.Windows.Media.BrushConverter]::new()
+                $isDarkBanner = [bool]$stateContainer.IsDarkTheme
+                $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Visible
+                if ($cap -eq 2) {
+                    $netEtwAlertBanner.Background  = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#451A03" } else { "#FEF3C7" }))
+                    $netEtwAlertBanner.BorderBrush = $bcNet.ConvertFromString("#F59E0B")
+                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = $bcNet.ConvertFromString("#D97706") }
+                    if ($txtNetEtwBannerBadge) { $txtNetEtwBannerBadge.Text = "CIRCUIT BREAKER" }
+                    if ($txtNetEtwBannerMsg)   {
+                        $txtNetEtwBannerMsg.Text = "Per-process Network ETW auto-paused after exceeding 25,000 events/sec ($evRate/s) to protect host CPU. Click Resume to restart."
+                        $txtNetEtwBannerMsg.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#FEF3C7" } else { "#0F172A" }))
+                    }
+                    if ($btnNetEtwResume) {
+                        $btnNetEtwResume.Visibility  = [System.Windows.Visibility]::Visible
+                        $btnNetEtwResume.Background  = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#1E293B" } else { "#FFFFFF" }))
+                        $btnNetEtwResume.Foreground  = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#F8FAFC" } else { "#0F172A" }))
+                    }
+                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#FEF3C7" } else { "#0F172A" })) }
+                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#FDE68A" } else { "#475569" })) }
+                } elseif ($cap -eq 3) {
+                    $netEtwAlertBanner.Background  = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#082F49" } else { "#E0F2FE" }))
+                    $netEtwAlertBanner.BorderBrush = $bcNet.ConvertFromString("#0284C7")
+                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = $bcNet.ConvertFromString("#0284C7") }
+                    if ($txtNetEtwBannerBadge) { $txtNetEtwBannerBadge.Text = "TIER 1 FALLBACK" }
+                    if ($txtNetEtwBannerMsg)   {
+                        $txtNetEtwBannerMsg.Text = "Kernel Network ETW requires Administrators or Performance Log Users on target host. System-wide NET rate remains active."
+                        $txtNetEtwBannerMsg.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#E0F2FE" } else { "#0F172A" }))
+                    }
+                    if ($btnNetEtwResume)  { $btnNetEtwResume.Visibility  = [System.Windows.Visibility]::Collapsed }
+                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#E0F2FE" } else { "#0F172A" })) }
+                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#BAE6FD" } else { "#475569" })) }
+                } else {
+                    $netEtwAlertBanner.Background  = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#450A0A" } else { "#FEE2E2" }))
+                    $netEtwAlertBanner.BorderBrush = $bcNet.ConvertFromString("#EF4444")
+                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = $bcNet.ConvertFromString("#DC2626") }
+                    if ($txtNetEtwBannerBadge) { $txtNetEtwBannerBadge.Text = "ETW UNAVAILABLE" }
+                    if ($txtNetEtwBannerMsg)   {
+                        $txtNetEtwBannerMsg.Text = "Unable to start Microsoft-Windows-Kernel-Network ETW session on target host."
+                        $txtNetEtwBannerMsg.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#FEE2E2" } else { "#0F172A" }))
+                    }
+                    if ($btnNetEtwResume)  { $btnNetEtwResume.Visibility  = [System.Windows.Visibility]::Collapsed }
+                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#FEE2E2" } else { "#0F172A" })) }
+                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = $bcNet.ConvertFromString($(if ($isDarkBanner) { "#FECACA" } else { "#475569" })) }
+                }
+            } else {
+                $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Collapsed
+            }
+        }
+    }
+    $script:UpdateNetEtwUi = $updateNetEtwUi
+    $stateContainer.OnNetEtwStateChanged = $updateNetEtwUi
+
+    $setNetEtwEnabled = {
+        param([bool]$enable, [bool]$resetBreaker = $false)
+        $script:NetBannerDismissedCap = 0
+        if ($script:ActiveHostTab) { $script:ActiveHostTab.NetBannerDismissedCap = 0 }
+        $stateContainer.EnableNetEtw = $enable
+        if (-not $enable) {
+            $stateContainer.NetEtwCap = 0
+            $stateContainer.NetEtwEventsPerSec = 0
+            if ($engineHandle -and $engineHandle.ProcessMap) {
+                foreach ($vmNet in $engineHandle.ProcessMap.Values) {
+                    $vmNet.UpdateNetwork(0L, 0L)
+                    $vmNet.UpdateTreeNetwork(0L, 0L)
+                }
+            }
+        }
+        if ($script:ActiveHostTab) { $script:ActiveHostTab.EnableNetEtw = $enable }
+        &$updateNetEtwUi $(if ($enable) { if ($stateContainer.NetEtwCap -eq 1) { 1 } else { 0 } } else { 0 }) 0
+        if ($engineHandle -and $engineHandle.SendCommand) {
+            & $engineHandle.SendCommand @{
+                CommandType  = "SetNetEtw"
+                Enable       = $enable
+                ResetBreaker = $resetBreaker
+            } $null
+        }
+    }
+
+    if ($btnToolbarNetEtw) {
+        $btnToolbarNetEtw.add_Click({
+            $want = (-not [bool]$stateContainer.EnableNetEtw)
+            &$setNetEtwEnabled $want $want
+        })
+    }
+    if ($menuViewNetEtw) {
+        $menuViewNetEtw.add_Click({
+            $want = [bool]$menuViewNetEtw.IsChecked
+            &$setNetEtwEnabled $want $want
+        })
+    }
+    if ($btnToolbarNetRxTx) {
+        $btnToolbarNetRxTx.add_Click({
+            $script:ShowRxTxCols = (-not $script:ShowRxTxCols)
+            if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $script:ShowRxTxCols }
+            &$syncNetColumnVisibility
+        })
+    }
+    if ($menuColNetRxTx) {
+        $menuColNetRxTx.add_Click({
+            $script:ShowRxTxCols = [bool]$menuColNetRxTx.IsChecked
+            &$syncNetColumnVisibility
+        })
+    }
+    if ($menuColTreeNet) {
+        $menuColTreeNet.add_Click({
+            $script:ShowTreeNetCol = [bool]$menuColTreeNet.IsChecked
+            &$syncNetColumnVisibility
+        })
+    }
+    if ($btnNetEtwResume)  { $btnNetEtwResume.add_Click({ &$setNetEtwEnabled $true $true }) }
+    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.add_Click({ &$setNetEtwEnabled $false $true }) }
+    if ($btnNetEtwDismiss) {
+        $btnNetEtwDismiss.add_Click({
+            $script:NetBannerDismissedCap = [int]$stateContainer.NetEtwCap
+            if ($script:ActiveHostTab) { $script:ActiveHostTab.NetBannerDismissedCap = [int]$stateContainer.NetEtwCap }
+            if ($netEtwAlertBanner) { $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Collapsed }
+        })
+    }
+
     # 16. Global Keyboard Accelerators
     $window.add_PreviewKeyDown({
         param($sender, $e)
@@ -3416,6 +3935,10 @@ function Start-PSRPM {
             $e.Handled = $true
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin)) {
             &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused)
+            $e.Handled = $true
+        } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::N) {
+            $want = (-not [bool]$stateContainer.EnableNetEtw)
+            &$setNetEtwEnabled $want $want
             $e.Handled = $true
         } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::F) {
             &$actionShowFindHandle
@@ -3521,6 +4044,7 @@ function Start-PSRPM {
     # 17. Deterministic Teardown on Window Close
     $window.add_Closed({
         try {
+            $stateContainer.EnableNetEtw = $false
             $stateContainer.IsStopping = $true
             if ($stateContainer.WakeEvent) {
                 try { [void]$stateContainer.WakeEvent.Set() } catch {}
@@ -3533,6 +4057,24 @@ function Start-PSRPM {
             }
         } catch {}
         finally {
+            if ($LocalOnly -and ('PSRPM.EtwNetConsumerV1' -as [type])) {
+                try {
+                    [PSRPM.EtwNetConsumerV1]::Active = 0
+                    $th = [PSRPM.EtwNetConsumerV1]::ActiveTraceHandle
+                    if ($th -ne [uint64]::MaxValue -and $th -ne [uint64]0) {
+                        [void][PSRPM.EtwNetConsumerV1]::CloseTrace($th)
+                    }
+                    $pb = 112 + [IntPtr]::Size
+                    $pt = $pb + 512
+                    $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($pt)
+                    for ($zi = 0; $zi -lt $pt; $zi += 8) { [System.Runtime.InteropServices.Marshal]::WriteInt64($ptr, $zi, 0L) }
+                    [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 0, $pt)
+                    [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 44, 0x00020000)
+                    [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 108 + [IntPtr]::Size, $pb)
+                    [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, "PSRPM_NetMon_$PID", $ptr, [uint32]1)
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+                } catch {}
+            }
             try { if ($engineHandle.PowerShell) { $engineHandle.PowerShell.Dispose() } } catch {}
             try {
                 if ($engineHandle.Runspace) {
@@ -3548,6 +4090,8 @@ function Start-PSRPM {
             if ($session) {
                 try { Remove-PSSession -Session $session -ErrorAction SilentlyContinue } catch {}
             }
+            $script:UpdateNetEtwUi = $null
+            $script:ActiveHostTab  = $null
         }
     })
 

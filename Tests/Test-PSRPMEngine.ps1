@@ -292,7 +292,7 @@ Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard 
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
@@ -330,13 +330,28 @@ foreach ($xf in $xamlFiles) {
     Write-Host "  Verified $($xf.File): All $($xf.RequiredControls.Count) required named controls resolved cleanly." -ForegroundColor Gray
     if ($xf.File -eq "MainWindow.xaml") {
         $gridProcTest = $winObj.FindName("GridProcesses")
+        if ($gridProcTest.SelectionMode -ne [System.Windows.Controls.DataGridSelectionMode]::Extended) {
+            throw "MainWindow.xaml expected GridProcesses SelectionMode='Extended', got '$($gridProcTest.SelectionMode)'."
+        }
         $colHeaders = @($gridProcTest.Columns | ForEach-Object { [string]$_.Header })
         $cpuIdx = [Array]::IndexOf($colHeaders, "CPU")
         $treeCpuIdx = [Array]::IndexOf($colHeaders, "Tree CPU Usage")
         if ($cpuIdx -lt 0 -or $treeCpuIdx -ne ($cpuIdx + 1)) {
             throw "MainWindow.xaml expected 'Tree CPU Usage' column directly to the right of 'CPU' (CPU=$cpuIdx, TreeCPU=$treeCpuIdx)."
         }
-        Write-Host "  Verified MainWindow.xaml: 'Tree CPU Usage' column positioned immediately right of 'CPU' (index $treeCpuIdx)." -ForegroundColor Gray
+        $netColHeaders = @("Network", "Tree Net", "Net Recv", "Net Send")
+        foreach ($nch in $netColHeaders) {
+            $nCol = $gridProcTest.Columns | Where-Object { [string]$_.Header -eq $nch } | Select-Object -First 1
+            if ($null -eq $nCol) { throw "MainWindow.xaml missing network column '$nch'." }
+            if ($nCol.Visibility -ne [System.Windows.Visibility]::Collapsed) {
+                throw "MainWindow.xaml network column '$nch' must start Collapsed when Net ETW is off."
+            }
+        }
+        if ($winObj.FindName("NetEtwAlertBanner").Visibility -ne [System.Windows.Visibility]::Collapsed -or
+            $winObj.FindName("BtnToolbarNetRxTx").Visibility -ne [System.Windows.Visibility]::Collapsed) {
+            throw "MainWindow.xaml Net ETW banner and Rx/Tx button must start Collapsed when Net ETW is off."
+        }
+        Write-Host "  Verified MainWindow.xaml: GridProcesses SelectionMode='Extended' and 'Tree CPU Usage' at index $treeCpuIdx." -ForegroundColor Gray
     }
 }
 
@@ -344,6 +359,20 @@ foreach ($xf in $xamlFiles) {
 $vmTest = [ProcessItemViewModel]::new()
 $vmTest.SetStaticMetadata($selfMeta, $false)
 $vmTest.UpdateDynamic(1.25, 65536000, 45056000, 14, 420, 0)
+$vmTest.UpdateNetwork(200, 400)
+$vmTest.UpdateTreeNetwork(12500000, 25000000)
+if ($vmTest.NetTotalBps -ne 600 -or $vmTest.NetTotalFormatted -ne "< 0.01 Mb/s" -or $vmTest.TreeNetTotalBps -ne 37500000 -or $vmTest.TreeNetTotalFormatted -ne "300.00 Mb/s") {
+    throw "ProcessItemViewModel network formatting mismatch: Own=$($vmTest.NetTotalFormatted), Tree=$($vmTest.TreeNetTotalFormatted)."
+}
+if ([string]::IsNullOrWhiteSpace($vmTest.NetToolTip) -or -not $vmTest.NetToolTip.Contains("Own:") -or -not $vmTest.NetToolTip.Contains("Tree:") -or -not $vmTest.NetToolTip.Contains("Mb/s")) {
+    throw "ProcessItemViewModel NetToolTip missing Own/Tree directional Mb/s breakdown."
+}
+$vmTest.UpdateNetwork(25600, 51200)
+if ($vmTest.NetTotalBps -ne 76800 -or $vmTest.NetTotalFormatted -ne "0.61 Mb/s") {
+    throw "ProcessItemViewModel mid-range Mb/s formatting mismatch: Own=$($vmTest.NetTotalFormatted)."
+}
+$vmTest.UpdateNetwork(0, 0)
+$vmTest.UpdateTreeNetwork(0, 0)
 $vmTest.UpdateTreeState(2, $true, $true, "M 7.5,0 L 7.5,22 M 23.5,0 L 23.5,11.5 L 31,11.5", 1.0)
 $vmTest.UpdateTreeCpu(0.04)
 if ($vmTest.TreeCPU -ne 0.04 -or $vmTest.TreeCPUFormatted -ne "") {
@@ -816,6 +845,84 @@ try {
     }
     Write-Host "  Verified CloseTabSession multi-session bus command." -ForegroundColor Gray
 
+    # Verify ReconcileCollection preserves multi-selection across reorders and removals
+    $multiGrid = [System.Windows.Controls.DataGrid]::new()
+    $multiGrid.SelectionMode = [System.Windows.Controls.DataGridSelectionMode]::Extended
+    $multiCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+    $multiGrid.ItemsSource = $multiCol
+    $m1 = [PSCustomObject]@{ PID = 101; Name = "a.exe" }
+    $m2 = [PSCustomObject]@{ PID = 102; Name = "b.exe" }
+    $m3 = [PSCustomObject]@{ PID = 103; Name = "c.exe" }
+    $m4 = [PSCustomObject]@{ PID = 104; Name = "d.exe" }
+    $initList = [System.Collections.Generic.List[Object]]::new()
+    foreach ($mx in @($m1, $m2, $m3, $m4)) { [void]$initList.Add($mx) }
+    & $eng.ReconcileCollection $multiCol $initList $multiGrid
+    [void]$multiGrid.SelectedItems.Add($m1)
+    [void]$multiGrid.SelectedItems.Add($m3)
+
+    $reorderedList = [System.Collections.Generic.List[Object]]::new()
+    foreach ($mx in @($m4, $m3, $m2, $m1)) { [void]$reorderedList.Add($mx) }
+    & $eng.ReconcileCollection $multiCol $reorderedList $multiGrid
+    if ($multiGrid.SelectedItems.Count -ne 2 -or -not $multiGrid.SelectedItems.Contains($m1) -or -not $multiGrid.SelectedItems.Contains($m3)) {
+        throw "ReconcileCollection failed to preserve multi-selection across reorder (Count=$($multiGrid.SelectedItems.Count))."
+    }
+
+    $trimmedList = [System.Collections.Generic.List[Object]]::new()
+    foreach ($mx in @($m4, $m3, $m2)) { [void]$trimmedList.Add($mx) }
+    & $eng.ReconcileCollection $multiCol $trimmedList $multiGrid
+    if ($multiGrid.SelectedItems.Count -ne 1 -or -not $multiGrid.SelectedItems.Contains($m3)) {
+        throw "ReconcileCollection failed to preserve surviving selection after item removal (Count=$($multiGrid.SelectedItems.Count))."
+    }
+    Write-Host "  Verified ReconcileCollection: Multi-selection preserved across item reorder and partial removal." -ForegroundColor Gray
+
+    # Verify BatchProcessAction via RunspaceEngine SendCommand (2 headless Win32 canary processes + PID 4 protected trap)
+    $bProc1 = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList @("-n", "60", "127.0.0.1") -WindowStyle Hidden -PassThru
+    $bProc2 = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList @("-n", "60", "127.0.0.1") -WindowStyle Hidden -PassThru
+    try {
+        $batchCb = @{ Fired = $false; Success = $false; PayloadJson = "" }
+        $batchTargets = @(
+            @{ TargetPid = $bProc1.Id; ExpectedName = $bProc1.ProcessName; ExpectedCreateTime = $bProc1.StartTime.ToFileTimeUtc() },
+            @{ TargetPid = $bProc2.Id; ExpectedName = $bProc2.ProcessName; ExpectedCreateTime = $bProc2.StartTime.ToFileTimeUtc() },
+            @{ TargetPid = 4;          ExpectedName = "System";            ExpectedCreateTime = 0L }
+        )
+        & $eng.SendCommand @{
+            CommandType = "BatchProcessAction"
+            Action      = "KillProcess"
+            Targets     = $batchTargets
+            Priority    = "Normal"
+            DumpType    = "Mini"
+        } ({
+            param($res)
+            $batchCb.Fired = $true
+            $batchCb.Success = [bool]$res.Success
+            $batchCb.PayloadJson = [string]$res.PayloadJson
+        }.GetNewClosure())
+
+        $batchDeadline = [DateTime]::UtcNow.AddSeconds(5.0)
+        while ([DateTime]::UtcNow -lt $batchDeadline -and -not $batchCb.Fired) {
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+                [System.Windows.Threading.DispatcherPriority]::Background,
+                [Action]{}
+            )
+            Start-Sleep -Milliseconds 50
+        }
+        if (-not $batchCb.Fired -or -not $batchCb.Success) {
+            throw "BatchProcessAction SendCommand did not complete cleanly."
+        }
+        $batchArr = $jss.DeserializeObject($batchCb.PayloadJson)
+        if ($batchArr.Count -ne 3 -or -not $batchArr[0]['Success'] -or -not $batchArr[1]['Success'] -or $batchArr[2]['Success']) {
+            throw "BatchProcessAction unexpected per-target results: $($batchCb.PayloadJson)"
+        }
+        Start-Sleep -Milliseconds 100
+        if (-not $bProc1.HasExited -or -not $bProc2.HasExited) {
+            throw "BatchProcessAction failed to terminate both canary processes."
+        }
+        Write-Host "  Verified BatchProcessAction: Terminated 2 canary processes and refused PID 4 in single command." -ForegroundColor Gray
+    } finally {
+        if ($bProc1 -and -not $bProc1.HasExited) { Stop-Process -Id $bProc1.Id -Force -ErrorAction SilentlyContinue }
+        if ($bProc2 -and -not $bProc2.HasExited) { Stop-Process -Id $bProc2.Id -Force -ErrorAction SilentlyContinue }
+    }
+
     Write-Host "  [PASS] End-to-End RunspaceEngine, Tree-Grid reconciliation & ancestor filter verified." -ForegroundColor Green
 } finally {
     $eng.Timer.Stop()
@@ -832,7 +939,7 @@ try {
 # ------------------------------------------------------------------
 Write-Host "`n[TEST 8] Testing PID-Reuse & Collateral Reaping Prevention..." -ForegroundColor Yellow
 
-$canaryProc = Start-Process -FilePath "notepad.exe" -PassThru
+$canaryProc = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList @("-n", "60", "127.0.0.1") -WindowStyle Hidden -PassThru
 try {
     $canaryPid = $canaryProc.Id
     $canaryName = $canaryProc.ProcessName
@@ -1020,7 +1127,395 @@ Write-Host "  Verified Freshness Calculation: Age=${calcAgeMs}ms (2.5x interval)
 
 Write-Host "  [PASS] Multi-session lifecycle, freshness & visual states verified." -ForegroundColor Green
 
+# ------------------------------------------------------------------
+# TEST 12: Per-Process + Tree Network ETW Engine, Rollup & Guardrails
+# ------------------------------------------------------------------
+Write-Host "`n[TEST 12] Verifying Per-Process + Tree Network ETW Engine, Rollup & Zero-Cost Off Path..." -ForegroundColor Yellow
+
+# 12A: Zero-Cost Off Path (no netCap/netEv keys, 7-element dyn tuples, lazy type not compiled yet)
+if ('PSRPM.EtwNetConsumerV1' -as [type]) {
+    throw "PSRPM.EtwNetConsumerV1 should not be compiled into memory before Net ETW is enabled."
+}
+if ($dataTick2.ContainsKey("netCap") -or $dataTick2.ContainsKey("netEv")) {
+    throw "Baseline collector tick with Net ETW off unexpectedly emitted netCap/netEv keys."
+}
+if ($dataTick2['dyn'] -and $dataTick2['dyn'].Count -gt 0 -and $dataTick2['dyn'][0].Count -ne 7) {
+    throw "Baseline collector tick expected 7-element dyn tuple, got $($dataTick2['dyn'][0].Count)."
+}
+Write-Host "  Verified 12A: Baseline Net-Off path emits 7-element dyn tuples with zero netCap/netEv wire overhead and zero IL compile cost." -ForegroundColor Gray
+
+# 12B: Opt-In Enable + Clean Stop on Collector
+$etwStartRaw  = & $script:PSRPMCollectorScriptBlock $false $true ""
+$etwStartJson = Expand-GzipPayload $etwStartRaw
+$etwStartObj  = $jss.DeserializeObject($etwStartJson)
+if (-not $etwStartObj.ContainsKey("netCap") -or ([int]$etwStartObj["netCap"] -notin @(1, 3, 4))) {
+    throw "Collector opt-in Net ETW expected valid netCap (1=Active, 3=AccessDenied, 4=Unavailable), got $($etwStartObj['netCap'])."
+}
+if ([int]$etwStartObj["netCap"] -eq 3) {
+    $etwFollowRaw = & $script:PSRPMCollectorScriptBlock $false $false ""
+    $etwFollowObj = $jss.DeserializeObject((Expand-GzipPayload $etwFollowRaw))
+    if ([int]$etwFollowObj["netCap"] -ne 3) {
+        throw "Expected netCap=3 banner state to persist until explicit Stop action, got $($etwFollowObj['netCap'])."
+    }
+}
+$stopRes = & $script:PSRPMCollectorScriptBlock $false $false "Stop"
+if ($stopRes -ne "STOPPED") {
+    throw "Collector StopNetEtw action expected 'STOPPED', got '$stopRes'."
+}
+if ([PSRPM.EtwNetConsumerV1]::Active -ne 0) {
+    throw "Expected [PSRPM.EtwNetConsumerV1]::Active == 0 after StopNetEtw."
+}
+Write-Host "  Verified 12B: Opt-In ETW activation returned netCap=$($etwStartObj['netCap']) and StopNetEtw cleaned up cleanly." -ForegroundColor Gray
+
+# 12C: Craft unmanaged EVENT_RECORD + UserData to verify Pure-IL OnEventRecord + DrainAndReset deterministically
+[PSRPM.EtwNetConsumerV1]::ClearSlots()
+[PSRPM.EtwNetConsumerV1]::TotalEvents = 0
+[PSRPM.EtwNetConsumerV1]::Active = 1
+$recSize = 96 + [IntPtr]::Size
+$pRec  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($recSize)
+$pData = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(16)
+try {
+    for ($zi = 0; $zi -lt $recSize; $zi++) { [System.Runtime.InteropServices.Marshal]::WriteByte($pRec, $zi, 0) }
+    for ($zi = 0; $zi -lt 16; $zi++)       { [System.Runtime.InteropServices.Marshal]::WriteByte($pData, $zi, 0) }
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($pRec, 86, [int16]16)
+    [System.Runtime.InteropServices.Marshal]::WriteIntPtr($pRec, 88 + [IntPtr]::Size, $pData)
+
+    # Case 1: TCPv4 Send (Task=10, Opcode=10, PID=4242, Size=1200)
+    [System.Runtime.InteropServices.Marshal]::WriteByte($pRec, 45, [byte]10)
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($pRec, 46, [int16]10)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 0, 4242)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 4, 1200)
+    [PSRPM.EtwNetConsumerV1]::OnEventRecord($pRec)
+
+    # Case 2: TCPv4 Recv (Task=10, Opcode=11, PID=4242, Size=800)
+    [System.Runtime.InteropServices.Marshal]::WriteByte($pRec, 45, [byte]11)
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($pRec, 46, [int16]10)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 0, 4242)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 4, 800)
+    [PSRPM.EtwNetConsumerV1]::OnEventRecord($pRec)
+
+    # Case 3: UDPv6 Send (Task=11, Opcode=42, PID=5353, Size=640)
+    [System.Runtime.InteropServices.Marshal]::WriteByte($pRec, 45, [byte]42)
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($pRec, 46, [int16]11)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 0, 5353)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 4, 640)
+    [PSRPM.EtwNetConsumerV1]::OnEventRecord($pRec)
+
+    # Case 4: Non-payload Connect opcode (Task=10, Opcode=12 -> ignored for byte counters)
+    [System.Runtime.InteropServices.Marshal]::WriteByte($pRec, 45, [byte]12)
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($pRec, 46, [int16]10)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 0, 4242)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($pData, 4, 9999)
+    [PSRPM.EtwNetConsumerV1]::OnEventRecord($pRec)
+
+    $outPids = [int[]]::new(64)
+    $outRx   = [long[]]::new(64)
+    $outTx   = [long[]]::new(64)
+    $totEv   = 0
+    $drained = [PSRPM.EtwNetConsumerV1]::DrainAndReset($outPids, $outRx, $outTx, [ref]$totEv)
+    if ($drained -ne 2 -or $totEv -ne 4) {
+        throw "Pure-IL DrainAndReset mismatch: expected drained=2 & totalEvents=4, got drained=$drained, totalEvents=$totEv."
+    }
+    $found4242 = $false; $found5353 = $false
+    for ($di = 0; $di -lt $drained; $di++) {
+        if ($outPids[$di] -eq 4242 -and $outRx[$di] -eq 800L -and $outTx[$di] -eq 1200L) { $found4242 = $true }
+        if ($outPids[$di] -eq 5353 -and $outRx[$di] -eq 0L   -and $outTx[$di] -eq 640L)  { $found5353 = $true }
+    }
+    if (-not $found4242 -or -not $found5353) {
+        $dumpSlots = (0..($drained - 1) | ForEach-Object { "pid=$($outPids[$_]) rx=$($outRx[$_]) tx=$($outTx[$_])" }) -join "; "
+        throw "Pure-IL OnEventRecord/DrainAndReset misattributed PID/Rx/Tx counters: $dumpSlots"
+    }
+} finally {
+    [PSRPM.EtwNetConsumerV1]::Active = 0
+    [PSRPM.EtwNetConsumerV1]::ClearSlots()
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pRec)
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pData)
+}
+Write-Host "  Verified 12C: Pure-IL OnEventRecord + DrainAndReset attributed TCP/UDP Tx & Rx slots accurately." -ForegroundColor Gray
+
+# 12C-2: Verify EVENT_TRACE_LOGFILEW size/callback offsets in DataCollector.ps1 and live OpenTraceW+ProcessTrace callback delivery
+$dcSrc = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\DataCollector.ps1"))
+if ($dcSrc -notmatch '\$lfSize\s*=\s*if\s*\(\$is64\)\s*\{\s*448\s*\}\s*else\s*\{\s*416\s*\}' -or
+    $dcSrc -notmatch '\$offCallback\s*=\s*if\s*\(\$is64\)\s*\{\s*424\s*\}\s*else\s*\{\s*400\s*\}') {
+    throw "DataCollector.ps1 EVENT_TRACE_LOGFILEW offsets/sizes do not match verified Windows SDK layout (x64: 448/424, x86: 416/400)."
+}
+$sampleEtl = Get-ChildItem -Path "$env:SystemRoot\Logs" -Recurse -Filter "*.etl" -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt 8192 } | Select-Object -First 1
+if ($sampleEtl) {
+    $is64Test = ([IntPtr]::Size -eq 8)
+    $lfSzTest = if ($is64Test) { 448 } else { 416 }
+    $cbOffTest = if ($is64Test) { 424 } else { 400 }
+    $pmOffTest = if ($is64Test) { 28 } else { 20 }
+    $pLf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($lfSzTest)
+    $pFn = [System.Runtime.InteropServices.Marshal]::StringToHGlobalUni($sampleEtl.FullName)
+    $delType = 'PSRPM.EtwEventRecordCallback' -as [type]
+    $onEvDel = [Delegate]::CreateDelegate($delType, ([PSRPM.EtwNetConsumerV1]).GetMethod("OnEventRecord"))
+    $onEvPtr = [System.Runtime.InteropServices.Marshal]::GetFunctionPointerForDelegate($onEvDel)
+    $hTr = [uint64]::MaxValue
+    try {
+        for ($zi = 0; $zi -lt $lfSzTest; $zi++) { [System.Runtime.InteropServices.Marshal]::WriteByte($pLf, $zi, 0) }
+        [System.Runtime.InteropServices.Marshal]::WriteIntPtr($pLf, 0, $pFn)
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($pLf, $pmOffTest, 0x10000000) # EVENT_RECORD
+        [System.Runtime.InteropServices.Marshal]::WriteIntPtr($pLf, $cbOffTest, $onEvPtr)
+        [PSRPM.EtwNetConsumerV1]::TotalEvents = 0
+        [PSRPM.EtwNetConsumerV1]::Active = 1
+        $hTr = [PSRPM.EtwNetConsumerV1]::OpenTraceW($pLf)
+        $invH = if ($is64Test) { [uint64]::MaxValue } else { [uint64]0xFFFFFFFFL }
+        if ($hTr -ne $invH -and $hTr -ne [uint64]0) {
+            [void][PSRPM.EtwNetConsumerV1]::ProcessTrace([uint64[]]@($hTr), [uint32]1, [IntPtr]::Zero, [IntPtr]::Zero)
+            $seenEtlEv = [PSRPM.EtwNetConsumerV1]::TotalEvents
+            if ($seenEtlEv -le 0) {
+                throw "OpenTraceW/ProcessTrace on $($sampleEtl.FullName) delivered 0 callbacks using EVENT_TRACE_LOGFILEW layout (sz=$lfSzTest, cbOff=$cbOffTest)."
+            }
+            Write-Host "  Verified 12C-2: Real OpenTraceW+ProcessTrace delivered $seenEtlEv callbacks via EVENT_TRACE_LOGFILEW (sz=$lfSzTest, cbOff=$cbOffTest)." -ForegroundColor Gray
+        }
+    } finally {
+        [PSRPM.EtwNetConsumerV1]::Active = 0
+        [PSRPM.EtwNetConsumerV1]::TotalEvents = 0
+        [PSRPM.EtwNetConsumerV1]::ClearSlots()
+        $invH2 = if ($is64Test) { [uint64]::MaxValue } else { [uint64]0xFFFFFFFFL }
+        if ($hTr -ne $invH2 -and $hTr -ne [uint64]0) { [void][PSRPM.EtwNetConsumerV1]::CloseTrace($hTr) }
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pFn)
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pLf)
+        [GC]::KeepAlive($onEvDel)
+    }
+} else {
+    Write-Host "  Verified 12C-2: EVENT_TRACE_LOGFILEW static layout constants validated (no sample .etl in %SystemRoot%\Logs)." -ForegroundColor Gray
+}
+
+# 12D: RunspaceEngine 3-Tier TreeNet Rollup & Numeric Network Sorting
+$psrpmModNet = Get-Module PSRPM
+$sNetSort = & $psrpmModNet { Get-PSRPMNextColumnSortState -IsTreeMode $true -CurrentSortProperty "PID" -CurrentSortDescending $false -ClickedSortProperty "TreeNetTotalBps" }
+if ($sNetSort.IsTreeMode -or $sNetSort.SortProperty -ne "TreeNetTotalBps" -or -not $sNetSort.SortDescending) {
+    throw "TreeNetTotalBps sort click expected Flat Descending first."
+}
+$netBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "MainWindow.xaml"))
+$msNet = [System.IO.MemoryStream]::new($netBytes)
+$netWin = [System.Windows.Markup.XamlReader]::Load($msNet)
+$msNet.Close()
+$netProcCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$netSvcCol  = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$netSumVm   = [SystemSummaryViewModel]::new()
+$netWin.FindName("GridProcesses").ItemsSource = $netProcCol
+$netWin.FindName("GridServices").ItemsSource  = $netSvcCol
+$netWin.FindName("SummaryBar").DataContext    = $netSumVm
+
+$engNet = Start-PSRPMEngine `
+    -PSSession $null `
+    -Window $netWin `
+    -ProcessCollection $netProcCol `
+    -ServicesCollection $netSvcCol `
+    -SummaryViewModel $netSumVm `
+    -CollectorScript $script:PSRPMCollectorScriptBlock `
+    -InspectorScript $script:PSRPMDeepInspectorScriptBlock `
+    -ActionScript $script:PSRPMActionScriptBlock `
+    -IntervalMs 1000 `
+    -IsLocal $true `
+    -TargetName "NetTest"
+try {
+    if ($engNet.Timer) { $engNet.Timer.Stop() }
+    $engNet.StateContainer.IsPaused = $true
+    $engNet.StateContainer.NetEtwCap = 1
+    $engNet.ProcessMap.Clear()
+    $nRoot = [ProcessItemViewModel]::new()
+    $nRoot.SetStaticMetadata(@{ id = 1000; n = "parent.exe"; p = 0; u = "SYSTEM"; arch = "x64"; ct = 10; cat = "System" }, $false)
+    $nRoot.UpdateNetwork(0L, 0L)
+    $nChild = [ProcessItemViewModel]::new()
+    $nChild.SetStaticMetadata(@{ id = 1001; n = "child.exe"; p = 1000; u = "SYSTEM"; arch = "x64"; ct = 20; cat = "System" }, $false)
+    $nChild.UpdateNetwork(1024L, 0L)
+    $nGrand = [ProcessItemViewModel]::new()
+    $nGrand.SetStaticMetadata(@{ id = 1002; n = "grand.exe"; p = 1001; u = "SYSTEM"; arch = "x64"; ct = 30; cat = "System" }, $false)
+    $nGrand.UpdateNetwork(0L, 2048L)
+
+    $engNet.ProcessMap[1000] = $nRoot
+    $engNet.ProcessMap[1001] = $nChild
+    $engNet.ProcessMap[1002] = $nGrand
+    & $engNet.RefreshTree
+
+    if ($nRoot.TreeNetRxBps -ne 1024L -or $nRoot.TreeNetTxBps -ne 2048L -or $nRoot.TreeNetTotalBps -ne 3072L -or $nChild.TreeNetTotalBps -ne 3072L -or $nGrand.TreeNetTotalBps -ne 2048L) {
+        throw "3-tier TreeNet rollup mismatch: Root=$($nRoot.TreeNetTotalBps), Child=$($nChild.TreeNetTotalBps), Grand=$($nGrand.TreeNetTotalBps)."
+    }
+
+    $engNet.StateContainer.IsTreeMode = $false
+    $engNet.StateContainer.SortProperty = "NetTotalBps"
+    $engNet.StateContainer.SortDescending = $true
+    & $engNet.RefreshTree
+    if ($netProcCol.IndexOf($nGrand) -ne 0 -or $netProcCol.IndexOf($nChild) -ne 1 -or $netProcCol.IndexOf($nRoot) -ne 2) {
+        throw "Flat NetTotalBps Desc sort mismatch (expected grand(2048) -> child(1024) -> parent(0))."
+    }
+    foreach ($np in @("NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "TreeNetRxBps", "TreeNetTxBps")) {
+        $engNet.StateContainer.SortProperty = $np
+        & $engNet.RefreshTree
+    }
+} finally {
+    $engNet.StateContainer.IsStopping = $true
+    try { [void]$engNet.StateContainer.WakeEvent.Set() } catch {}
+    if ($engNet.Timer) { $engNet.Timer.Stop() }
+    if ($engNet.Handle -and $engNet.Handle.AsyncWaitHandle) { [void]$engNet.Handle.AsyncWaitHandle.WaitOne(1500) }
+    try { $engNet.PowerShell.Dispose(); $engNet.Runspace.Close(); $engNet.Runspace.Dispose() } catch {}
+}
+Write-Host "  Verified 12D: 3-tier TreeNet rollup (3072 B/s = 3.0 KB/s) and numeric sorting across all network metrics." -ForegroundColor Gray
+
+# 12F: Classic System Logger MOF (TcpIpGuid/UdpIpGuid Task=0, IPv4/IPv6 Send/Recv 10,11,26,27) & Diagnostic Fields
+$etwTypeCheck = 'PSRPM.EtwNetConsumerV1' -as [type]
+if ($null -eq $etwTypeCheck) { throw "Expected PSRPM.EtwNetConsumerV1 to be compiled before 12F." }
+if ($null -eq $etwTypeCheck.GetField('TraceThreadRunning') -or $null -eq $etwTypeCheck.GetField('LastTraceStatus')) {
+    throw "Expected TraceThreadRunning and LastTraceStatus diagnostic fields on PSRPM.EtwNetConsumerV1."
+}
+$evRecPtr2 = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(112)
+$udPtr2    = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(32)
+try {
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($udPtr2, 0, 7777)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($udPtr2, 4, 2048)
+    $offUd2 = 88 + [IntPtr]::Size
+    $mofCases = @(
+        @{ Guid = '9a280ac0-c8e0-11d1-84e2-00c04fb998a2'; Task = 0;  Op = 10; Rx = 0L;    Tx = 2048L },
+        @{ Guid = '9a280ac0-c8e0-11d1-84e2-00c04fb998a2'; Task = 0;  Op = 11; Rx = 2048L; Tx = 0L    },
+        @{ Guid = '9a280ac0-c8e0-11d1-84e2-00c04fb998a2'; Task = 0;  Op = 26; Rx = 0L;    Tx = 2048L },
+        @{ Guid = '9a280ac0-c8e0-11d1-84e2-00c04fb998a2'; Task = 0;  Op = 27; Rx = 2048L; Tx = 0L    },
+        @{ Guid = 'bf3a50c5-a9c9-4988-a005-2df0b7c80f80'; Task = 0;  Op = 10; Rx = 0L;    Tx = 2048L },
+        @{ Guid = 'bf3a50c5-a9c9-4988-a005-2df0b7c80f80'; Task = 0;  Op = 27; Rx = 2048L; Tx = 0L    },
+        @{ Guid = '7dd42a49-5329-4832-8dfd-43d979153a88'; Task = 11; Op = 58; Rx = 0L;    Tx = 2048L },
+        @{ Guid = '7dd42a49-5329-4832-8dfd-43d979153a88'; Task = 11; Op = 59; Rx = 2048L; Tx = 0L    }
+    )
+    $outPids2 = New-Object int[] 4096
+    $outRx2   = New-Object long[] 4096
+    $outTx2   = New-Object long[] 4096
+    $prevAct  = [PSRPM.EtwNetConsumerV1]::Active
+    [PSRPM.EtwNetConsumerV1]::Active = 1
+    try {
+        foreach ($mc in $mofCases) {
+            [PSRPM.EtwNetConsumerV1]::ClearSlots()
+            for ($zi = 0; $zi -lt 112; $zi++) { [System.Runtime.InteropServices.Marshal]::WriteByte($evRecPtr2, $zi, 0) }
+            $gb2 = ([Guid]$mc.Guid).ToByteArray()
+            [System.Runtime.InteropServices.Marshal]::Copy($gb2, 0, [IntPtr]::Add($evRecPtr2, 24), 16)
+            [System.Runtime.InteropServices.Marshal]::WriteByte($evRecPtr2, 45, [byte]$mc.Op)
+            [System.Runtime.InteropServices.Marshal]::WriteInt16($evRecPtr2, 46, [int16]$mc.Task)
+            [System.Runtime.InteropServices.Marshal]::WriteInt16($evRecPtr2, 86, [int16]32)
+            [System.Runtime.InteropServices.Marshal]::WriteIntPtr($evRecPtr2, $offUd2, $udPtr2)
+            [PSRPM.EtwNetConsumerV1]::OnEventRecord($evRecPtr2)
+            $tot2 = 0
+            $cnt2 = [PSRPM.EtwNetConsumerV1]::DrainAndReset($outPids2, $outRx2, $outTx2, [ref]$tot2)
+            if ($cnt2 -ne 1 -or $outPids2[0] -ne 7777 -or $outRx2[0] -ne $mc.Rx -or $outTx2[0] -ne $mc.Tx) {
+                throw "Classic MOF event attribution failed for $($mc.Guid) op=$($mc.Op): cnt=$cnt2 pid=$($outPids2[0]) rx=$($outRx2[0]) tx=$($outTx2[0])."
+            }
+        }
+        # Non-network Task=0 provider (EventTrace header GUID) must be ignored
+        [PSRPM.EtwNetConsumerV1]::ClearSlots()
+        $hdrGb = ([Guid]'68fdd900-4a3e-11d1-84f4-0000f80464e3').ToByteArray()
+        [System.Runtime.InteropServices.Marshal]::Copy($hdrGb, 0, [IntPtr]::Add($evRecPtr2, 24), 16)
+        [System.Runtime.InteropServices.Marshal]::WriteByte($evRecPtr2, 45, [byte]10)
+        [System.Runtime.InteropServices.Marshal]::WriteInt16($evRecPtr2, 46, [int16]0)
+        [PSRPM.EtwNetConsumerV1]::OnEventRecord($evRecPtr2)
+        $totHdr = 0
+        if ([PSRPM.EtwNetConsumerV1]::DrainAndReset($outPids2, $outRx2, $outTx2, [ref]$totHdr) -ne 0) {
+            throw "Expected non-network Task=0 provider event to be ignored."
+        }
+    } finally {
+        [PSRPM.EtwNetConsumerV1]::Active = $prevAct
+    }
+} finally {
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($evRecPtr2)
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($udPtr2)
+}
+Write-Host "  Verified 12F: Classic System Logger TcpIpGuid/UdpIpGuid (IPv4/IPv6 Send/Recv 10,11,26,27) and header exclusion." -ForegroundColor Gray
+
+$dcRaw12g = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\DataCollector.ps1"))
+$idxStartBlock = $dcRaw12g.IndexOf('$startNetEtw = {')
+$idxIs64Start  = $dcRaw12g.IndexOf('$is64 = ([IntPtr]::Size -eq 8)', $idxStartBlock)
+$idxLfSize     = $dcRaw12g.IndexOf('$lfSize = if ($is64)', $idxStartBlock)
+if ($idxStartBlock -lt 0 -or $idxIs64Start -lt 0 -or $idxLfSize -lt 0 -or $idxIs64Start -gt $idxLfSize) {
+    throw "Regression: `$is64 must be initialized inside `$startNetEtw before `$lfSize / `$offCallback / `$invTraceHnd!"
+}
+Write-Host "  Verified 12G: `$is64 initialized inside `$startNetEtw before 64/32-bit EVENT_TRACE_LOGFILEW offsets." -ForegroundColor Gray
+
+# 12H: Double-bank slot recycling across >4096 distinct PIDs (zero slot exhaustion)
+$evRecPtr3 = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(112)
+$udPtr3    = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(32)
+$prevAct3  = [PSRPM.EtwNetConsumerV1]::Active
+try {
+    [PSRPM.EtwNetConsumerV1]::ClearSlots()
+    [PSRPM.EtwNetConsumerV1]::ActiveBank = 0
+    [PSRPM.EtwNetConsumerV1]::InFlight0  = 0
+    [PSRPM.EtwNetConsumerV1]::InFlight1  = 0
+    [PSRPM.EtwNetConsumerV1]::Active     = 1
+
+    for ($zi = 0; $zi -lt 112; $zi++) { [System.Runtime.InteropServices.Marshal]::WriteByte($evRecPtr3, $zi, 0) }
+    [System.Runtime.InteropServices.Marshal]::WriteByte($evRecPtr3, 45, [byte]11)   # Rx IPv4
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($evRecPtr3, 46, [int16]10) # Task=10 TcpIp
+    [System.Runtime.InteropServices.Marshal]::WriteInt16($evRecPtr3, 86, [int16]32)
+    [System.Runtime.InteropServices.Marshal]::WriteIntPtr($evRecPtr3, (88 + [IntPtr]::Size), $udPtr3)
+    [System.Runtime.InteropServices.Marshal]::WriteInt32($udPtr3, 4, 256)
+
+    $outPids3 = New-Object int[] 4096
+    $outRx3   = New-Object long[] 4096
+    $outTx3   = New-Object long[] 4096
+    $cumPids  = 0
+    $cumBytes = 0L
+    # 3 ticks x 2000 unique PIDs = 6000 distinct PIDs (>4096 single-table capacity)
+    for ($tickIdx = 0; $tickIdx -lt 3; $tickIdx++) {
+        $basePid = 10000 + ($tickIdx * 2000)
+        for ($pi = 0; $pi -lt 2000; $pi++) {
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($udPtr3, 0, ($basePid + $pi))
+            [PSRPM.EtwNetConsumerV1]::OnEventRecord($evRecPtr3)
+        }
+        $tot3 = 0
+        $cnt3 = [PSRPM.EtwNetConsumerV1]::DrainAndReset($outPids3, $outRx3, $outTx3, [ref]$tot3)
+        if ($cnt3 -ne 2000) {
+            throw "Double-bank slot recycling failed on tick $($tickIdx): expected 2000 unique PIDs, got $cnt3."
+        }
+        $cumPids += $cnt3
+        for ($di = 0; $di -lt $cnt3; $di++) { $cumBytes += $outRx3[$di] }
+    }
+    if ($cumPids -ne 6000 -or $cumBytes -ne (6000L * 256L)) {
+        throw "Double-bank totals mismatch: pids=$cumPids bytes=$cumBytes."
+    }
+    $totEmpty = 0
+    $cntEmpty = [PSRPM.EtwNetConsumerV1]::DrainAndReset($outPids3, $outRx3, $outTx3, [ref]$totEmpty)
+    if ($cntEmpty -ne 0) {
+        throw "Expected drained bank to start empty on subsequent tick, got $cntEmpty."
+    }
+} finally {
+    [PSRPM.EtwNetConsumerV1]::Active = $prevAct3
+    [PSRPM.EtwNetConsumerV1]::ClearSlots()
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($evRecPtr3)
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($udPtr3)
+}
+Write-Host "  Verified 12H: Double-bank lock-free slot reclamation recycled 6,000 unique PIDs across 3 ticks with zero exhaustion." -ForegroundColor Gray
+
+# 12I: Per-tab NetEtwCap/NetBannerDismissedCap isolation and Dark/Light banner theme parity
+$tabEtwA = [HostTabItemViewModel]::new("tA", "PC-A", "PC-A", "WINRM", $false, $null)
+$tabEtwA.NetEtwCap = 2
+$tabEtwA.NetEtwEventsPerSec = 31200
+$tabEtwA.NetBannerDismissedCap = 2
+$tabEtwB = [HostTabItemViewModel]::new("tB", "PC-B", "PC-B", "WINRM", $false, $null)
+if ($tabEtwB.NetEtwCap -ne 0 -or $tabEtwB.NetBannerDismissedCap -ne 0 -or $tabEtwA.NetBannerDismissedCap -ne 2 -or $tabEtwA.NetEtwEventsPerSec -ne 31200) {
+    throw "HostTabItemViewModel ETW per-tab isolation mismatch."
+}
+$psm1Src12 = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\PSRPM.psm1"))
+if ($psm1Src12 -notmatch '\$stateContainer\.NetEtwCap\s*=\s*\[int\]\$targetTabVm\.NetEtwCap' -or
+    $psm1Src12 -notmatch 'NetBannerDismissedCap' -or
+    $psm1Src12 -notmatch '\$script:UpdateNetEtwUi') {
+    throw "PSRPM.psm1 missing per-tab NetEtwCap preservation, per-tab NetBannerDismissedCap, or theme-sync hook."
+}
+Write-Host "  Verified 12I: Per-tab NetEtwCap (including Paused/Unavailable), NetBannerDismissedCap isolation, and theme-aware banner sync." -ForegroundColor Gray
+
+# 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
+$nonAsciiHits = [System.Collections.Generic.List[string]]::new()
+foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {
+    $rawBytes = [System.IO.File]::ReadAllBytes($psFile.FullName)
+    for ($bi = 0; $bi -lt $rawBytes.Length; $bi++) {
+        if ($rawBytes[$bi] -gt 127) {
+            $nonAsciiHits.Add("$($psFile.Name)@offset$bi=0x$($rawBytes[$bi].ToString('X2'))")
+            break
+        }
+    }
+}
+if ($nonAsciiHits.Count -gt 0) {
+    throw "Strict 7-bit ASCII violation detected: $($nonAsciiHits -join ', ')"
+}
+Write-Host "  [PASS] 12E: Verified strict 7-bit ASCII compliance across all .ps1 and .psm1 files." -ForegroundColor Green
+
 Write-Host "`n================================================================" -ForegroundColor Cyan
-Write-Host " ALL 11 PSRPM VERIFICATION SUITES PASSED SUCCESSFULLY!" -ForegroundColor Green
+Write-Host " ALL 12 PSRPM VERIFICATION SUITES PASSED SUCCESSFULLY!" -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Cyan
 [System.Environment]::Exit(0)

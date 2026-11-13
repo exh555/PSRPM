@@ -69,7 +69,7 @@
         <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="#0284C7" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.7.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.8.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -150,22 +150,26 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
                                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Enter / Dbl-Click" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="Open 7-Tab Process Properties Inspector (Image, Perf, DLLs, Handles, TCP/IP, Services, Env)" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Del" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Terminate selected process (KillProcess) with confirmation" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl / Shift+Click" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Select multiple processes (Ctrl+Click) or contiguous range (Shift+Click / Shift+Arrows) for batch actions" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Shift+Del" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Terminate process tree (KillTree) with two-phase atomic suspension to avoid PID collisions" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Del" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Terminate selected process(es) (KillProcess) with confirmation" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Space" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Pause / resume real-time telemetry polling" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Shift+Del" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Terminate selected process tree(s) (KillTree) with two-phase atomic suspension" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="F5" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Trigger immediate telemetry poll and differential UI sync" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Space" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Pause / resume real-time telemetry polling" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="F5" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Trigger immediate telemetry poll and differential UI sync" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
@@ -378,7 +382,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
                                         <Border Background="#E0F2FE" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.7.0" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.8.0" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="#475569" FontSize="11" Margin="0,2,0,4"/>

@@ -5,7 +5,9 @@
 
 $script:PSRPMCollectorScriptBlock = {
     param(
-        [bool]$ForceFullSync = $false
+        [bool]$ForceFullSync = $false,
+        [bool]$EnableNetEtw = $false,
+        [string]$NetEtwAction = ""
     )
 
     # 1. One-Time In-Memory Native P/Invoke & State Initialization (0 Disk Writes, 0 csc.exe)
@@ -88,6 +90,28 @@ $script:PSRPMCollectorScriptBlock = {
         $script:LastNetRx          = 0L
         $script:LastNetTx          = 0L
         $script:LastNetTicks       = 0L
+
+        # Opt-In Per-Process Kernel Network ETW Tracking (Lazy-Initialized on First Enable)
+        $script:EtwNetInitialized  = $false
+        $script:EtwNetActive       = $false
+        $script:EtwNetCap          = 0 # 0=Off, 1=Active, 2=AutoPaused, 3=AccessDenied, 4=Error
+        $script:EtwLastErr         = ""
+        $script:EtwLastSentCap     = 0
+        $script:EtwBreakerTripped  = $false
+        $script:EtwHighRateTicks   = 0
+        $script:EtwSessionHandle   = [uint64]0
+        $script:EtwTraceHandle     = [uint64]::MaxValue
+        $script:EtwPropsPtr        = [IntPtr]::Zero
+        $script:EtwLogFilePtr      = [IntPtr]::Zero
+        $script:EtwLogNamePtr      = [IntPtr]::Zero
+        $script:EtwEventDelegate   = $null
+        $script:EtwConsumerThread  = $null
+        $script:EtwSessionName     = "PSRPM_NetMon_$PID"
+        $script:EtwLastDrainTicks  = 0L
+        $script:EtwDrainPids       = $null
+        $script:EtwDrainRx         = $null
+        $script:EtwDrainTx         = $null
+        $script:EtwNetRates        = @{} # Key: int PID -> [long rxBps, long txBps]
 
         # One-Time Static System & Storage Metadata (Registry + DriveInfo, 0 WMI)
         $machineStr = "Windows PC"
@@ -211,6 +235,989 @@ $script:PSRPMCollectorScriptBlock = {
         $script:LastDynState.Clear()
         $script:LastSvcState.Clear()
         $script:LastSvcRefresh = [DateTime]::MinValue
+    }
+
+    # 1B. Lazy Opt-In Per-Process Network ETW Manager (0 overhead if never enabled)
+    $ensureEtwConsumerType = {
+        if (-not ('PSRPM.EtwNetConsumerV1' -as [type])) {
+            $eAsm = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
+                [System.Reflection.AssemblyName]::new("PSRPMEtwNetConsumerV1Asm"),
+                [System.Reflection.Emit.AssemblyBuilderAccess]::Run
+            )
+            $eMod = $eAsm.DefineDynamicModule("PSRPMEtwNetConsumerV1Mod")
+
+            # Unmanaged Winapi callback delegate for ProcessTrace
+            $delTb = $eMod.DefineType(
+                "PSRPM.EtwEventRecordCallback",
+                [System.Reflection.TypeAttributes]"Public,Sealed,AutoClass,AnsiClass",
+                [System.MulticastDelegate]
+            )
+            $ufpCtor = [System.Runtime.InteropServices.UnmanagedFunctionPointerAttribute].GetConstructor([type[]]@([System.Runtime.InteropServices.CallingConvention]))
+            $delTb.SetCustomAttribute([System.Reflection.Emit.CustomAttributeBuilder]::new($ufpCtor, @([System.Runtime.InteropServices.CallingConvention]::Winapi)))
+            $delCtor = $delTb.DefineConstructor(
+                [System.Reflection.MethodAttributes]"Public,HideBySig,SpecialName,RTSpecialName",
+                [System.Reflection.CallingConventions]::Standard,
+                [type[]]@([object], [IntPtr])
+            )
+            $delCtor.SetImplementationFlags([System.Reflection.MethodImplAttributes]"Runtime,Managed")
+            $delInv = $delTb.DefineMethod(
+                "Invoke",
+                [System.Reflection.MethodAttributes]"Public,HideBySig,NewSlot,Virtual",
+                [void],
+                [type[]]@([IntPtr])
+            )
+            $delInv.SetImplementationFlags([System.Reflection.MethodImplAttributes]"Runtime,Managed")
+            [void]$delTb.CreateType()
+
+            $etwTb = $eMod.DefineType("PSRPM.EtwNetConsumerV1", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
+            $fSlotPids   = $etwTb.DefineField("SlotPids",          [int[]],  [System.Reflection.FieldAttributes]"Public,Static")
+            $fSlotRx     = $etwTb.DefineField("SlotRx",            [long[]], [System.Reflection.FieldAttributes]"Public,Static")
+            $fSlotTx     = $etwTb.DefineField("SlotTx",            [long[]], [System.Reflection.FieldAttributes]"Public,Static")
+            $fSlotPids2  = $etwTb.DefineField("SlotPids2",         [int[]],  [System.Reflection.FieldAttributes]"Public,Static")
+            $fSlotRx2    = $etwTb.DefineField("SlotRx2",           [long[]], [System.Reflection.FieldAttributes]"Public,Static")
+            $fSlotTx2    = $etwTb.DefineField("SlotTx2",           [long[]], [System.Reflection.FieldAttributes]"Public,Static")
+            $fSlotMask   = $etwTb.DefineField("SlotMask",          [int],    [System.Reflection.FieldAttributes]"Public,Static")
+            $fActive     = $etwTb.DefineField("Active",            [int],    [System.Reflection.FieldAttributes]"Public,Static")
+            $fActiveBank = $etwTb.DefineField("ActiveBank",        [int],    [System.Reflection.FieldAttributes]"Public,Static")
+            $fInFlight0  = $etwTb.DefineField("InFlight0",         [int],    [System.Reflection.FieldAttributes]"Public,Static")
+            $fInFlight1  = $etwTb.DefineField("InFlight1",         [int],    [System.Reflection.FieldAttributes]"Public,Static")
+            $fTotalEv    = $etwTb.DefineField("TotalEvents",       [int],    [System.Reflection.FieldAttributes]"Public,Static")
+            $fTraceHnd   = $etwTb.DefineField("ActiveTraceHandle", [uint64], [System.Reflection.FieldAttributes]"Public,Static")
+            $fSessName   = $etwTb.DefineField("SessionName",       [string], [System.Reflection.FieldAttributes]"Public,Static")
+
+            $dllCtor  = [System.Runtime.InteropServices.DllImportAttribute].GetConstructor([type[]]@([string]))
+            $fLastErr = [System.Runtime.InteropServices.DllImportAttribute].GetField("SetLastError")
+            $fCSet    = [System.Runtime.InteropServices.DllImportAttribute].GetField("CharSet")
+            $fCConv   = [System.Runtime.InteropServices.DllImportAttribute].GetField("CallingConvention")
+            $fEntry   = [System.Runtime.InteropServices.DllImportAttribute].GetField("EntryPoint")
+
+            $addEtwPInvoke = {
+                param($name, $retType, [type[]]$pTypes)
+                $mb = $etwTb.DefineMethod($name, [System.Reflection.MethodAttributes]"Public,Static,PinvokeImpl", $retType, $pTypes)
+                $mb.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+                $mb.SetCustomAttribute([System.Reflection.Emit.CustomAttributeBuilder]::new(
+                    $dllCtor, @("advapi32.dll"),
+                    @($fLastErr, $fCSet, $fCConv, $fEntry),
+                    @([bool]$true, [System.Runtime.InteropServices.CharSet]::Unicode, [System.Runtime.InteropServices.CallingConvention]::Winapi, $name)
+                ))
+                return $mb
+            }
+
+            [void](&$addEtwPInvoke "StartTraceW"    ([uint32]) @([uint64].MakeByRefType(), [string], [IntPtr]))
+            $mCtrlTrace  = &$addEtwPInvoke "ControlTraceW"  ([uint32]) @([uint64], [string], [IntPtr], [uint32])
+            [void](&$addEtwPInvoke "EnableTraceEx2" ([uint32]) @([uint64], [Guid].MakeByRefType(), [uint32], [byte], [uint64], [uint64], [uint32], [IntPtr]))
+            [void](&$addEtwPInvoke "OpenTraceW"     ([uint64]) @([IntPtr]))
+            $mProcTrace  = &$addEtwPInvoke "ProcessTrace" ([uint32]) @([uint64[]], [uint32], [IntPtr], [IntPtr])
+            $mCloseTrace = &$addEtwPInvoke "CloseTrace"     ([uint32]) @([uint64])
+
+            # Pure-IL OnProcessExit(object sender, EventArgs e) so AppDomain.ProcessExit runs with zero PowerShell runspace
+            $mProcExit = $etwTb.DefineMethod("OnProcessExit", [System.Reflection.MethodAttributes]"Public,Static", [void], [type[]]@([object], [EventArgs]))
+            $ilPe = $mProcExit.GetILGenerator()
+            [void]$ilPe.DeclareLocal([IntPtr]) # 0: ptr
+            [void]$ilPe.DeclareLocal([int])    # 1: zi
+            $lblPeRet  = $ilPe.DefineLabel()
+            $lblPeZLp  = $ilPe.DefineLabel()
+            $lblPeZDn  = $ilPe.DefineLabel()
+            $lblPeNoTh = $ilPe.DefineLabel()
+
+            $mAllocH   = [System.Runtime.InteropServices.Marshal].GetMethod("AllocHGlobal",  [type[]]@([int]))
+            $mFreeH    = [System.Runtime.InteropServices.Marshal].GetMethod("FreeHGlobal",   [type[]]@([IntPtr]))
+            $mWriteI32 = [System.Runtime.InteropServices.Marshal].GetMethod("WriteInt32",    [type[]]@([IntPtr], [int], [int]))
+            $mWriteI64 = [System.Runtime.InteropServices.Marshal].GetMethod("WriteInt64",    [type[]]@([IntPtr], [int], [long]))
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fActive)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Brfalse, $lblPeRet)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Stsfld, $fActive)
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fTraceHnd)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblPeNoTh)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fTraceHnd)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, -1L)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblPeNoTh)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fTraceHnd)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mCloseTrace)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Pop)
+
+            $ilPe.MarkLabel($lblPeNoTh)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSessName)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Brfalse, $lblPeRet)
+
+            $peBase  = 120
+            $peTotal = $peBase + 512
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, $peTotal)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mAllocH)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Stloc_0)
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Stloc_1)
+            $ilPe.MarkLabel($lblPeZLp)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, $peTotal)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Bge, $lblPeZDn)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mWriteI64)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_8)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Add)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Stloc_1)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Br, $lblPeZLp)
+
+            $ilPe.MarkLabel($lblPeZDn)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, $peTotal)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mWriteI32)
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]44)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, 0x00020000)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mWriteI32)
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, 108 + [IntPtr]::Size)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, $peBase)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mWriteI32)
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSessName)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mCtrlTrace)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Pop)
+
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Call, $mFreeH)
+
+            $ilPe.MarkLabel($lblPeRet)
+            $ilPe.Emit([System.Reflection.Emit.OpCodes]::Ret)
+
+            # Pure-IL TraceThreadMain() for background OS thread (Zero PowerShell runspace overhead)
+            $fThreadAlive = $etwTb.DefineField("TraceThreadRunning", [int], [System.Reflection.FieldAttributes]"Public,Static")
+            $fLastTraceSt = $etwTb.DefineField("LastTraceStatus",    [int], [System.Reflection.FieldAttributes]"Public,Static")
+            $mThreadMain  = $etwTb.DefineMethod("TraceThreadMain", [System.Reflection.MethodAttributes]"Public,Static", [void], [type[]]@())
+            $ilTm = $mThreadMain.GetILGenerator()
+            $fZeroPtr = [IntPtr].GetField("Zero")
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Stsfld, $fThreadAlive)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Stsfld, $fLastTraceSt)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Newarr, [uint64])
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Dup)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fTraceHnd)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Stelem_I8)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fZeroPtr)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fZeroPtr)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Call, $mProcTrace)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Stsfld, $fLastTraceSt)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Stsfld, $fThreadAlive)
+            $ilTm.Emit([System.Reflection.Emit.OpCodes]::Ret)
+
+            # Pure-IL ClearSlots() - clears both Bank 0 and Bank 1 safely
+            $mClr = $etwTb.DefineMethod("ClearSlots", [System.Reflection.MethodAttributes]"Public,Static", [void], [type[]]@())
+            $ilClr = $mClr.GetILGenerator()
+            $mArrClr = [Array].GetMethod("Clear", [type[]]@([Array], [int], [int]))
+            foreach ($fld in @($fSlotPids, $fSlotRx, $fSlotTx, $fSlotPids2, $fSlotRx2, $fSlotTx2)) {
+                $lblSkipClr = $ilClr.DefineLabel()
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fld)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Brfalse, $lblSkipClr)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fld)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fld)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Ldlen)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Conv_I4)
+                $ilClr.Emit([System.Reflection.Emit.OpCodes]::Call, $mArrClr)
+                $ilClr.MarkLabel($lblSkipClr)
+            }
+            $ilClr.Emit([System.Reflection.Emit.OpCodes]::Ret)
+
+            # Pure-IL OnEventRecord(IntPtr pRec)
+            $mOnEv = $etwTb.DefineMethod("OnEventRecord", [System.Reflection.MethodAttributes]"Public,Static", [void], [type[]]@([IntPtr]))
+            $il = $mOnEv.GetILGenerator()
+            [void]$il.DeclareLocal([int])    # 0: opcode
+            [void]$il.DeclareLocal([int])    # 1: task
+            [void]$il.DeclareLocal([int])    # 2: dir (1=Tx, 2=Rx)
+            [void]$il.DeclareLocal([IntPtr]) # 3: userData
+            [void]$il.DeclareLocal([int])    # 4: pid
+            [void]$il.DeclareLocal([long])   # 5: size
+            [void]$il.DeclareLocal([int])    # 6: idx
+            [void]$il.DeclareLocal([int])    # 7: probe
+            [void]$il.DeclareLocal([int])    # 8: curPid
+            [void]$il.DeclareLocal([int])    # 9: curBank
+            [void]$il.DeclareLocal([int[]])  # 10: pArr
+            [void]$il.DeclareLocal([long[]]) # 11: rArr
+            [void]$il.DeclareLocal([long[]]) # 12: tArr
+
+            $mPtrEq    = [IntPtr].GetMethod("op_Equality", [type[]]@([IntPtr], [IntPtr]))
+            $mReadByte = [System.Runtime.InteropServices.Marshal].GetMethod("ReadByte",   [type[]]@([IntPtr], [int]))
+            $mReadI16  = [System.Runtime.InteropServices.Marshal].GetMethod("ReadInt16",  [type[]]@([IntPtr], [int]))
+            $mReadI32  = [System.Runtime.InteropServices.Marshal].GetMethod("ReadInt32",  [type[]]@([IntPtr], [int]))
+            $mReadI64  = [System.Runtime.InteropServices.Marshal].GetMethod("ReadInt64",  [type[]]@([IntPtr], [int]))
+            $mReadPtr  = [System.Runtime.InteropServices.Marshal].GetMethod("ReadIntPtr", [type[]]@([IntPtr], [int]))
+            $mIncInt   = [System.Threading.Interlocked].GetMethod("Increment",       [type[]]@([int].MakeByRefType()))
+            $mDecInt   = [System.Threading.Interlocked].GetMethod("Decrement",       [type[]]@([int].MakeByRefType()))
+            $mCexInt   = [System.Threading.Interlocked].GetMethod("CompareExchange", [type[]]@([int].MakeByRefType(), [int], [int]))
+            $mAddLong  = [System.Threading.Interlocked].GetMethod("Add",             [type[]]@([long].MakeByRefType(), [long]))
+            $mExchInt  = [System.Threading.Interlocked].GetMethod("Exchange",        [type[]]@([int].MakeByRefType(), [int]))
+            $mSpinWait = [System.Threading.Thread].GetMethod("SpinWait",             [type[]]@([int]))
+
+            $lblRet        = $il.DefineLabel()
+            $lblExitBank   = $il.DefineLabel()
+            $lblDec1       = $il.DefineLabel()
+            $lblTx         = $il.DefineLabel()
+            $lblRx         = $il.DefineLabel()
+            $lblCheckTask  = $il.DefineLabel()
+            $lblCheckUdp   = $il.DefineLabel()
+            $lblCheckLen   = $il.DefineLabel()
+            $lblPickBank   = $il.DefineLabel()
+            $lblTryB1      = $il.DefineLabel()
+            $lblUseB0      = $il.DefineLabel()
+            $lblUseB1      = $il.DefineLabel()
+            $lblStartProbe = $il.DefineLabel()
+            $lblLoop       = $il.DefineLabel()
+            $lblNextProbe  = $il.DefineLabel()
+            $lblFound      = $il.DefineLabel()
+            $lblAddTx      = $il.DefineLabel()
+
+            $tcpGuidBytes = ([Guid]"9a280ac0-c8e0-11d1-84e2-00c04fb998a2").ToByteArray()
+            $udpGuidBytes = ([Guid]"bf3a50c5-a9c9-4988-a005-2df0b7c80f80").ToByteArray()
+            $tcpLo = [BitConverter]::ToInt64($tcpGuidBytes, 0)
+            $tcpHi = [BitConverter]::ToInt64($tcpGuidBytes, 8)
+            $udpLo = [BitConverter]::ToInt64($udpGuidBytes, 0)
+            $udpHi = [BitConverter]::ToInt64($udpGuidBytes, 8)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fActive)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brfalse, $lblRet)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fZeroPtr)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mPtrEq)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblRet)
+
+            # Count every ETW record reaching OnEventRecord so connect/disconnect storms still trip the circuit breaker
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fTotalEv)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mIncInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+
+            # Match classic MOF + Kernel-Network opcodes:
+            # TX = 10 (TCP/UDP v4), 26 (TCP/UDP v6), 42 (KernelNet UDP v4), 58 (KernelNet UDP v6)
+            # RX = 11 (TCP/UDP v4), 27 (TCP/UDP v6), 43 (KernelNet UDP v4), 59 (KernelNet UDP v6)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]45)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadByte)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc_0)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]10)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]26)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]42)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]58)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]11)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblRx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]27)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblRx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]43)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblRx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]59)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblRx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblRet)
+
+            $il.MarkLabel($lblTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc_2)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblCheckTask)
+
+            $il.MarkLabel($lblRx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_2)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc_2)
+
+            # Accept Microsoft-Windows-Kernel-Network tasks (10=TCP, 11=UDP) OR Task==0 for classic TcpIpGuid/UdpIpGuid MOF events
+            $il.MarkLabel($lblCheckTask)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]46)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI16)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]10)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblCheckLen)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]11)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblCheckLen)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblRet)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]24)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI64)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, $tcpLo)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Bne_Un, $lblCheckUdp)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]32)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI64)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, $tcpHi)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblCheckLen)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblRet)
+
+            $il.MarkLabel($lblCheckUdp)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]24)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI64)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, $udpLo)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Bne_Un, $lblRet)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]32)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI64)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, $udpHi)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Bne_Un, $lblRet)
+
+            $il.MarkLabel($lblCheckLen)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]86)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI16)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_8)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Blt, $lblRet)
+
+            $offUd = 88 + [IntPtr]::Size
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]$offUd)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadPtr)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc_3)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_3)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fZeroPtr)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mPtrEq)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblRet)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_3)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI32)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ble, $lblRet)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_3)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mReadI32)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Conv_I8)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0xFFFFFFFFL)
+            $il.Emit([System.Reflection.Emit.OpCodes]::And)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 5)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 5)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ble, $lblRet)
+
+            # Lock-free InFlight guard on double-buffered banks so DrainAndReset reclaims dead PIDs safely every tick
+            $il.MarkLabel($lblPickBank)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fActiveBank)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 9)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 9)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblTryB1)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mIncInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fActiveBank)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brfalse, $lblUseB0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mDecInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblPickBank)
+
+            $il.MarkLabel($lblUseB0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotPids)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 10)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotRx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 11)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 12)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblStartProbe)
+
+            $il.MarkLabel($lblTryB1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mIncInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fActiveBank)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblUseB1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mDecInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblPickBank)
+
+            $il.MarkLabel($lblUseB1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotPids2)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 10)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotRx2)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 11)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotTx2)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 12)
+
+            $il.MarkLabel($lblStartProbe)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 7)
+
+            $il.MarkLabel($lblLoop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 7)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_S, [sbyte]64)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Bge, $lblExitBank)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4, 0x45D9F3B)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Mul)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 7)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Add)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotMask)
+            $il.Emit([System.Reflection.Emit.OpCodes]::And)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 6)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 10)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 6)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldelema, [int])
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 8)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 8)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblFound)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 8)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblNextProbe)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 10)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 6)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldelema, [int])
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 8)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 8)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brfalse, $lblFound)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 8)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblFound)
+
+            $il.MarkLabel($lblNextProbe)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 7)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Add)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Stloc, 7)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblLoop)
+
+            $il.MarkLabel($lblFound)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc_2)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Beq, $lblAddTx)
+
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 11)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 6)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldelema, [long])
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 5)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mAddLong)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblExitBank)
+
+            $il.MarkLabel($lblAddTx)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 12)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 6)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldelema, [long])
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 5)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mAddLong)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+
+            $il.MarkLabel($lblExitBank)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 9)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblDec1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight0)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mDecInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Br, $lblRet)
+
+            $il.MarkLabel($lblDec1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight1)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Call, $mDecInt)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Pop)
+
+            $il.MarkLabel($lblRet)
+            $il.Emit([System.Reflection.Emit.OpCodes]::Ret)
+
+            # Pure-IL DrainAndReset(int[] outPids, long[] outRx, long[] outTx, out int totalEvents) -> int count
+            $mDrain = $etwTb.DefineMethod("DrainAndReset", [System.Reflection.MethodAttributes]"Public,Static", [int], [type[]]@([int[]], [long[]], [long[]], [int].MakeByRefType()))
+            $ilD = $mDrain.GetILGenerator()
+            [void]$ilD.DeclareLocal([int])    # 0: count
+            [void]$ilD.DeclareLocal([int])    # 1: i
+            [void]$ilD.DeclareLocal([int])    # 2: len
+            [void]$ilD.DeclareLocal([int])    # 3: pid
+            [void]$ilD.DeclareLocal([long])   # 4: rx
+            [void]$ilD.DeclareLocal([long])   # 5: tx
+            [void]$ilD.DeclareLocal([int])    # 6: prevBank
+            [void]$ilD.DeclareLocal([int[]])  # 7: pArr
+            [void]$ilD.DeclareLocal([long[]]) # 8: rArr
+            [void]$ilD.DeclareLocal([long[]]) # 9: tArr
+
+            $lblDWait0 = $ilD.DefineLabel()
+            $lblDUse0  = $ilD.DefineLabel()
+            $lblDWait1 = $ilD.DefineLabel()
+            $lblDUse1  = $ilD.DefineLabel()
+            $lblDScan  = $ilD.DefineLabel()
+            $lblDLoop  = $ilD.DefineLabel()
+            $lblDNext  = $ilD.DefineLabel()
+            $lblDDone  = $ilD.DefineLabel()
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldarg_3)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fTotalEv)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Call, $mExchInt)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stind_I4)
+
+            # Swap ActiveBank atomically, drain the quiesced previous bank, and reclaim its slots
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fActiveBank)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Xor)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 6)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fActiveBank)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 6)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Call, $mExchInt)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 6)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 6)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Brtrue, $lblDWait1)
+
+            $ilD.MarkLabel($lblDWait0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ble, $lblDUse0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Call, $mSpinWait)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Br, $lblDWait0)
+
+            $ilD.MarkLabel($lblDUse0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotPids)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 7)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotRx)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 8)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotTx)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 9)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Br, $lblDScan)
+
+            $ilD.MarkLabel($lblDWait1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsflda, $fInFlight1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Call, $mCexInt)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ble, $lblDUse1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Call, $mSpinWait)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Br, $lblDWait1)
+
+            $ilD.MarkLabel($lblDUse1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotPids2)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 7)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotRx2)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 8)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldsfld, $fSlotTx2)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 9)
+
+            $ilD.MarkLabel($lblDScan)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 7)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldlen)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Conv_I4)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc_2)
+
+            $ilD.MarkLabel($lblDLoop)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_2)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Bge, $lblDDone)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 7)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldelem_I4)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc_3)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_3)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ble, $lblDNext)
+
+            # Quiesced bank: read & zero Rx/Tx and clear pArr[i]=0 so dead PIDs never accumulate
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 8)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldelem_I8)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 4)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 8)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stelem_I8)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 9)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldelem_I8)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc, 5)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 9)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stelem_I8)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 7)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stelem_I4)
+
+            $lblDEmit = $ilD.DefineLabel()
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Bgt, $lblDEmit)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 5)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I8, 0L)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ble, $lblDNext)
+
+            $ilD.MarkLabel($lblDEmit)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldlen)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Conv_I4)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Bge, $lblDDone)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldarg_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_3)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stelem_I4)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldarg_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 4)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stelem_I8)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldarg_2)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc, 5)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stelem_I8)
+
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Add)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc_0)
+
+            $ilD.MarkLabel($lblDNext)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldc_I4_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Add)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Stloc_1)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Br, $lblDLoop)
+
+            $ilD.MarkLabel($lblDDone)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ldloc_0)
+            $ilD.Emit([System.Reflection.Emit.OpCodes]::Ret)
+
+            [void]$etwTb.CreateType()
+        }
+
+        if ($null -eq [PSRPM.EtwNetConsumerV1]::SlotPids) {
+            [PSRPM.EtwNetConsumerV1]::SlotPids  = [int[]]::new(4096)
+            [PSRPM.EtwNetConsumerV1]::SlotRx    = [long[]]::new(4096)
+            [PSRPM.EtwNetConsumerV1]::SlotTx    = [long[]]::new(4096)
+            [PSRPM.EtwNetConsumerV1]::SlotPids2 = [int[]]::new(4096)
+            [PSRPM.EtwNetConsumerV1]::SlotRx2   = [long[]]::new(4096)
+            [PSRPM.EtwNetConsumerV1]::SlotTx2   = [long[]]::new(4096)
+            [PSRPM.EtwNetConsumerV1]::SlotMask  = 4095
+            [PSRPM.EtwNetConsumerV1]::Active    = 0
+            [PSRPM.EtwNetConsumerV1]::ActiveBank = 0
+            [PSRPM.EtwNetConsumerV1]::InFlight0  = 0
+            [PSRPM.EtwNetConsumerV1]::InFlight1  = 0
+            [PSRPM.EtwNetConsumerV1]::TotalEvents = 0
+            [PSRPM.EtwNetConsumerV1]::ActiveTraceHandle = [uint64]::MaxValue
+        }
+        if (-not $script:EtwDrainPids) {
+            $script:EtwDrainPids = [int[]]::new(4096)
+            $script:EtwDrainRx   = [long[]]::new(4096)
+            $script:EtwDrainTx   = [long[]]::new(4096)
+        }
+        $script:EtwNetInitialized = $true
+    }
+
+    $stopNetEtw = {
+        if (-not ('PSRPM.EtwNetConsumerV1' -as [type])) {
+            $script:EtwNetActive = $false
+            if ($script:EtwNetCap -eq 1) { $script:EtwNetCap = 0 }
+            $script:EtwNetRates.Clear()
+            return
+        }
+        [PSRPM.EtwNetConsumerV1]::Active = 0
+
+        if ($script:EtwTraceHandle -ne [uint64]::MaxValue -and $script:EtwTraceHandle -ne [uint64]0) {
+            try { [void][PSRPM.EtwNetConsumerV1]::CloseTrace($script:EtwTraceHandle) } catch {}
+            $script:EtwTraceHandle = [uint64]::MaxValue
+            [PSRPM.EtwNetConsumerV1]::ActiveTraceHandle = [uint64]::MaxValue
+        }
+
+        # Stop kernel session by handle and/or session name (EVENT_TRACE_CONTROL_STOP = 1)
+        $propBase  = 120
+        $propTotal = $propBase + 512
+        if ($script:EtwPropsPtr -eq [IntPtr]::Zero) {
+            $script:EtwPropsPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($propTotal)
+        }
+        for ($zi = 0; $zi -lt $propTotal; $zi += 8) {
+            [System.Runtime.InteropServices.Marshal]::WriteInt64($script:EtwPropsPtr, $zi, 0L)
+        }
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 0, $propTotal)
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 44, 0x00020000) # WNODE_FLAG_TRACED_GUID
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 108 + [IntPtr]::Size, $propBase)
+
+        if ($script:EtwSessionHandle -ne [uint64]0) {
+            try { [void][PSRPM.EtwNetConsumerV1]::ControlTraceW($script:EtwSessionHandle, $null, $script:EtwPropsPtr, [uint32]1) } catch {}
+            $script:EtwSessionHandle = [uint64]0
+        }
+        try { [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, $script:EtwSessionName, $script:EtwPropsPtr, [uint32]1) } catch {}
+
+        if ($script:EtwConsumerThread) {
+            try { [void]$script:EtwConsumerThread.Join(350) } catch {}
+            $script:EtwConsumerThread = $null
+        }
+        if ($script:EtwLogFilePtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwLogFilePtr) } catch {}
+            $script:EtwLogFilePtr = [IntPtr]::Zero
+        }
+        if ($script:EtwLogNamePtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwLogNamePtr) } catch {}
+            $script:EtwLogNamePtr = [IntPtr]::Zero
+        }
+        if ($script:EtwPropsPtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwPropsPtr) } catch {}
+            $script:EtwPropsPtr = [IntPtr]::Zero
+        }
+
+        [PSRPM.EtwNetConsumerV1]::ClearSlots()
+        [PSRPM.EtwNetConsumerV1]::TotalEvents = 0
+        $script:EtwNetRates.Clear()
+        $script:EtwNetActive = $false
+        $script:EtwHighRateTicks = 0
+        if ($script:EtwNetCap -eq 1) { $script:EtwNetCap = 0 }
+    }
+
+    $startNetEtw = {
+        &$ensureEtwConsumerType
+        [PSRPM.EtwNetConsumerV1]::SessionName = $script:EtwSessionName
+        if (-not $script:EtwExitHooked) {
+            $script:EtwExitHooked = $true
+            try {
+                $exitDel = [Delegate]::CreateDelegate([EventHandler], ([PSRPM.EtwNetConsumerV1]).GetMethod("OnProcessExit"))
+                [AppDomain]::CurrentDomain.add_ProcessExit($exitDel)
+            } catch {}
+        }
+
+        if ($script:EtwNetActive) { return }
+        $is64 = ([IntPtr]::Size -eq 8)
+        $script:EtwLastErr = ""
+
+        # Clean up any orphaned session with our PID name first
+        $propBase  = 120
+        $propTotal = $propBase + 512
+        if ($script:EtwPropsPtr -eq [IntPtr]::Zero) {
+            $script:EtwPropsPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($propTotal)
+        }
+        $sessionGuidBytes = ([Guid]::NewGuid()).ToByteArray()
+
+        $initProps = {
+            param([int]$logMode, [int]$enFlags)
+            for ($zi = 0; $zi -lt $propTotal; $zi += 8) {
+                [System.Runtime.InteropServices.Marshal]::WriteInt64($script:EtwPropsPtr, $zi, 0L)
+            }
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 0, $propTotal)   # Wnode.BufferSize
+            [System.Runtime.InteropServices.Marshal]::Copy($sessionGuidBytes, 0, [IntPtr]::Add($script:EtwPropsPtr, 24), 16) # Wnode.Guid
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 40, 1)          # Wnode.ClientContext = QPC
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 44, 0x00020000) # WNODE_FLAG_TRACED_GUID
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 48, 64)         # BufferSize (64 KB)
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 52, 4)          # MinimumBuffers
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 56, 32)         # MaximumBuffers
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 64, $logMode)   # LogFileMode
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 68, 1)          # FlushTimer (1 sec)
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 72, $enFlags)   # EnableFlags
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 108 + [IntPtr]::Size, $propBase) # LoggerNameOffset
+        }
+
+        # Primary: Private System Logger session (EVENT_TRACE_SYSTEM_LOGGER_MODE 0x02000000 | REAL_TIME 0x00000100) + EVENT_TRACE_FLAG_NETWORK_TCPIP (0x00010000)
+        $useSysLogger = $true
+        &$initProps 0x02000100 0x00010000
+        $sHandle = [uint64]0
+        $errStart = [PSRPM.EtwNetConsumerV1]::StartTraceW([ref]$sHandle, $script:EtwSessionName, $script:EtwPropsPtr)
+        if ($errStart -eq 183) {
+            # ERROR_ALREADY_EXISTS: stop orphan and retry once
+            &$initProps 0x02000100 0x00010000
+            [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, $script:EtwSessionName, $script:EtwPropsPtr, [uint32]1)
+            &$initProps 0x02000100 0x00010000
+            $sHandle = [uint64]0
+            $errStart = [PSRPM.EtwNetConsumerV1]::StartTraceW([ref]$sHandle, $script:EtwSessionName, $script:EtwPropsPtr)
+        }
+        if ($errStart -ne 0 -and $errStart -ne 5) {
+            # Fallback for pre-Win8 or saturated 8-slot System Logger limit: standard real-time session + EnableTraceEx2
+            $useSysLogger = $false
+            &$initProps 0x00000100 0
+            $sHandle = [uint64]0
+            $errStart = [PSRPM.EtwNetConsumerV1]::StartTraceW([ref]$sHandle, $script:EtwSessionName, $script:EtwPropsPtr)
+            if ($errStart -eq 183) {
+                &$initProps 0x00000100 0
+                [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, $script:EtwSessionName, $script:EtwPropsPtr, [uint32]1)
+                &$initProps 0x00000100 0
+                $sHandle = [uint64]0
+                $errStart = [PSRPM.EtwNetConsumerV1]::StartTraceW([ref]$sHandle, $script:EtwSessionName, $script:EtwPropsPtr)
+            }
+        }
+
+        if ($errStart -eq 5) {
+            # ERROR_ACCESS_DENIED -> Tier 1 Non-Admin Graceful Fallback
+            &$stopNetEtw
+            $script:EtwLastErr = "StartTrace=5"
+            $script:EtwNetCap = 3
+            return
+        }
+        if ($errStart -ne 0) {
+            &$stopNetEtw
+            $script:EtwLastErr = "StartTrace=$errStart"
+            $script:EtwNetCap = 4
+            return
+        }
+        $script:EtwSessionHandle = $sHandle
+
+        if (-not $useSysLogger) {
+            # Enable Microsoft-Windows-Kernel-Network {7dd42a49-5329-4832-8dfd-43d979153a88} on fallback session
+            $netGuid = [Guid]"7dd42a49-5329-4832-8dfd-43d979153a88"
+            $errEn = [PSRPM.EtwNetConsumerV1]::EnableTraceEx2(
+                $script:EtwSessionHandle,
+                [ref]$netGuid,
+                [uint32]1,      # EVENT_CONTROL_CODE_ENABLE_PROVIDER
+                [byte]5,        # TRACE_LEVEL_VERBOSE
+                [uint64]0x30,   # KERNEL_NETWORK_KEYWORD_IPV4 | IPV6
+                [uint64]0,
+                [uint32]0,
+                [IntPtr]::Zero
+            )
+            if ($errEn -ne 0) {
+                &$stopNetEtw
+                $script:EtwLastErr = "EnableTraceEx2=$errEn"
+                $script:EtwNetCap = if ($errEn -eq 5) { 3 } else { 4 }
+                return
+            }
+        }
+
+        # Prepare rooted Winapi delegate for ProcessTrace
+        if ($null -eq $script:EtwEventDelegate) {
+            $delType = 'PSRPM.EtwEventRecordCallback' -as [type]
+            $onEvMethod = ([PSRPM.EtwNetConsumerV1]).GetMethod("OnEventRecord")
+            $script:EtwEventDelegate = [Delegate]::CreateDelegate($delType, $onEvMethod)
+        }
+        $cbPtr = [System.Runtime.InteropServices.Marshal]::GetFunctionPointerForDelegate($script:EtwEventDelegate)
+
+        # Build EVENT_TRACE_LOGFILEW (x64: 448 bytes, Callback@424; x86: 416 bytes, Callback@400)
+        $lfSize = if ($is64) { 448 } else { 416 }
+        $script:EtwLogFilePtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($lfSize)
+        for ($zi = 0; $zi -lt $lfSize; $zi++) { [System.Runtime.InteropServices.Marshal]::WriteByte($script:EtwLogFilePtr, $zi, 0) }
+        $script:EtwLogNamePtr = [System.Runtime.InteropServices.Marshal]::StringToHGlobalUni($script:EtwSessionName)
+
+        $offLoggerName = [IntPtr]::Size
+        $offProcMode   = if ($is64) { 28 } else { 20 }
+        $offCallback   = if ($is64) { 424 } else { 400 }
+        [System.Runtime.InteropServices.Marshal]::WriteIntPtr($script:EtwLogFilePtr, $offLoggerName, $script:EtwLogNamePtr)
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwLogFilePtr, $offProcMode, 0x10000100) # REAL_TIME | EVENT_RECORD
+        [System.Runtime.InteropServices.Marshal]::WriteIntPtr($script:EtwLogFilePtr, $offCallback, $cbPtr)
+
+        $tHandle = [PSRPM.EtwNetConsumerV1]::OpenTraceW($script:EtwLogFilePtr)
+        $openErr = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        $invTraceHnd = if ($is64) { [uint64]::MaxValue } else { [uint64]0xFFFFFFFFL }
+        if ($tHandle -eq $invTraceHnd -or $tHandle -eq [uint64]0) {
+            &$stopNetEtw
+            $script:EtwLastErr = "OpenTrace=$openErr"
+            $script:EtwNetCap = if ($openErr -eq 5) { 3 } else { 4 }
+            return
+        }
+
+        [PSRPM.EtwNetConsumerV1]::ClearSlots()
+        [PSRPM.EtwNetConsumerV1]::ActiveBank = 0
+        [PSRPM.EtwNetConsumerV1]::InFlight0  = 0
+        [PSRPM.EtwNetConsumerV1]::InFlight1  = 0
+        [PSRPM.EtwNetConsumerV1]::TotalEvents = 0
+        [PSRPM.EtwNetConsumerV1]::Active = 1
+        [PSRPM.EtwNetConsumerV1]::ActiveTraceHandle = $tHandle
+        $script:EtwTraceHandle = $tHandle
+        $script:EtwNetActive = $true
+        $script:EtwNetCap = 1
+        $script:EtwBreakerTripped = $false
+        $script:EtwHighRateTicks = 0
+        $script:EtwLastDrainTicks = [DateTime]::UtcNow.Ticks
+
+        $ts = [System.Threading.ThreadStart]::CreateDelegate([System.Threading.ThreadStart], ([PSRPM.EtwNetConsumerV1]).GetMethod("TraceThreadMain"))
+        $script:EtwConsumerThread = [System.Threading.Thread]::new($ts)
+        $script:EtwConsumerThread.IsBackground = $true
+        $script:EtwConsumerThread.Name = "PSRPM_ETW_Net"
+        $script:EtwConsumerThread.Start()
+
+        [System.Threading.Thread]::Sleep(15)
+        $tsErr = [PSRPM.EtwNetConsumerV1]::LastTraceStatus
+        if ((-not $script:EtwConsumerThread.IsAlive) -and $tsErr -ne 0 -and $tsErr -ne 1223) {
+            &$stopNetEtw
+            $script:EtwLastErr = "ProcessTrace=$tsErr"
+            $script:EtwNetCap = if ($tsErr -eq 5) { 3 } else { 4 }
+            return
+        }
+    }
+
+    if ($NetEtwAction -eq "Stop") {
+        $script:EtwBreakerTripped = $false
+        &$stopNetEtw
+        $script:EtwLastErr = ""
+        $script:EtwNetCap = 0
+        $script:EtwLastSentCap = 0
+        return "STOPPED"
+    }
+
+    if ($NetEtwAction -eq "ResetBreaker") {
+        $script:EtwBreakerTripped = $false
+        $script:EtwHighRateTicks = 0
+        if ($script:EtwNetCap -eq 2) { $script:EtwNetCap = 0 }
+    }
+
+    if ($EnableNetEtw) {
+        if (-not $script:EtwBreakerTripped -and -not $script:EtwNetActive -and $script:EtwNetCap -ne 3) {
+            &$startNetEtw
+        }
+    } else {
+        if ($script:EtwNetActive -or $script:EtwNetCap -eq 1) {
+            $script:EtwBreakerTripped = $false
+            &$stopNetEtw
+            $script:EtwNetCap = 0
+        }
     }
 
     if ($script:FileMetaCache.Count -gt 4096) {
@@ -412,6 +1419,55 @@ $script:PSRPMCollectorScriptBlock = {
     $wallDeltaTicks = $nowTicks - $script:LastSnapTicks
     if ($wallDeltaTicks -le 0L) { $wallDeltaTicks = 10000000L } # 1s fallback in 100ns units
     $totalCapacityTicks = [double]($wallDeltaTicks * $script:CoreCount)
+
+    # 1C. Opt-In Kernel Network ETW Drain & 25k ev/s Circuit Breaker
+    $netEvRate = 0
+    if ($script:EtwNetActive -and ('PSRPM.EtwNetConsumerV1' -as [type])) {
+        $etwDeltaTicks = $nowTicks - $script:EtwLastDrainTicks
+        if ($etwDeltaTicks -le 0L) { $etwDeltaTicks = $wallDeltaTicks }
+        $etwDtSec = [double]$etwDeltaTicks / 10000000.0
+        if ($etwDtSec -lt 0.1) { $etwDtSec = 0.1 }
+        $script:EtwLastDrainTicks = $nowTicks
+
+        $totalEv = 0
+        $drainedCount = [PSRPM.EtwNetConsumerV1]::DrainAndReset(
+            $script:EtwDrainPids, $script:EtwDrainRx, $script:EtwDrainTx, [ref]$totalEv
+        )
+        $netEvRate = [int][Math]::Round([double]$totalEv / $etwDtSec)
+
+        # Circuit breaker: immediate spike >50k/s OR 2 consecutive ticks >25k/s -> auto-pause
+        $tripBreaker = $false
+        if ($netEvRate -gt 50000) {
+            $tripBreaker = $true
+        } elseif ($netEvRate -gt 25000) {
+            $script:EtwHighRateTicks++
+            if ($script:EtwHighRateTicks -ge 2) { $tripBreaker = $true }
+        } else {
+            $script:EtwHighRateTicks = 0
+        }
+
+        if ($tripBreaker) {
+            $script:EtwBreakerTripped = $true
+            &$stopNetEtw
+            $script:EtwNetCap = 2 # AutoPaused
+        } else {
+            $script:EtwNetRates.Clear()
+            for ($ei = 0; $ei -lt $drainedCount; $ei++) {
+                $ePid = $script:EtwDrainPids[$ei]
+                if ($ePid -gt 0) {
+                    $rBps = [long][Math]::Round([double]$script:EtwDrainRx[$ei] / $etwDtSec)
+                    $tBps = [long][Math]::Round([double]$script:EtwDrainTx[$ei] / $etwDtSec)
+                    if ($rBps -gt 0L -or $tBps -gt 0L) {
+                        $script:EtwNetRates[$ePid] = [long[]]@($rBps, $tBps)
+                    }
+                }
+            }
+            if ($drainedCount -gt 2048) {
+                [PSRPM.EtwNetConsumerV1]::ClearSlots()
+            }
+        }
+    }
+    $etwRateActive = ($script:EtwNetCap -eq 1)
 
     # 2. Query SystemProcessInformation (Class 5) in a Single Kernel Transition
     $retLen = 0
@@ -691,23 +1747,53 @@ $script:PSRPMCollectorScriptBlock = {
             }
 
             # 4. Differential Dynamic State Comparison
-            # Only emit dynamic row if CPU, WorkingSet (>4KB), PrivateBytes (>4KB), Threads, Handles, or Status changed
+            # Only emit dynamic row if CPU, WorkingSet (>4KB), PrivateBytes (>4KB), Threads, Handles, Status (or Net when ETW active) changed
+            $rxBps = 0L
+            $txBps = 0L
+            if ($etwRateActive -and $script:EtwNetRates.ContainsKey($pidVal)) {
+                $nr = $script:EtwNetRates[$pidVal]
+                $rxBps = $nr[0]
+                $txBps = $nr[1]
+            }
+
             $emitDyn = $true
             if ($script:LastDynState.ContainsKey($compKey)) {
                 $prev = $script:LastDynState[$compKey]
-                if ($prev[0] -eq $cpuPct -and
+                $baseUnchanged = (
+                    $prev[0] -eq $cpuPct -and
                     [Math]::Abs($wsBytes - $prev[1]) -lt 4096L -and
                     [Math]::Abs($privBytes - $prev[2]) -lt 4096L -and
                     $prev[3] -eq $numThreads -and
                     $prev[4] -eq $handles -and
-                    $prev[5] -eq $statusFlags) {
-                    $emitDyn = $false
+                    $prev[5] -eq $statusFlags
+                )
+                if ($baseUnchanged) {
+                    if (-not $etwRateActive) {
+                        if ($prev.Count -eq 6) { $emitDyn = $false }
+                    } else {
+                        if ($prev.Count -ge 8) {
+                            $prevRx = $prev[6]
+                            $prevTx = $prev[7]
+                            $rxZeroEdge = (($prevRx -eq 0L) -ne ($rxBps -eq 0L))
+                            $txZeroEdge = (($prevTx -eq 0L) -ne ($txBps -eq 0L))
+                            if (-not $rxZeroEdge -and -not $txZeroEdge -and
+                                [Math]::Abs($rxBps - $prevRx) -lt 1024L -and
+                                [Math]::Abs($txBps - $prevTx) -lt 1024L) {
+                                $emitDyn = $false
+                            }
+                        }
+                    }
                 }
             }
             if ($emitDyn) {
-                $script:LastDynState[$compKey] = @($cpuPct, $wsBytes, $privBytes, $numThreads, $handles, $statusFlags)
                 $cpuStr = $cpuPct.ToString([System.Globalization.CultureInfo]::InvariantCulture)
-                $dynDeltaList.Add("[$pidVal,$cpuStr,$wsBytes,$privBytes,$numThreads,$handles,$statusFlags]")
+                if ($etwRateActive) {
+                    $script:LastDynState[$compKey] = @($cpuPct, $wsBytes, $privBytes, $numThreads, $handles, $statusFlags, $rxBps, $txBps)
+                    $dynDeltaList.Add("[$pidVal,$cpuStr,$wsBytes,$privBytes,$numThreads,$handles,$statusFlags,$rxBps,$txBps]")
+                } else {
+                    $script:LastDynState[$compKey] = @($cpuPct, $wsBytes, $privBytes, $numThreads, $handles, $statusFlags)
+                    $dynDeltaList.Add("[$pidVal,$cpuStr,$wsBytes,$privBytes,$numThreads,$handles,$statusFlags]")
+                }
             }
         }
 
@@ -734,6 +1820,7 @@ $script:PSRPMCollectorScriptBlock = {
     }
     foreach ($sp in $stalePids) {
         $script:ActivePidToKey.Remove($sp)
+        [void]$script:EtwNetRates.Remove($sp)
         $deadPids.Add($sp)
     }
 
@@ -995,7 +2082,7 @@ $script:PSRPMCollectorScriptBlock = {
     $svcDeadJson = if ($deadSvcNames.Count -gt 0) { $jss.Serialize($deadSvcNames) } else { '[]' }
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.7.0","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.8.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"sys":[').Append("$sysCpuStr,$ramUsedMB,$ramTotalMB,$totalProcs,$totalThreads,$totalHandles,$commitUsedMB,$commitLimitMB,$kernCpuStr,$commitCurKB,$commitLimKB,$commitPeakKB,$physTotalKB,$physAvailKB,$sysCacheKB,$kernelPagedKB,$kernelNonPagedKB,$pfDelta,$prDelta,$pfwDelta,$mfwDelta,$csDelta,$intrDelta,$scDelta,$ioReadDelta,$ioWriteDelta,$ioOtherDelta,$($netRxKBs.ToString($inv)),$($netTxKBs.ToString($inv)),$($diskReadKBs.ToString($inv)),$($diskWriteKBs.ToString($inv)),$($diskQueueDepth.ToString($inv))").Append(']')
     [void]$sb.Append(',"cores":[').Append(($coreTuples -join ',')).Append(']')
@@ -1004,6 +2091,13 @@ $script:PSRPMCollectorScriptBlock = {
     [void]$sb.Append(',"meta":').Append($metaJson)
     [void]$sb.Append(',"svc":').Append($svcJson)
     [void]$sb.Append(',"svcDead":').Append($svcDeadJson)
+    if ($script:EtwNetCap -ne 0 -or $script:EtwLastSentCap -ne 0) {
+        [void]$sb.Append(',"netCap":').Append($script:EtwNetCap).Append(',"netEv":').Append($netEvRate)
+        if ($script:EtwNetCap -ge 2 -and -not [string]::IsNullOrEmpty($script:EtwLastErr)) {
+            [void]$sb.Append(',"netErr":').Append($jss.Serialize([string]$script:EtwLastErr))
+        }
+        $script:EtwLastSentCap = $script:EtwNetCap
+    }
     [void]$sb.Append(',"dyn":[').Append(($dynDeltaList -join ',')).Append(']}')
 
     $rawBytes = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())

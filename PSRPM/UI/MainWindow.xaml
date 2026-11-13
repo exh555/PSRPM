@@ -33,6 +33,7 @@
 
         <!-- Subtle Column Metric Tints (Process Explorer Classic Column Tints) -->
         <SolidColorBrush x:Key="ColTint_CPU" Color="#2222C55E"/>
+        <SolidColorBrush x:Key="ColTint_Net" Color="#1A0284C7"/>
         <SolidColorBrush x:Key="ColTint_PrivateBytes" Color="#28EAB308"/>
         <SolidColorBrush x:Key="ColTint_WorkingSet" Color="#22F97316"/>
 
@@ -458,6 +459,10 @@
                 <MenuItem x:Name="MenuCollapseAll" Header="_Collapse All Tree Nodes"/>
                 <Separator/>
                 <MenuItem x:Name="MenuViewLog" Header="_Activity &amp; Audit Log Pane" InputGestureText="Ctrl+L" IsCheckable="True"/>
+                <Separator/>
+                <MenuItem x:Name="MenuViewNetEtw" Header="Per-Process _Network Monitoring (ETW)" InputGestureText="Ctrl+Shift+N" IsCheckable="True"/>
+                <MenuItem x:Name="MenuColTreeNet" Header="Show _Tree Net Column" IsCheckable="True" IsChecked="True"/>
+                <MenuItem x:Name="MenuColNetRxTx" Header="Show Net _Recv / Send Columns" IsCheckable="True"/>
                 <MenuItem Header="_Update Speed">
                     <MenuItem x:Name="MenuRate500ms" Header="High (500 ms)" IsCheckable="True"/>
                     <MenuItem x:Name="MenuRate1s" Header="Normal (1 second)" IsCheckable="True" IsChecked="True"/>
@@ -467,7 +472,7 @@
                     <MenuItem x:Name="MenuRatePaused" Header="_Paused" InputGestureText="Space" IsCheckable="True"/>
                 </MenuItem>
             </MenuItem>
-            <MenuItem Header="_Process">
+            <MenuItem x:Name="MenuProcess" Header="_Process">
                 <MenuItem x:Name="MenuProperties" Header="_Properties..." InputGestureText="Enter" FontWeight="SemiBold"/>
                 <Separator/>
                 <MenuItem x:Name="MenuSuspend" Header="_Suspend Process"/>
@@ -476,7 +481,7 @@
                 <MenuItem x:Name="MenuEndProcess" Header="_Kill Process" InputGestureText="Del"/>
                 <MenuItem x:Name="MenuEndProcessTree" Header="Kill Process _Tree" InputGestureText="Shift+Del"/>
                 <Separator/>
-                <MenuItem Header="Set _Priority">
+                <MenuItem x:Name="MenuSetPriority" Header="Set _Priority">
                     <MenuItem x:Name="MenuPrioIdle" Header="Idle (Low)"/>
                     <MenuItem x:Name="MenuPrioBelow" Header="Below Normal"/>
                     <MenuItem x:Name="MenuPrioNormal" Header="Normal"/>
@@ -484,7 +489,7 @@
                     <MenuItem x:Name="MenuPrioHigh" Header="High"/>
                 </MenuItem>
                 <Separator/>
-                <MenuItem Header="Create _Dump">
+                <MenuItem x:Name="MenuCreateDump" Header="Create _Dump">
                     <MenuItem x:Name="MenuCreateMiniDump" Header="Create _Minidump..." ToolTip="Create lightweight minidump on remote target in C:\temp"/>
                     <MenuItem x:Name="MenuCreateFullDump" Header="Create _Full Memory Dump..." ToolTip="Create complete memory dump on remote target in C:\temp"/>
                 </MenuItem>
@@ -595,10 +600,10 @@
                     <Button x:Name="BtnToolbarProps" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Inspect Process Properties (Enter)">
                         <Path Data="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-6h2V17z M13,9h-2V7h2V9z" Fill="#0284C7" Width="15" Height="15" Stretch="Uniform"/>
                     </Button>
-                    <Button x:Name="BtnToolbarKill" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Kill Selected Process (Del)">
+                    <Button x:Name="BtnToolbarKill" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Kill Selected Process(es) (Del)">
                         <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" Fill="#DC2626" Width="15" Height="15" Stretch="Uniform"/>
                     </Button>
-                    <Button x:Name="BtnToolbarKillTree" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Kill Process Tree (Shift+Del)">
+                    <Button x:Name="BtnToolbarKillTree" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Kill Process Tree(s) (Shift+Del)">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" Fill="#991B1B" Width="14" Height="14" Stretch="Uniform"/>
                             <TextBlock Text="Tree" FontSize="10" FontWeight="Bold" Foreground="#991B1B" Margin="2,0,0,0" VerticalAlignment="Center"/>
@@ -607,6 +612,16 @@
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
                     <Button x:Name="BtnFindHandleOrDll" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Find Handle or DLL Substring (Ctrl+Shift+F)">
                         <Path Data="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14Z" Fill="#0284C7" Width="14" Height="14" Stretch="Uniform"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
+                    <Button x:Name="BtnToolbarNetEtw" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Toggle Opt-In Per-Process Kernel Network Monitoring (ETW, Ctrl+Shift+N)">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="EllNetEtwDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtNetEtwBtn" Text="Net ETW" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="BtnToolbarNetRxTx" Style="{StaticResource ToolbarButtonStyle}" Visibility="Collapsed" ToolTip="Show/Hide Net Recv and Net Send Split Columns" Margin="1,0,0,0">
+                        <TextBlock Text="Rx/Tx" FontSize="10.5" FontWeight="SemiBold" Foreground="#0284C7"/>
                     </Button>
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
                     <Button x:Name="BtnToolbarTheme" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Switch Light / Dark Theme (Ctrl+D)">
@@ -798,13 +813,30 @@
             </Grid>
         </Border>
 
+        <!-- 4B. Opt-In Network ETW Alert Banner (Circuit Breaker / Tier 1 Non-Admin Fallback) -->
+        <Border x:Name="NetEtwAlertBanner" DockPanel.Dock="Top" Visibility="Collapsed" Background="#FEF3C7" BorderBrush="#F59E0B" BorderThickness="0,0,0,1" Padding="10,5">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="BtnNetEtwResume" Content="Resume Monitoring" Padding="8,2" FontSize="11" FontWeight="SemiBold" Margin="0,0,6,0" Background="#FFFFFF" Foreground="#0F172A" BorderBrush="#D97706" BorderThickness="1" Cursor="Hand"/>
+                    <Button x:Name="BtnNetEtwTurnOff" Content="Turn Off" Padding="8,2" FontSize="11" Margin="0,0,6,0" Background="Transparent" Foreground="#0F172A" BorderBrush="#94A3B8" BorderThickness="1" Cursor="Hand"/>
+                    <Button x:Name="BtnNetEtwDismiss" Content="X" Padding="5,2" FontSize="11" FontWeight="Bold" Background="Transparent" Foreground="#475569" BorderThickness="0" Cursor="Hand" ToolTip="Dismiss Notice"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border x:Name="BdNetEtwBannerBadge" Background="#F59E0B" CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="TxtNetEtwBannerBadge" Text="CIRCUIT BREAKER" Foreground="#FFFFFF" FontSize="9.5" FontWeight="Bold"/>
+                    </Border>
+                    <TextBlock x:Name="TxtNetEtwBannerMsg" Text="" Foreground="#0F172A" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- 5. Main Workspace TabControl (Processes Tree-Grid & Services Manager) -->
         <TabControl x:Name="MainTabControl" BorderThickness="0" Background="{DynamicResource BrushSurfaceBg}" Padding="0">
             <TabItem Header="Processes">
                 <DataGrid x:Name="GridProcesses"
                           AutoGenerateColumns="False"
                           IsReadOnly="True"
-                          SelectionMode="Single"
+                          SelectionMode="Extended"
                           SelectionUnit="FullRow"
                           HeadersVisibility="Column"
                           GridLinesVisibility="Vertical"
@@ -920,6 +952,38 @@
                         <!-- Column 3: Tree CPU Usage % (Right-Aligned Tabular, Shown in Both Tree & Flat View) -->
                         <DataGridTextColumn Header="Tree CPU Usage" Binding="{Binding TreeCPUFormatted}" SortMemberPath="TreeCPU" Width="104" ElementStyle="{StaticResource RightTabularText}"/>
 
+                        <!-- Opt-In Per-Process Kernel Network ETW Columns (Collapsed by Default, 0 Cost When Off) -->
+                        <DataGridTemplateColumn x:Name="ColNetTotal" Header="Network" SortMemberPath="NetTotalBps" Width="94" Visibility="Collapsed">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource ColTint_Net}" Height="22" ToolTip="{Binding NetToolTip}">
+                                        <TextBlock Text="{Binding NetTotalFormatted}" Style="{StaticResource RightTabularText}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn x:Name="ColTreeNet" Header="Tree Net" Binding="{Binding TreeNetTotalFormatted}" SortMemberPath="TreeNetTotalBps" Width="94" Visibility="Collapsed">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource RightTabularText}">
+                                    <Setter Property="ToolTip" Value="{Binding NetToolTip}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn x:Name="ColNetRx" Header="Net Recv" Binding="{Binding NetRxFormatted}" SortMemberPath="NetRxBps" Width="94" Visibility="Collapsed">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource RightTabularText}">
+                                    <Setter Property="ToolTip" Value="{Binding NetToolTip}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn x:Name="ColNetTx" Header="Net Send" Binding="{Binding NetTxFormatted}" SortMemberPath="NetTxBps" Width="94" Visibility="Collapsed">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource RightTabularText}">
+                                    <Setter Property="ToolTip" Value="{Binding NetToolTip}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
                         <!-- Column 4: Private Bytes (Right-Aligned Tabular + Subtle Cream Column Tint) -->
                         <DataGridTemplateColumn Header="Private Bytes" SortMemberPath="PrivateBytes" Width="98">
                             <DataGridTemplateColumn.CellTemplate>
@@ -968,7 +1032,7 @@
                             <MenuItem x:Name="CtxEndProcess" Header="Kill Process" InputGestureText="Del"/>
                             <MenuItem x:Name="CtxEndTree" Header="Kill Process Tree" InputGestureText="Shift+Del"/>
                             <Separator/>
-                            <MenuItem Header="Create Dump">
+                            <MenuItem x:Name="CtxCreateDump" Header="Create Dump">
                                 <MenuItem x:Name="CtxCreateMiniDump" Header="Create Minidump..."/>
                                 <MenuItem x:Name="CtxCreateFullDump" Header="Create Full Memory Dump..."/>
                             </MenuItem>

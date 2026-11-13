@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-12
+
+### Added
+- **Opt-In Per-Process & Tree Kernel Network ETW Telemetry (`DataCollector.ps1`, `RunspaceEngine.ps1`, `ViewModelClasses.ps1`, `MainWindow.xaml`)**:
+  - Added a lazy-initialized, zero-cost-when-off pure-IL (`Reflection.Emit`) ETW consumer supporting classic System Logger MOF (`TcpIpGuid`/`UdpIpGuid`) and `Microsoft-Windows-Kernel-Network` fallback sessions.
+  - Added lock-free double-buffered slot recycling (`DrainAndReset`), a 25k/50k events/sec circuit breaker, non-admin Tier 1 graceful fallback banner, and 4 opt-in DataGrid columns (`Network`, `Tree Net`, `Net Recv`, `Net Send`) with 3-tier `TreeNet` hierarchy rollup and numeric sorting.
+- **Multi-Select Process Selection & Batch Actions (`MainWindow.xaml`, `PSRPM.psm1`, `RunspaceEngine.ps1`, `HelpWindow.xaml`)**:
+  - Enabled `Extended` selection (`Ctrl+Click`, `Shift+Click`, `Shift+Arrows`) and right-click multi-selection preservation on `GridProcesses`.
+  - Added batch command dispatch for `KillProcess`, `KillTree` (with ancestor deduplication to avoid redundant child kills), `SuspendProcess`, `ResumeProcess`, and `SetPriority`, while protecting `PID <= 4` kernel processes.
+- **Expanded ETW & Batch Verification (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added Test 12 covering the ETW zero-cost off path, pure-IL `OnEventRecord`/`DrainAndReset`, live `OpenTraceW`+`ProcessTrace` callback delivery, 3-tier `TreeNet` rollup, >4096 PID double-bank slot recycling, per-tab ETW banner isolation, strict 7-bit ASCII audit, and multi-select batch dispatch verification.
+
+### Changed
+- **Per-Tab ETW Lifecycle & Selection Preservation (`RunspaceEngine.ps1`, `PSRPM.psm1`)**:
+  - Isolated `NetEtwCap`, `NetEtwEventsPerSec`, and banner dismissal state per host tab, with automatic ETW session teardown on tab switch, tab close, or disconnect.
+  - Preserved multi-row selection across differential tree reconciliations and reorders.
+
 ## [1.7.0] - 2026-11-12
 
 ### Added

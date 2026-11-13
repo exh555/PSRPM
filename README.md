@@ -4,7 +4,7 @@
 
 # PSRPM -- PowerShell Remote Process Manager
 
-[![Version: 1.7.0](https://img.shields.io/badge/version-1.7.0-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.7.0](https://img.shields.io/badge/version-1.8.0-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 

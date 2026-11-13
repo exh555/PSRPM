@@ -14,6 +14,19 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [double]$TreeCPU
     [string]$TreeCPUFormatted
     hidden [double]$PendingTreeCPU
+    [long]$NetRxBps
+    [long]$NetTxBps
+    [long]$NetTotalBps
+    [string]$NetTotalFormatted
+    [string]$NetRxFormatted
+    [string]$NetTxFormatted
+    [long]$TreeNetRxBps
+    [long]$TreeNetTxBps
+    [long]$TreeNetTotalBps
+    [string]$TreeNetTotalFormatted
+    [string]$NetToolTip
+    hidden [long]$PendingTreeNetRx
+    hidden [long]$PendingTreeNetTx
     [long]$MemoryBytes
     [string]$MemoryFormatted
     [long]$PrivateBytes
@@ -258,6 +271,99 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.TreeCPUFormatted = $newTreeFmt
             $this.OnPropertyChanged('TreeCPUFormatted')
         }
+    }
+
+    static [string] FormatNetRate([long]$bps) {
+        if ($bps -le 0L) { return "" }
+        $mbps = ($bps * 8.0) / 1000000.0
+        if ($mbps -lt 0.01) { return "< 0.01 Mb/s" }
+        return ($mbps.ToString("F2") + " Mb/s")
+    }
+
+    [void] RefreshNetToolTip() {
+        $ownTot = $this.NetTotalBps
+        $treeTot = $this.TreeNetTotalBps
+        $tip = if ($ownTot -le 0L -and $treeTot -le 0L) {
+            $null
+        } else {
+            $ownRx = if ($this.NetRxBps -gt 0L) { [ProcessItemViewModel]::FormatNetRate($this.NetRxBps) } else { "0.00 Mb/s" }
+            $ownTx = if ($this.NetTxBps -gt 0L) { [ProcessItemViewModel]::FormatNetRate($this.NetTxBps) } else { "0.00 Mb/s" }
+            $trRx  = if ($this.TreeNetRxBps -gt 0L) { [ProcessItemViewModel]::FormatNetRate($this.TreeNetRxBps) } else { "0.00 Mb/s" }
+            $trTx  = if ($this.TreeNetTxBps -gt 0L) { [ProcessItemViewModel]::FormatNetRate($this.TreeNetTxBps) } else { "0.00 Mb/s" }
+            "Own:  Recv $ownRx | Send $ownTx`nTree: Recv $trRx | Send $trTx"
+        }
+        if ($this.NetToolTip -ne $tip) {
+            $this.NetToolTip = $tip
+            $this.OnPropertyChanged('NetToolTip')
+        }
+    }
+
+    [void] UpdateNetwork([long]$rx, [long]$tx) {
+        $rxVal = if ($rx -gt 0L) { $rx } else { 0L }
+        $txVal = if ($tx -gt 0L) { $tx } else { 0L }
+        $totVal = $rxVal + $txVal
+        $changed = $false
+
+        if ($this.NetRxBps -ne $rxVal) {
+            $this.NetRxBps = $rxVal
+            $this.OnPropertyChanged('NetRxBps')
+            $rxFmt = [ProcessItemViewModel]::FormatNetRate($rxVal)
+            if ($this.NetRxFormatted -ne $rxFmt) {
+                $this.NetRxFormatted = $rxFmt
+                $this.OnPropertyChanged('NetRxFormatted')
+            }
+            $changed = $true
+        }
+        if ($this.NetTxBps -ne $txVal) {
+            $this.NetTxBps = $txVal
+            $this.OnPropertyChanged('NetTxBps')
+            $txFmt = [ProcessItemViewModel]::FormatNetRate($txVal)
+            if ($this.NetTxFormatted -ne $txFmt) {
+                $this.NetTxFormatted = $txFmt
+                $this.OnPropertyChanged('NetTxFormatted')
+            }
+            $changed = $true
+        }
+        if ($this.NetTotalBps -ne $totVal) {
+            $this.NetTotalBps = $totVal
+            $this.OnPropertyChanged('NetTotalBps')
+            $totFmt = [ProcessItemViewModel]::FormatNetRate($totVal)
+            if ($this.NetTotalFormatted -ne $totFmt) {
+                $this.NetTotalFormatted = $totFmt
+                $this.OnPropertyChanged('NetTotalFormatted')
+            }
+            $changed = $true
+        }
+        if ($changed) { $this.RefreshNetToolTip() }
+    }
+
+    [void] UpdateTreeNetwork([long]$tRx, [long]$tTx) {
+        $rxVal = if ($tRx -gt 0L) { $tRx } else { 0L }
+        $txVal = if ($tTx -gt 0L) { $tTx } else { 0L }
+        $totVal = $rxVal + $txVal
+        $changed = $false
+
+        if ($this.TreeNetRxBps -ne $rxVal) {
+            $this.TreeNetRxBps = $rxVal
+            $this.OnPropertyChanged('TreeNetRxBps')
+            $changed = $true
+        }
+        if ($this.TreeNetTxBps -ne $txVal) {
+            $this.TreeNetTxBps = $txVal
+            $this.OnPropertyChanged('TreeNetTxBps')
+            $changed = $true
+        }
+        if ($this.TreeNetTotalBps -ne $totVal) {
+            $this.TreeNetTotalBps = $totVal
+            $this.OnPropertyChanged('TreeNetTotalBps')
+            $totFmt = [ProcessItemViewModel]::FormatNetRate($totVal)
+            if ($this.TreeNetTotalFormatted -ne $totFmt) {
+                $this.TreeNetTotalFormatted = $totFmt
+                $this.OnPropertyChanged('TreeNetTotalFormatted')
+            }
+            $changed = $true
+        }
+        if ($changed) { $this.RefreshNetToolTip() }
     }
 
     [void] SetTheme([bool]$isDark) {
@@ -1482,6 +1588,10 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [Object]$PidServicesMap
     [Object]$SummaryVm
     [hashtable]$TelemStats
+    [bool]$EnableNetEtw
+    [int]$NetEtwCap
+    [int]$NetEtwEventsPerSec
+    [int]$NetBannerDismissedCap
 
     hidden [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]] $Handlers
 
@@ -1504,6 +1614,10 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.AccentVisibility = "Visible"
         $this.CloseVisibility = "Collapsed"
         $this.LatencyText     = ""
+        $this.EnableNetEtw    = $false
+        $this.NetEtwCap       = 0
+        $this.NetEtwEventsPerSec = 0
+        $this.NetBannerDismissedCap = 0
 
         $this.ProcessMap     = [System.Collections.Generic.Dictionary[int, Object]]::new()
         $this.ServicesMap    = [System.Collections.Generic.Dictionary[string, Object]]::new()

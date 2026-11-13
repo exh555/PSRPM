@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.7.0'
+    ModuleVersion     = '1.8.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,12 +77,11 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.7.0 - Tree CPU Usage, Sort Cycling, Differential Services & Security Hardening
-- Tree CPU Usage Column: Added aggregated descendant + self CPU% column (TreeCPU) across Tree and Flat views.
-- Process Header 3-Way Sort Cycling: Clicking the Process column cycles Tree -> Flat Asc -> Flat Desc -> Tree, backed by fast Array.Sort ordering.
-- Differential Services & Zero-Clear UI: Added delta Windows Services streaming (svcDead), sub-tick CycleTime CPU detection, and in-place tab/tree reconciliation.
-- Win32 Security & Identity Hardening: Enabled SetLastError=true on Reflection.Emit P/Invoke calls, added fail-closed PID-reuse verification across process actions, and hardened memory dump directory ACLs.
-- Performance & Verification: Added Tests/Test-GzipPerformance.ps1 benchmark and expanded Test-PSRPMEngine.ps1 coverage.
+PSRPM v1.8.0 - Opt-In Per-Process Network ETW Telemetry & Multi-Select Batch Actions
+- Opt-In Per-Process & Tree Network ETW Telemetry: Lazy pure-IL Reflection.Emit ETW consumer supporting classic System Logger MOF and Kernel-Network fallback, double-buffered slot recycling, 25k/50k ev/s circuit breaker, and 4 opt-in columns (Network, Tree Net, Net Recv, Net Send).
+- Multi-Select Process Selection & Batch Actions: Enabled Extended row selection (Ctrl+Click, Shift+Click, Shift+Arrows), right-click selection preservation, and batch KillProcess, KillTree (with ancestor deduplication), SuspendProcess, ResumeProcess, and SetPriority actions.
+- Per-Tab ETW State Isolation & Non-Admin Guardrails: Added per-tab NetEtwCap/banner isolation, automatic ETW teardown on tab close/disconnect, and PID <= 4 kernel protection across batch actions.
+- Expanded Verification Suite: Added Test 12 for ETW zero-cost off path, pure-IL OnEventRecord/DrainAndReset, live OpenTraceW+ProcessTrace delivery, 3-tier TreeNet rollup, >4096 PID bank recycling, and multi-select batch dispatch verification.
 '@
         }
     }
