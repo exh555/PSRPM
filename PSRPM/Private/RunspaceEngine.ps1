@@ -68,6 +68,7 @@ function Start-PSRPMEngine {
         FilterText          = ""
         CategoryFilter      = ""
         ForceFullSync       = $true
+        FullSyncGen         = 1L
         ClearHostMaps       = $false
         ActiveTabId         = $InitialTabId
         PayloadTabId        = $InitialTabId
@@ -146,6 +147,20 @@ function Start-PSRPMEngine {
         $lastPollUtcTicks = 0L
         $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
 
+        $setFullSync = {
+            param([bool]$val)
+            [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
+            try {
+                $stateContainer.ForceFullSync = $val
+                if ($val) {
+                    $stateContainer.FullSyncGen = [long]$stateContainer.FullSyncGen + 1L
+                }
+            } finally {
+                [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
+            }
+        }
+
+        try {
         while (-not $stateContainer.IsStopping) {
             # 1. Drain High-Priority User Commands (Cooperative Quantum: at most 5 commands or 250 ms)
             $cmdBudgetSw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -346,7 +361,7 @@ function Start-PSRPMEngine {
                             $stateContainer.TargetDisplayName = $targetName
                             $stateContainer.TransportBadge    = $badge
                             $stateContainer.ConnectionState   = if ($newLocal) { "LocalMode" } else { "Connected" }
-                            $stateContainer.ForceFullSync     = $true
+                            &$setFullSync $true
 
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -357,6 +372,7 @@ function Start-PSRPMEngine {
                                 Target      = $targetName
                                 Transport   = $badge
                                 IsLocal     = $newLocal
+                                ConnState   = $stateContainer.ConnectionState
                                 ElapsedMs   = $swCmd.ElapsedMilliseconds
                             })
                         }
@@ -369,8 +385,8 @@ function Start-PSRPMEngine {
                                 $stateContainer.ActiveTabId       = $selTabId
                                 $stateContainer.TargetDisplayName = $curr.Target
                                 $stateContainer.TransportBadge    = $curr.Badge
-                                $stateContainer.ConnectionState   = if ($curr.IsLocal) { "LocalMode" } else { "Connected" }
-                                $stateContainer.ForceFullSync     = [bool]$cmd.ForceFullSync
+                                $stateContainer.ConnectionState   = $curr.ConnState
+                                &$setFullSync ([bool]$cmd.ForceFullSync)
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -399,8 +415,8 @@ function Start-PSRPMEngine {
                                     $stateContainer.ActiveTabId       = $activeTabId
                                     $stateContainer.TargetDisplayName = $curr.Target
                                     $stateContainer.TransportBadge    = $curr.Badge
-                                    $stateContainer.ConnectionState   = if ($curr.IsLocal) { "LocalMode" } else { "Connected" }
-                                    $stateContainer.ForceFullSync     = $true
+                                    $stateContainer.ConnectionState   = $curr.ConnState
+                                    &$setFullSync $true
                                 }
                             }
 
@@ -475,7 +491,7 @@ function Start-PSRPMEngine {
                             }
 
                             $stateContainer.ClearHostMaps = $true
-                            $stateContainer.ForceFullSync = $true
+                            &$setFullSync $true
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
                                 RequestId   = $cmd.RequestId
@@ -511,8 +527,13 @@ function Start-PSRPMEngine {
             if (-not $stateContainer.IsPaused -and $activeSessObj -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
                 $swPoll = [System.Diagnostics.Stopwatch]::StartNew()
                 try {
-                    $forceFull = [bool]$stateContainer.ForceFullSync
-                    $stateContainer.ForceFullSync = $false
+                    [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
+                    try {
+                        $forceFull     = [bool]$stateContainer.ForceFullSync
+                        $syncGenBefore = [long]$stateContainer.FullSyncGen
+                    } finally {
+                        [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
+                    }
 
                     $rawResult = if ($activeSessObj.IsLocal) {
                         & $activeSessObj.CollectorSb $forceFull
@@ -547,6 +568,16 @@ function Start-PSRPMEngine {
 
                     $swPoll.Stop()
                     if ($rawResult) {
+                        if ($forceFull) {
+                            [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
+                            try {
+                                if ([long]$stateContainer.FullSyncGen -eq $syncGenBefore) {
+                                    $stateContainer.ForceFullSync = $false
+                                }
+                            } finally {
+                                [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
+                            }
+                        }
                         $pollFinishTicks = [DateTime]::UtcNow.Ticks
                         $lastPollUtcTicks = $pollFinishTicks
                         $stateContainer.LastSampleUtcTicks = $pollFinishTicks
@@ -569,6 +600,9 @@ function Start-PSRPMEngine {
                     $swPoll.Stop()
                     $activeSessObj.ConsecutiveFailures++
                     $fails = $activeSessObj.ConsecutiveFailures
+                    if ($forceFull) {
+                        &$setFullSync $true
+                    }
 
                     if ($activeSessObj.IsLocal) {
                         $stateContainer.ConnectionState = "Disconnected"
@@ -637,7 +671,7 @@ function Start-PSRPMEngine {
                                     $activeSessObj.ReconnectAttempts    = 0
                                     $activeSessObj.BackoffSec           = 1
                                     $stateContainer.ConnectionState     = "Connected"
-                                    $stateContainer.ForceFullSync       = $true
+                                    &$setFullSync $true
                                     $stateContainer.LastErr             = $null
                                 }
                             }
@@ -654,10 +688,11 @@ function Start-PSRPMEngine {
             if ($waitMs -lt 10)        { $waitMs = 10 }
             [void]$stateContainer.WakeEvent.WaitOne($waitMs)
         }
-
-        foreach ($sItem in $sessions.Values) {
-            if ($sItem.Session) {
-                Remove-PSSession -Session $sItem.Session -ErrorAction SilentlyContinue
+        } finally {
+            foreach ($sItem in $sessions.Values) {
+                if ($sItem.Session) {
+                    Remove-PSSession -Session $sItem.Session -ErrorAction SilentlyContinue
+                }
             }
         }
     })
@@ -673,13 +708,36 @@ function Start-PSRPMEngine {
     $asyncHandle = $ps.BeginInvoke()
 
     # Host UI State Dictionaries & Caches
-    $processMap     = [System.Collections.Generic.Dictionary[int, Object]]::new()
-    $servicesMap    = [System.Collections.Generic.Dictionary[string, Object]]::new()
-    $pidServicesMap = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[string]]]::new()
-    $iconCache      = @{}
-    $callbacks      = @{}
-    $jss            = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+    $summaryVmHolder = @{ Value = $SummaryViewModel }
+    $processMap      = [System.Collections.Generic.Dictionary[int, Object]]::new()
+    $servicesMap     = [System.Collections.Generic.Dictionary[string, Object]]::new()
+    $pidServicesMap  = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[string]]]::new()
+    $iconCache       = @{}
+    $callbacks       = @{}
+    $jss             = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
     $jss.MaxJsonLength = 10485760
+
+    $requestFullSync = {
+        [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
+        try {
+            $stateContainer.ForceFullSync = $true
+            $stateContainer.FullSyncGen   = [long]$stateContainer.FullSyncGen + 1L
+        } finally {
+            [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
+        }
+        [void]$stateContainer.WakeEvent.Set()
+    }.GetNewClosure()
+
+    $appendLogSafe = {
+        param([string]$text)
+        if ($LogConsole -and -not [string]::IsNullOrEmpty($text)) {
+            if ($LogConsole.Text.Length -gt 24000) {
+                $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 16000)
+            }
+            $LogConsole.AppendText($text)
+            $LogConsole.ScrollToEnd()
+        }
+    }.GetNewClosure()
 
     # Helper: Extract 16x16 Associated Process Icon (Cached per Unique Path)
     $resolveProcessIcon = {
@@ -687,6 +745,7 @@ function Start-PSRPMEngine {
         if ([string]::IsNullOrWhiteSpace($exePath) -or $exePath -eq "N/A") { return $null }
         $key = $exePath.ToLowerInvariant()
         if ($iconCache.ContainsKey($key)) { return $iconCache[$key] }
+        if ($iconCache.Count -ge 512) { $iconCache.Clear() }
 
         $bmpSrc = $null
         try {
@@ -755,7 +814,42 @@ function Start-PSRPMEngine {
     $gridProcesses = $Window.FindName("GridProcesses")
     $txtMatchCount = $Window.FindName("TxtMatchCount")
 
+    $treeCpuVisited = [System.Collections.Generic.HashSet[int]]::new()
+    $recalculateTreeCpu = {
+        foreach ($kvp in $processMap.GetEnumerator()) {
+            $kvp.Value.PendingTreeCPU = $kvp.Value.CPU
+        }
+
+        foreach ($kvp in $processMap.GetEnumerator()) {
+            $vm = $kvp.Value
+            $ownCpu = $vm.CPU
+            if ($ownCpu -le 0.0) { continue }
+
+            $treeCpuVisited.Clear()
+            [void]$treeCpuVisited.Add($vm.PID)
+            $curr = $vm
+            $guard = 0
+            while ($curr.ParentPID -gt 0 -and $curr.ParentPID -ne $curr.PID -and $processMap.ContainsKey($curr.ParentPID) -and $guard -lt 64) {
+                $pPid = $curr.ParentPID
+                if (-not $treeCpuVisited.Add($pPid)) { break }
+                $parentVm = $processMap[$pPid]
+                if ($parentVm.CreateTime -gt 0 -and $curr.CreateTime -gt 0 -and $parentVm.CreateTime -gt $curr.CreateTime) {
+                    break
+                }
+                $parentVm.PendingTreeCPU += $ownCpu
+                $curr = $parentVm
+                $guard++
+            }
+        }
+
+        foreach ($kvp in $processMap.GetEnumerator()) {
+            $vm = $kvp.Value
+            $vm.UpdateTreeCpu($vm.PendingTreeCPU)
+        }
+    }.GetNewClosure()
+
     $updateViewCollections = {
+        & $recalculateTreeCpu
         $isTreeMode = [bool]$stateContainer.IsTreeMode
         $sortProp   = [string]$stateContainer.SortProperty
         if (-not $sortProp) { $sortProp = "PID" }
@@ -783,7 +877,6 @@ function Start-PSRPMEngine {
 
         foreach ($kvp in $processMap.GetEnumerator()) {
             $vm = $kvp.Value
-            $vm.Children.Clear()
 
             $isMatch = $true
             if ($catFilter.Length -gt 0 -and $vm.Category -ne $catFilter) {
@@ -817,7 +910,7 @@ function Start-PSRPMEngine {
             foreach ($matchPid in $directMatches) {
                 $curr = $processMap[$matchPid]
                 $guard = 0
-                while ($curr -and $curr.ParentPID -gt 0 -and $processMap.ContainsKey($curr.ParentPID) -and $curr.ParentPID -ne $curr.PID -and $guard -lt 20) {
+                while ($curr -and $curr.ParentPID -gt 0 -and $processMap.ContainsKey($curr.ParentPID) -and $curr.ParentPID -ne $curr.PID -and $guard -lt 64) {
                     $parentVm = $processMap[$curr.ParentPID]
                     if ($parentVm.CreateTime -gt 0 -and $curr.CreateTime -gt 0 -and $parentVm.CreateTime -gt $curr.CreateTime) {
                         break
@@ -864,17 +957,119 @@ function Start-PSRPMEngine {
                     $childrenMap[$pPid] = [System.Collections.Generic.List[Object]]::new()
                 }
                 $childrenMap[$pPid].Add($vm)
-                [void]$processMap[$pPid].Children.Add($vm)
             } else {
                 $roots.Add($vm)
             }
         }
 
-        # Helper to sort any node list by current SortProperty
+        # Reconcile vm.Children in-place only when membership changes (zero .Clear() calls)
+        foreach ($kvp in $processMap.GetEnumerator()) {
+            $pVm = $kvp.Value
+            if (-not $childrenMap.ContainsKey($kvp.Key)) {
+                for ($ci = $pVm.Children.Count - 1; $ci -ge 0; $ci--) {
+                    $pVm.Children.RemoveAt($ci)
+                }
+            } else {
+                $newKids = $childrenMap[$kvp.Key]
+                $same = ($pVm.Children.Count -eq $newKids.Count)
+                if ($same) {
+                    for ($ci = 0; $ci -lt $newKids.Count; $ci++) {
+                        if (-not [Object]::ReferenceEquals($pVm.Children[$ci], $newKids[$ci])) {
+                            $same = $false
+                            break
+                        }
+                    }
+                }
+                if (-not $same) {
+                    for ($ci = $pVm.Children.Count - 1; $ci -ge 0; $ci--) {
+                        $pVm.Children.RemoveAt($ci)
+                    }
+                    foreach ($nk in $newKids) {
+                        [void]$pVm.Children.Add($nk)
+                    }
+                }
+            }
+        }
+
+        # Fast Array.Sort helper (avoids PowerShell pipeline Sort-Object overhead)
+        $isNumericSort = $sortProp -in @("PID", "CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles")
         $sortNodes = {
             param($list)
-            if ($list.Count -le 1) { return $list }
-            return @($list | Sort-Object -Property @{ Expression = $sortProp; Descending = $sortDesc }, @{ Expression = "PID"; Descending = $false })
+            $cnt = $list.Count
+            if ($cnt -le 1) { return $list }
+            $arr = $list.ToArray()
+            if ($isNumericSort) {
+                $keys = [double[]]::new($cnt)
+                switch ($sortProp) {
+                    "CPU"          { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].CPU } }
+                    "TreeCPU"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeCPU } }
+                    "MemoryBytes"  { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].MemoryBytes } }
+                    "PrivateBytes" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PrivateBytes } }
+                    "Threads"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Threads } }
+                    "Handles"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Handles } }
+                    default        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PID } }
+                }
+                [Array]::Sort([Array]$keys, [Array]$arr)
+                if ($sortDesc) {
+                    [Array]::Reverse([Array]$keys)
+                    [Array]::Reverse([Array]$arr)
+                }
+                if ($sortProp -ne "PID") {
+                    $idx = 0
+                    while ($idx -lt ($cnt - 1)) {
+                        $j = $idx + 1
+                        while ($j -lt $cnt -and $keys[$j] -eq $keys[$idx]) { $j++ }
+                        $runLen = $j - $idx
+                        if ($runLen -gt 1) {
+                            $subItems = [Object[]]::new($runLen)
+                            $subPids  = [int[]]::new($runLen)
+                            for ($s = 0; $s -lt $runLen; $s++) {
+                                $subItems[$s] = $arr[$idx + $s]
+                                $subPids[$s]  = [int]$subItems[$s].PID
+                            }
+                            [Array]::Sort([Array]$subPids, [Array]$subItems)
+                            for ($s = 0; $s -lt $runLen; $s++) {
+                                $arr[$idx + $s] = $subItems[$s]
+                            }
+                        }
+                        $idx = $j
+                    }
+                }
+            } else {
+                $keys = [string[]]::new($cnt)
+                switch ($sortProp) {
+                    "Name"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [string]$arr[$idx].Name } }
+                    "Description" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [string]$arr[$idx].Description } }
+                    "CompanyName" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [string]$arr[$idx].CompanyName } }
+                    "User"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [string]$arr[$idx].User } }
+                    default       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [string]$arr[$idx].$sortProp } }
+                }
+                [Array]::Sort([Array]$keys, [Array]$arr, [System.StringComparer]::OrdinalIgnoreCase)
+                if ($sortDesc) {
+                    [Array]::Reverse([Array]$keys)
+                    [Array]::Reverse([Array]$arr)
+                }
+                $idx = 0
+                while ($idx -lt ($cnt - 1)) {
+                    $j = $idx + 1
+                    while ($j -lt $cnt -and [string]::Equals($keys[$j], $keys[$idx], [System.StringComparison]::OrdinalIgnoreCase)) { $j++ }
+                    $runLen = $j - $idx
+                    if ($runLen -gt 1) {
+                        $subItems = [Object[]]::new($runLen)
+                        $subPids  = [int[]]::new($runLen)
+                        for ($s = 0; $s -lt $runLen; $s++) {
+                            $subItems[$s] = $arr[$idx + $s]
+                            $subPids[$s]  = [int]$subItems[$s].PID
+                        }
+                        [Array]::Sort([Array]$subPids, [Array]$subItems)
+                        for ($s = 0; $s -lt $runLen; $s++) {
+                            $arr[$idx + $s] = $subItems[$s]
+                        }
+                    }
+                    $idx = $j
+                }
+            }
+            return $arr
         }
 
         $desiredList = [System.Collections.Generic.List[Object]]::new()
@@ -1001,23 +1196,31 @@ function Start-PSRPMEngine {
                 } catch {
                     if ($LogConsole) {
                         $tsErr = (Get-Date).ToString("HH:mm:ss.fff")
-                        $LogConsole.AppendText("[$tsErr] [ERROR] Command callback error: $($_.Exception.Message)`r`n")
+                        &$appendLogSafe "[$tsErr] [ERROR] Command callback error: $($_.Exception.Message)`r`n"
                     }
                     $stateContainer.LastErr = "Command callback error: $($_.Exception.Message)"
                 }
             }
         }
 
-        # 2. Check Target Switch / Reset Request
+        # 2. Check Target Switch / Reset Request (Zero .Clear() on live DataGrids)
         if ($stateContainer.ClearHostMaps) {
             $stateContainer.ClearHostMaps = $false
             $telemStats.LastReceivedSeq = 0
             $processMap.Clear()
             $servicesMap.Clear()
             $pidServicesMap.Clear()
-            $ProcessCollection.Clear()
-            if ($null -ne $ServicesCollection) { $ServicesCollection.Clear() }
-            if ($SummaryViewModel -and $SummaryViewModel.CoreGraphs) { $SummaryViewModel.CoreGraphs.Clear() }
+            $emptyList = [System.Collections.Generic.List[Object]]::new()
+            &$reconcileCollection $ProcessCollection $emptyList $gridProcesses
+            if ($null -ne $ServicesCollection) {
+                &$reconcileCollection $ServicesCollection $emptyList $null
+            }
+            $curSumVmReset = $summaryVmHolder.Value
+            if ($curSumVmReset -and $curSumVmReset.CoreGraphs) {
+                for ($gi = $curSumVmReset.CoreGraphs.Count - 1; $gi -ge 0; $gi--) {
+                    $curSumVmReset.CoreGraphs.RemoveAt($gi)
+                }
+            }
             $telemStats.TotalWireBytes = 0L
             $telemStats.TotalRawBytes  = 0L
             $telemStats.TotalTicks     = 0L
@@ -1101,9 +1304,9 @@ function Start-PSRPMEngine {
                 $gapCount = $seq - $lastSeq - 1
                 if ($LogConsole) {
                     $tsGap = (Get-Date).ToString("HH:mm:ss.fff")
-                    $LogConsole.AppendText("[$tsGap] [WARN] Telemetry sequence gap detected: expected #$($lastSeq + 1), received #$seq ($gapCount missed ticks). Triggering baseline resync.`r`n")
+                    &$appendLogSafe "[$tsGap] [WARN] Telemetry sequence gap detected: expected #$($lastSeq + 1), received #$seq ($gapCount missed ticks). Triggering baseline resync.`r`n"
                 }
-                $stateContainer.ForceFullSync = $true
+                &$requestFullSync
             }
             $telemStats.LastReceivedSeq = $seq
             $isDark = [bool]$stateContainer.IsDarkTheme
@@ -1139,37 +1342,74 @@ function Start-PSRPMEngine {
                 }
             }
 
-            # C. Process Services Update (if sent on this tick)
-            $svcArr = $data['svc']
-            if ($svcArr) {
-                $pidServicesMap.Clear()
-                foreach ($s in $svcArr) {
-                    $sName = [string]$s['n']
-                    $sDisp = [string]$s['d']
-                    $sPid  = [int]$s['p']
-                    $sSt   = [string]$s['st']
-                    $sSm   = [string]$s['sm']
-                    $sUsr  = [string]$s['u']
-                    $sDep  = if ($s['dep']) { [string]$s['dep'] } else { "" }
-                    $sRev  = if ($s['rev']) { [string]$s['rev'] } else { "" }
-                    $sDesc = if ($s['dsc']) { [string]$s['dsc'] } else { "" }
-                    $sBin  = if ($s['bin']) { [string]$s['bin'] } else { "" }
-
-                    if ($sPid -gt 0) {
-                        if (-not $pidServicesMap.ContainsKey($sPid)) {
-                            $pidServicesMap[$sPid] = [System.Collections.Generic.List[string]]::new()
+            # C. Process Differential Services Update (Added/Changed + Removed)
+            $svcArr     = $data['svc']
+            $svcDeadArr = $data['svcDead']
+            $svcChanged = ($svcArr -and $svcArr.Count -gt 0) -or ($svcDeadArr -and $svcDeadArr.Count -gt 0)
+            if ($svcChanged) {
+                if ($svcDeadArr -and $svcDeadArr.Count -gt 0) {
+                    $deadSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                    foreach ($dn in $svcDeadArr) {
+                        $dnStr = [string]$dn
+                        [void]$deadSet.Add($dnStr)
+                        if ($servicesMap.ContainsKey($dnStr)) {
+                            [void]$servicesMap.Remove($dnStr)
                         }
-                        $pidServicesMap[$sPid].Add($sName)
                     }
+                    if ($null -ne $ServicesCollection) {
+                        for ($si = $ServicesCollection.Count - 1; $si -ge 0; $si--) {
+                            if ($deadSet.Contains([string]$ServicesCollection[$si].Name)) {
+                                $ServicesCollection.RemoveAt($si)
+                            }
+                        }
+                    }
+                }
 
-                    if ($servicesMap.ContainsKey($sName)) {
-                        $servicesMap[$sName].UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
-                    } else {
-                        $sVm = & $createServiceVm
-                        $sVm.UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
-                        $servicesMap[$sName] = $sVm
-                        if ($null -ne $ServicesCollection) {
-                            $ServicesCollection.Add($sVm)
+                if ($svcArr -and $svcArr.Count -gt 0) {
+                    foreach ($s in $svcArr) {
+                        $sName = [string]$s['n']
+                        $sDisp = [string]$s['d']
+                        $sPid  = [int]$s['p']
+                        $sSt   = [string]$s['st']
+                        $sSm   = [string]$s['sm']
+                        $sUsr  = [string]$s['u']
+                        $sDep  = if ($s['dep']) { [string]$s['dep'] } else { "" }
+                        $sRev  = if ($s['rev']) { [string]$s['rev'] } else { "" }
+                        $sDesc = if ($s['dsc']) { [string]$s['dsc'] } else { "" }
+                        $sBin  = if ($s['bin']) { [string]$s['bin'] } else { "" }
+
+                        if ($servicesMap.ContainsKey($sName)) {
+                            $servicesMap[$sName].UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
+                        } else {
+                            $sVm = & $createServiceVm
+                            $sVm.UpdateService($sName, $sDisp, $sPid, $sSt, $sSm, $sUsr, $sDep, $sRev, $sDesc, $sBin)
+                            $servicesMap[$sName] = $sVm
+                            if ($null -ne $ServicesCollection) {
+                                $ServicesCollection.Add($sVm)
+                            }
+                        }
+                    }
+                }
+
+                $pidServicesMap.Clear()
+                foreach ($svcVmCur in $servicesMap.Values) {
+                    if ($svcVmCur.PID -gt 0) {
+                        if (-not $pidServicesMap.ContainsKey($svcVmCur.PID)) {
+                            $pidServicesMap[$svcVmCur.PID] = [System.Collections.Generic.List[string]]::new()
+                        }
+                        $pidServicesMap[$svcVmCur.PID].Add($svcVmCur.Name)
+                    }
+                }
+
+                foreach ($pKvp in $processMap.GetEnumerator()) {
+                    $pVmItem = $pKvp.Value
+                    $newHosted = if ($pidServicesMap.ContainsKey($pKvp.Key)) { ($pidServicesMap[$pKvp.Key] -join ", ") } else { "" }
+                    if ($pVmItem.HostedServices -ne $newHosted) {
+                        $pVmItem.HostedServices = $newHosted
+                        $pVmItem.OnPropertyChanged('HostedServices')
+                        if ($pVmItem.Name -eq "svchost.exe") {
+                            $pVmItem.Description = if ($newHosted) { "Host Process for Windows Services ($newHosted)" } else { "Host Process for Windows Services" }
+                            $pVmItem.OnPropertyChanged('Description')
                         }
                     }
                 }
@@ -1300,13 +1540,14 @@ function Start-PSRPMEngine {
                 $txtTelemDelta.ToolTip = "Sequence #$seq | Dynamic Updates: $dynCount | New Processes (+Meta): $metaCount | Exited (-Exit): $deadCount"
             }
 
-            if ($data['hw']) {
-                $SummaryViewModel.UpdateHardwareInfo($data['hw'])
+            $curSummaryVm = $summaryVmHolder.Value
+            if ($curSummaryVm -and $data['hw']) {
+                $curSummaryVm.UpdateHardwareInfo($data['hw'])
             }
 
             $sysArr = $data['sys']
-            if ($sysArr -and $sysArr.Count -ge 8) {
-                $SummaryViewModel.UpdateSummary(
+            if ($curSummaryVm -and $sysArr -and $sysArr.Count -ge 8) {
+                $curSummaryVm.UpdateSummary(
                     [double]$sysArr[0],
                     [long]$sysArr[1],
                     [long]$sysArr[2],
@@ -1318,12 +1559,12 @@ function Start-PSRPMEngine {
                 )
 
                 if ($sysArr.Count -ge 27) {
-                    $SummaryViewModel.UpdateExtendedTelemetry($sysArr, $data['cores'])
+                    $curSummaryVm.UpdateExtendedTelemetry($sysArr, $data['cores'])
                 }
 
                 if ($statusText) {
-                    $netTag = if ($SummaryViewModel.NetThroughputFormatted -and $SummaryViewModel.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($SummaryViewModel.NetThroughputFormatted)" } else { "" }
-                    $telemMsg = "CPU: $($SummaryViewModel.CpuSummaryFormatted) | Commit: $($SummaryViewModel.CommitSummaryFormatted) | Procs: $($SummaryViewModel.ProcessCount) | RAM: $($SummaryViewModel.RamPctFormatted)$netTag | Wire: $($wireKB.ToString('F2')) KB ($($stateContainer.PollLatencyMs) ms)"
+                    $netTag = if ($curSummaryVm.NetThroughputFormatted -and $curSummaryVm.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($curSummaryVm.NetThroughputFormatted)" } else { "" }
+                    $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag | Wire: $($wireKB.ToString('F2')) KB ($($stateContainer.PollLatencyMs) ms)"
                     $stateContainer.LastStatusText = $telemMsg
                     if ($stateContainer.IsPaused) {
                         $statusText.Text = "[PAUSED] $telemMsg"
@@ -1363,9 +1604,11 @@ function Start-PSRPMEngine {
             }
 
             # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting)
-            $needsOrderPass = $structureChanged -or (-not $stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles")) -or ($stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles"))
+            $needsOrderPass = $structureChanged -or (-not $stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles")) -or ($stateContainer.IsTreeMode -and $stateContainer.SortProperty -in @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles"))
             if ($needsOrderPass -or $ProcessCollection.Count -eq 0) {
                 & $updateViewCollections
+            } elseif (($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
+                & $recalculateTreeCpu
             }
         } catch {
             $stateContainer.LastErr = "UI Sync Error: $($_.Exception.Message)"
@@ -1386,16 +1629,32 @@ function Start-PSRPMEngine {
         [void]$stateContainer.WakeEvent.Set()
     }.GetNewClosure()
 
+    $setSummaryViewModel = {
+        param([Object]$vm)
+        if ($vm) { $summaryVmHolder.Value = $vm }
+    }.GetNewClosure()
+
+    $reconcileServices = {
+        param([System.Collections.Generic.List[Object]]$desiredServices)
+        if ($null -ne $ServicesCollection) {
+            &$reconcileCollection $ServicesCollection $desiredServices $null
+        }
+    }.GetNewClosure()
+
     return @{
-        Runspace       = $rs
-        PowerShell     = $ps
-        Handle         = $asyncHandle
-        Timer          = $timer
-        StateContainer = $stateContainer
-        ProcessMap     = $processMap
-        ServicesMap    = $servicesMap
-        PidServicesMap = $pidServicesMap
-        RefreshTree    = $updateViewCollections
-        SendCommand    = $enqueueCommand
+        Runspace            = $rs
+        PowerShell          = $ps
+        Handle              = $asyncHandle
+        Timer               = $timer
+        StateContainer      = $stateContainer
+        ProcessMap          = $processMap
+        ServicesMap         = $servicesMap
+        PidServicesMap      = $pidServicesMap
+        TelemStats          = $telemStats
+        RefreshTree         = $updateViewCollections
+        SendCommand         = $enqueueCommand
+        SetSummaryViewModel = $setSummaryViewModel
+        ReconcileServices   = $reconcileServices
+        RequestFullSync     = $requestFullSync
     }
 }

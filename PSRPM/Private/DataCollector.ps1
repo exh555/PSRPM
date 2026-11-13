@@ -17,17 +17,27 @@ $script:PSRPMCollectorScriptBlock = {
         $dynMod = $dynAsm.DefineDynamicModule("PSRPMNativeCollectorV3Mod")
         $tb = $dynMod.DefineType("PSRPM.NativeCollectorV3", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
 
+        $dllImpCtor = [System.Runtime.InteropServices.DllImportAttribute].GetConstructor(@([string]))
+        $fSetLast   = [System.Runtime.InteropServices.DllImportAttribute].GetField("SetLastError")
+        $fCharSet   = [System.Runtime.InteropServices.DllImportAttribute].GetField("CharSet")
+        $fCallConv  = [System.Runtime.InteropServices.DllImportAttribute].GetField("CallingConvention")
+        $fEntryPt   = [System.Runtime.InteropServices.DllImportAttribute].GetField("EntryPoint")
+
         $addPInvoke = {
             param($name, $dll, $retType, [type[]]$paramTypes)
-            $mb = $tb.DefinePInvokeMethod(
-                $name, $dll,
+            $mb = $tb.DefineMethod(
+                $name,
                 [System.Reflection.MethodAttributes]"Public,Static,PinvokeImpl",
-                [System.Reflection.CallingConventions]::Standard,
-                $retType, $paramTypes,
-                [System.Runtime.InteropServices.CallingConvention]::Winapi,
-                [System.Runtime.InteropServices.CharSet]::Unicode
+                $retType, $paramTypes
             )
-            $mb.SetImplementationFlags($mb.GetMethodImplementationFlags() -bor [System.Reflection.MethodImplAttributes]::PreserveSig)
+            $mb.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+            $cab = [System.Reflection.Emit.CustomAttributeBuilder]::new(
+                $dllImpCtor,
+                @($dll),
+                @($fSetLast, $fCharSet, $fCallConv, $fEntryPt),
+                @([bool]$true, [System.Runtime.InteropServices.CharSet]::Unicode, [System.Runtime.InteropServices.CallingConvention]::Winapi, $name)
+            )
+            $mb.SetCustomAttribute($cab)
         }
 
         &$addPInvoke "NtQuerySystemInformation"   "ntdll.dll"    ([int])    @([int], [IntPtr], [int], [int].MakeByRefType())
@@ -160,12 +170,13 @@ $script:PSRPMCollectorScriptBlock = {
 
         # Persistent Session Caches
         $script:ProcCpuCache   = @{} # Key: "PID_CreateTime" -> long (UserTime + KernelTime in 100ns ticks)
+        $script:ProcCycleCache = @{} # Key: "PID_CreateTime" -> long (CycleTime for sub-tick CPU activity)
         $script:ProcMetaCache  = @{} # Key: "PID_CreateTime" -> Hashtable static metadata
         $script:SentMetaKeys   = [System.Collections.Generic.HashSet[string]]::new()
         $script:LastDynState   = @{} # Key: "PID_CreateTime" -> [double cpu, long ws, long pb, int th, int hnd, int flags]
         $script:ActivePidToKey = @{} # Key: int PID -> "PID_CreateTime"
         $script:ServicePidSet  = [System.Collections.Generic.HashSet[int]]::new()
-        $script:CachedServices = [System.Collections.Generic.List[Object]]::new()
+        $script:LastSvcState   = @{}
         $script:FileMetaCache  = @{
             "n/a" = @{ d = ""; c = "" }
         }
@@ -198,11 +209,24 @@ $script:PSRPMCollectorScriptBlock = {
     if ($ForceFullSync) {
         $script:SentMetaKeys.Clear()
         $script:LastDynState.Clear()
+        $script:LastSvcState.Clear()
         $script:LastSvcRefresh = [DateTime]::MinValue
+    }
+
+    if ($script:FileMetaCache.Count -gt 4096) {
+        $script:FileMetaCache.Clear()
+        $script:FileMetaCache["n/a"] = @{ d = ""; c = "" }
+    }
+    if ($script:SidCache.Count -gt 1024) {
+        $script:SidCache.Clear()
+        $script:SidCache["S-1-5-18"] = "NT AUTHORITY\SYSTEM"
+        $script:SidCache["S-1-5-19"] = "NT AUTHORITY\LOCAL SERVICE"
+        $script:SidCache["S-1-5-20"] = "NT AUTHORITY\NETWORK SERVICE"
     }
 
     # Refresh Windows Services Cache first on initial sync or every 30s so ServicePidSet is ready
     $servicesPayload = $null
+    $deadSvcNames    = [System.Collections.Generic.List[string]]::new()
     $nowUtc = [DateTime]::UtcNow
     if (($nowUtc - $script:LastSvcRefresh).TotalSeconds -ge 30.0) {
         $svcArr = [System.Collections.Generic.List[Object]]::new()
@@ -355,8 +379,31 @@ $script:PSRPMCollectorScriptBlock = {
             } catch {}
         }
 
-        $script:CachedServices = $svcArr
-        $servicesPayload = $svcArr
+        $sendFullSvc = ($script:LastSvcState.Count -eq 0 -or $ForceFullSync)
+        $deltaSvc = [System.Collections.Generic.List[Object]]::new()
+        $seenSvcNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+        foreach ($entry in $svcArr) {
+            $sKey = [string]$entry.n
+            [void]$seenSvcNames.Add($sKey)
+            $sig = "$($entry.p)|$($entry.st)|$($entry.sm)|$($entry.u)|$($entry.d)|$($entry.dep)|$($entry.rev)|$($entry.dsc)|$($entry.bin)"
+            if ($sendFullSvc -or -not $script:LastSvcState.ContainsKey($sKey) -or $script:LastSvcState[$sKey] -ne $sig) {
+                $script:LastSvcState[$sKey] = $sig
+                $deltaSvc.Add($entry)
+            }
+        }
+
+        $oldSvcKeys = @($script:LastSvcState.Keys)
+        foreach ($oldKey in $oldSvcKeys) {
+            if (-not $seenSvcNames.Contains($oldKey)) {
+                [void]$script:LastSvcState.Remove($oldKey)
+                $deadSvcNames.Add($oldKey)
+            }
+        }
+
+        if ($deltaSvc.Count -gt 0) {
+            $servicesPayload = $deltaSvc
+        }
         $script:LastSvcRefresh = $nowUtc
     }
 
@@ -478,15 +525,24 @@ $script:PSRPMCollectorScriptBlock = {
 
             # Delta CPU % Calculation
             $totCpuTicks = $userTime + $kernelTime
+            $cycleTime   = [System.Runtime.InteropServices.Marshal]::ReadInt64($curPtr, 24)
             $cpuPct = 0.0
             if ($script:ProcCpuCache.ContainsKey($compKey)) {
                 $cpuDiff = $totCpuTicks - $script:ProcCpuCache[$compKey]
                 if ($cpuDiff -gt 0L) {
                     $cpuPct = [Math]::Round(($cpuDiff / $totalCapacityTicks) * 100.0, 2)
                     if ($cpuPct -gt 100.0) { $cpuPct = 100.0 }
+                    elseif ($cpuPct -le 0.0) { $cpuPct = 0.001 }
+                } elseif ($script:ProcCycleCache.ContainsKey($compKey)) {
+                    $cycleDiff = $cycleTime - $script:ProcCycleCache[$compKey]
+                    if ($cycleDiff -gt 0L) {
+                        # Sub-tick CPU activity (< 1 scheduler clock tick) -> triggers "< 0.01" display
+                        $cpuPct = 0.001
+                    }
                 }
             }
-            $script:ProcCpuCache[$compKey] = $totCpuTicks
+            $script:ProcCpuCache[$compKey]   = $totCpuTicks
+            $script:ProcCycleCache[$compKey] = $cycleTime
             $procCpuSum += $cpuPct
 
             # 3. Static Metadata Enrichment (Executed ONLY ONCE when a new PID+CreateTime spawns)
@@ -667,6 +723,7 @@ $script:PSRPMCollectorScriptBlock = {
     }
     foreach ($sk in $staleKeys) {
         $script:ProcCpuCache.Remove($sk)
+        $script:ProcCycleCache.Remove($sk)
         $script:ProcMetaCache.Remove($sk)
         $script:LastDynState.Remove($sk)
         [void]$script:SentMetaKeys.Remove($sk)
@@ -865,13 +922,6 @@ $script:PSRPMCollectorScriptBlock = {
 
     # C. psapi.dll!GetPerformanceInfo counters already computed natively in Section 6
 
-    # D. Extended Hardware Counters (iphlpapi!GetIfTable Network & Storage Activity)
-    $netRxKBs       = 0.0
-    $netTxKBs       = 0.0
-    $diskReadKBs    = 0.0
-    $diskWriteKBs   = 0.0
-    $diskQueueDepth = 0.0
-
     # D. Extended Hardware Counters (iphlpapi!GetIfTable2 64-bit Network & Storage Activity)
     $netRxKBs       = 0.0
     $netTxKBs       = 0.0
@@ -940,11 +990,12 @@ $script:PSRPMCollectorScriptBlock = {
     $kernCpuStr = $kernelCpu.ToString($inv)
     $isFullNum  = if ($script:SeqNumber -eq 1 -or $ForceFullSync) { 1 } else { 0 }
     $hwJson     = if ($isFullNum -eq 1) { $jss.Serialize($script:CachedHwInfo) } else { 'null' }
-    $metaJson   = if ($newMetaList.Count -gt 0) { $jss.Serialize($newMetaList) } else { '[]' }
-    $svcJson    = if ($null -ne $servicesPayload) { $jss.Serialize($servicesPayload) } else { 'null' }
+    $metaJson    = if ($newMetaList.Count -gt 0) { $jss.Serialize($newMetaList) } else { '[]' }
+    $svcJson     = if ($null -ne $servicesPayload) { $jss.Serialize($servicesPayload) } else { 'null' }
+    $svcDeadJson = if ($deadSvcNames.Count -gt 0) { $jss.Serialize($deadSvcNames) } else { '[]' }
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.6.3","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.7.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"sys":[').Append("$sysCpuStr,$ramUsedMB,$ramTotalMB,$totalProcs,$totalThreads,$totalHandles,$commitUsedMB,$commitLimitMB,$kernCpuStr,$commitCurKB,$commitLimKB,$commitPeakKB,$physTotalKB,$physAvailKB,$sysCacheKB,$kernelPagedKB,$kernelNonPagedKB,$pfDelta,$prDelta,$pfwDelta,$mfwDelta,$csDelta,$intrDelta,$scDelta,$ioReadDelta,$ioWriteDelta,$ioOtherDelta,$($netRxKBs.ToString($inv)),$($netTxKBs.ToString($inv)),$($diskReadKBs.ToString($inv)),$($diskWriteKBs.ToString($inv)),$($diskQueueDepth.ToString($inv))").Append(']')
     [void]$sb.Append(',"cores":[').Append(($coreTuples -join ',')).Append(']')
@@ -952,6 +1003,7 @@ $script:PSRPMCollectorScriptBlock = {
     [void]$sb.Append(',"dead":[').Append(($deadPids -join ',')).Append(']')
     [void]$sb.Append(',"meta":').Append($metaJson)
     [void]$sb.Append(',"svc":').Append($svcJson)
+    [void]$sb.Append(',"svcDead":').Append($svcDeadJson)
     [void]$sb.Append(',"dyn":[').Append(($dynDeltaList -join ',')).Append(']}')
 
     $rawBytes = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())

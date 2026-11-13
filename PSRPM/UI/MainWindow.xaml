@@ -917,7 +917,10 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Column 3: Private Bytes (Right-Aligned Tabular + Subtle Cream Column Tint) -->
+                        <!-- Column 3: Tree CPU Usage % (Right-Aligned Tabular, Shown in Both Tree & Flat View) -->
+                        <DataGridTextColumn Header="Tree CPU Usage" Binding="{Binding TreeCPUFormatted}" SortMemberPath="TreeCPU" Width="104" ElementStyle="{StaticResource RightTabularText}"/>
+
+                        <!-- Column 4: Private Bytes (Right-Aligned Tabular + Subtle Cream Column Tint) -->
                         <DataGridTemplateColumn Header="Private Bytes" SortMemberPath="PrivateBytes" Width="98">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

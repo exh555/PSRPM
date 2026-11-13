@@ -4,7 +4,7 @@
 
 # PSRPM -- PowerShell Remote Process Manager
 
-[![Version: 1.6.2](https://img.shields.io/badge/version-1.6.3-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.7.0](https://img.shields.io/badge/version-1.7.0-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 
@@ -45,7 +45,7 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
   - Subsequent ticks transmit only changed dynamic metric tuples (`[PID, CPU, WorkingSet, PrivateBytes, Threads, Handles, StatusFlags]`) compressed in-memory with GZIP.
 - **Sysinternals Process Explorer Unified Tree-Grid**:
   - Single-surface hierarchical process tree with continuous pixel-snapped vector guide lines (`|`, `+-`, `\-`), interactive `[+]`/`[-]` expanders, `Left`/`Right` arrow key branch collapse/expansion, 16x16 process icons, right-aligned tabular numeric columns, and classic column tints (`CPU`, `Private Bytes`, `Working Set`).
-  - **Smart Auto-Flat Sorting**: Clicking any column header (`CPU`, `Private Bytes`, `Working Set`, `PID`, `Name`, `Handles`) automatically switches to **Flat View** so processes rank globally across the entire system; clicking **Tree** (`Ctrl+T`) restores the hierarchical parent-child tree.
+  - **Smart Auto-Flat & Process Header Cycling**: Clicking the **Process** column header cycles **Tree View -> Flat Ascending -> Flat Descending -> Tree View** (matching Sysinternals Process Explorer). Clicking any other column header (`CPU`, `Private Bytes`, `Working Set`, `PID`, `Handles`, etc.) switches to **Flat View** and toggles Ascending/Descending; clicking **Tree** (`Ctrl+T`) also restores the hierarchical parent-child tree.
   - **Ancestor-Preserving Live Filter**: Typing in the filter box (`Ctrl+F`) or clicking a semantic category pill (`Services`, `Own / User`, `Packaged / WebView`) preserves parent ancestry chains in Tree View so every matching process remains contextualized.
 - **Semantic Category Color Coding & Light/Dark Themes**:
   - Instant visual classification matching Process Explorer conventions: **Services** (Soft Rose), **Own / User Session** (Soft Indigo), **Packaged / WebView2** (Cyan), **Suspended** (Slate Grey), **New Process** (1-tick Lime Flash), and **Exiting Process** (1-tick Red Flash), with one-click switching between **Clean Light** and **Precision Dark** themes (`Ctrl+D`).

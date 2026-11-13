@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-12
+
+### Added
+- **Tree CPU Usage Column (`MainWindow.xaml`, `ViewModelClasses.ps1`, `RunspaceEngine.ps1`)**:
+  - Added `Tree CPU Usage` column (`TreeCPU` / `TreeCPUFormatted`) aggregating self plus descendant CPU usage across the process hierarchy in both Tree and Flat views.
+- **Process Explorer 3-Way Header Sort Cycling (`PSRPM.psm1`, `README.md`)**:
+  - Added `Get-PSRPMNextColumnSortState` so clicking the `Process` column header cycles `Tree View -> Flat Ascending -> Flat Descending -> Tree View`, while other columns toggle Flat sort direction.
+- **Differential Windows Services Streaming & Sub-Tick CPU Detection (`DataCollector.ps1`, `RunspaceEngine.ps1`)**:
+  - Added delta service tracking (`LastSvcState` + `svcDead`) to transmit only changed or removed Windows services rather than resending the full service catalog.
+  - Added `ProcCycleCache` (`CycleTime`) sub-tick CPU activity detection to display `< 0.01` when CPU activity occurs below a single scheduler tick.
+- **Standalone GZIP Performance Benchmark (`Tests/Test-GzipPerformance.ps1`)**:
+  - Added an end-to-end and microbenchmark test script comparing GZIP-compressed vs. raw JSON telemetry payload size, CPU cost, and latency locally or over WinRM.
+
+### Changed
+- **High-Speed Tree/Flat Sorting & Zero-Clear Reconciliation (`RunspaceEngine.ps1`, `PSRPM.psm1`, `ViewModelClasses.ps1`)**:
+  - Replaced `Sort-Object` pipeline sorting with `Array.Sort` key/item sorting and in-place `vm.Children` reconciliation without `.Clear()`.
+  - Updated multi-host tab switching to preserve per-tab `ConnState` and `TelemStats` and reconcile `ServicesCollection` and `CoreGraphs` in-place.
+  - Added bounded cache eviction for `FileMetaCache`, `SidCache`, `DllMetaCache`, `HandleTypeCache`, `iconCache`, audit log text buffers, and completed background runspaces.
+- **Reflection.Emit `SetLastError` & 32/64-Bit Struct Parameterization (`DataCollector.ps1`, `DeepInspector.ps1`, `ProcessActions.ps1`)**:
+  - Switched `Reflection.Emit` P/Invoke registration from `DefinePInvokeMethod` to `DefineMethod` with `DllImportAttribute(SetLastError = true)` so `Marshal.GetLastWin32Error()` reports authentic Win32 error codes.
+  - Parameterized 32-bit/64-bit handle snapshot offsets in `DeepInspector.ps1` and bounded `NtQuerySystemInformation` / `NtQueryInformationProcess` reallocation loops.
+
+### Fixed
+- **Fail-Closed Process Action Identity Verification & Dump ACL Hardening (`ProcessActions.ps1`)**:
+  - Added unified `verifyProcessIdentity` (`CreationTime` + executable image leaf name) checks across `KillProcess`, `KillProcessTree`, `SuspendProcess`, `ResumeProcess`, `CloseHandle`, and `CreateDump`.
+  - Moved memory dump staging out of shared `C:\temp` into privilege-scoped directories (`%SystemRoot%\Temp\PSRPM_Dumps` when elevated, `%LOCALAPPDATA%\PSRPM\Dumps` otherwise) with explicit non-inherited ACLs and reparse-point validation.
+- **Expanded Verification Suite (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added automated verification for the 3-way Process header sort cycle, `SetLastError=87` accuracy, `RealTime` priority refusal, unknown `ControlService` refusal, and PID-reuse identity verification.
+
 ## [1.6.3] - 2026-11-11
 
 ## [1.6.2] - 2026-11-11

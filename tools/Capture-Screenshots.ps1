@@ -464,6 +464,24 @@ function Build-ProcessMapLight {
         }
         $pMap[$raw['id']] = $vm
     }
+    foreach ($kvp in $pMap.GetEnumerator()) {
+        $kvp.Value.PendingTreeCPU = $kvp.Value.CPU
+    }
+    foreach ($kvp in $pMap.GetEnumerator()) {
+        $vm = $kvp.Value
+        if ($vm.CPU -le 0.0) { continue }
+        $curr = $vm
+        $guard = 0
+        while ($curr.ParentPID -gt 0 -and $curr.ParentPID -ne $curr.PID -and $pMap.ContainsKey($curr.ParentPID) -and $guard -lt 64) {
+            $parentVm = $pMap[$curr.ParentPID]
+            $parentVm.PendingTreeCPU += $vm.CPU
+            $curr = $parentVm
+            $guard++
+        }
+    }
+    foreach ($kvp in $pMap.GetEnumerator()) {
+        $kvp.Value.UpdateTreeCpu($kvp.Value.PendingTreeCPU)
+    }
     return $pMap
 }
 

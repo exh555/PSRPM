@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.6.3'
+    ModuleVersion     = '1.7.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,9 +77,12 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.6.3 - Automated Release Management Tooling
-- Release Synchronization Tooling: Added tools/Set-ReleaseVersion.ps1 to automate single-command version synchronization across module manifests, changelogs, badges, Help window views, and collector protocol headers.
-- Release Protocol Hardening: Updated release skill to automatically enforce branch reconciliation, 5-asset version synchronization, visual screenshot refresh, and quality gates.
+PSRPM v1.7.0 - Tree CPU Usage, Sort Cycling, Differential Services & Security Hardening
+- Tree CPU Usage Column: Added aggregated descendant + self CPU% column (TreeCPU) across Tree and Flat views.
+- Process Header 3-Way Sort Cycling: Clicking the Process column cycles Tree -> Flat Asc -> Flat Desc -> Tree, backed by fast Array.Sort ordering.
+- Differential Services & Zero-Clear UI: Added delta Windows Services streaming (svcDead), sub-tick CycleTime CPU detection, and in-place tab/tree reconciliation.
+- Win32 Security & Identity Hardening: Enabled SetLastError=true on Reflection.Emit P/Invoke calls, added fail-closed PID-reuse verification across process actions, and hardened memory dump directory ACLs.
+- Performance & Verification: Added Tests/Test-GzipPerformance.ps1 benchmark and expanded Test-PSRPMEngine.ps1 coverage.
 '@
         }
     }

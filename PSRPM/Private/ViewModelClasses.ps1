@@ -11,6 +11,9 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [int]$ParentPID
     [double]$CPU
     [string]$CPUFormatted
+    [double]$TreeCPU
+    [string]$TreeCPUFormatted
+    hidden [double]$PendingTreeCPU
     [long]$MemoryBytes
     [string]$MemoryFormatted
     [long]$PrivateBytes
@@ -76,6 +79,9 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.Status                 = "Running"
         $this.CPU                    = 0.0
         $this.CPUFormatted           = ""
+        $this.TreeCPU                = 0.0
+        $this.TreeCPUFormatted       = ""
+        $this.PendingTreeCPU         = 0.0
         $this.MemoryBytes            = 0L
         $this.MemoryFormatted        = "0 K"
         $this.PrivateBytes           = 0L
@@ -185,7 +191,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
                 "Suspended"
             } elseif ($cpu -le 0.0) {
                 ""
-            } elseif ($cpu -lt 0.05) {
+            } elseif ($cpu -lt 0.01) {
                 "< 0.01"
             } else {
                 $cpu.ToString("F2")
@@ -235,6 +241,23 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
 
         $this.RefreshRowColors()
+    }
+
+    [void] UpdateTreeCpu([double]$treeCpu) {
+        $clamped = [Math]::Max(0.0, [Math]::Min(100.0, [Math]::Round($treeCpu, 2)))
+        if ($this.TreeCPU -ne $clamped) {
+            $this.TreeCPU = $clamped
+            $this.OnPropertyChanged('TreeCPU')
+        }
+        $newTreeFmt = if ($clamped -lt 0.05) {
+            ""
+        } else {
+            $clamped.ToString("F2")
+        }
+        if ($this.TreeCPUFormatted -ne $newTreeFmt) {
+            $this.TreeCPUFormatted = $newTreeFmt
+            $this.OnPropertyChanged('TreeCPUFormatted')
+        }
     }
 
     [void] SetTheme([bool]$isDark) {
@@ -1451,6 +1474,7 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$AccentVisibility
     [string]$CloseVisibility
     [string]$LatencyText
+    [string]$ConnState
 
     # Per-Tab Isolated State Caches (Enables <5ms Instant Tab Switching & 0 KB/s Standby)
     [Object]$ProcessMap
@@ -1469,6 +1493,7 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.Transport       = $transport
         $this.BadgeBackground = if ($isLocal) { "#0D9488" } else { "#0284C7" }
         $this.IsLocal         = $isLocal
+        $this.ConnState       = if ($isLocal) { "LocalMode" } else { "Connected" }
         $this.IsActive        = $true
         $this.IsDarkTheme     = $false
         $this.StatusDotFill   = "#16A34A"
@@ -1485,10 +1510,11 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.PidServicesMap = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[string]]]::new()
         $this.SummaryVm      = if ($summaryVm) { $summaryVm } else { [SystemSummaryViewModel]::new() }
         $this.TelemStats     = @{
-            TotalWireBytes = 0L
-            TotalRawBytes  = 0L
-            TotalTicks     = 0L
-            TotalRttMs     = 0L
+            TotalWireBytes  = 0L
+            TotalRawBytes   = 0L
+            TotalTicks      = 0L
+            TotalRttMs      = 0L
+            LastReceivedSeq = 0
         }
     }
 

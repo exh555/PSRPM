@@ -99,11 +99,19 @@ if ($dataTick1['sys'].Count -lt 27 -or -not $dataTick1['hw'] -or $null -ne $data
 }
 Write-Host "  Verified System Info Telemetry: $($dataTick1['sys'].Count) kernel/hardware counters, $($dataTick1['cores'].Count) CPU core series, OS='$($dataTick1['hw']['os'])', CPU='$($dataTick1['hw']['cpu'])'" -ForegroundColor Gray
 
-# 10-Tick Steady-State Statistical Benchmark
+# 30-Tick Steady-State Statistical Benchmark (with warmup + GC isolation)
 $latencies = [System.Collections.Generic.List[double]]::new()
 $wireSizes = [System.Collections.Generic.List[double]]::new()
 
-for ($t = 1; $t -le 10; $t++) {
+for ($w = 1; $w -le 3; $w++) {
+    $null = & $script:PSRPMCollectorScriptBlock $false
+    Start-Sleep -Milliseconds 30
+}
+[GC]::Collect()
+[GC]::WaitForPendingFinalizers()
+[GC]::Collect()
+
+for ($t = 1; $t -le 30; $t++) {
     Start-Sleep -Milliseconds 50
     $swSample = [System.Diagnostics.Stopwatch]::StartNew()
     $rawSample = & $script:PSRPMCollectorScriptBlock $false
@@ -128,7 +136,7 @@ $stdDevLat = [Math]::Sqrt($sumSqDiff / $latencies.Count)
 $sumWire = 0.0; foreach ($w in $wireSizes) { $sumWire += $w }
 $meanWire = $sumWire / $wireSizes.Count
 
-Write-Host "  Steady-State 10-Tick Benchmark: Mean=$([Math]::Round($meanLat, 1))ms, P95=${p95Lat}ms, StdDev=$([Math]::Round($stdDevLat, 1))ms (Range: ${minLat}-${maxLat}ms) | Avg Wire: $([Math]::Round($meanWire, 2)) KB" -ForegroundColor Gray
+Write-Host "  Steady-State 30-Tick Benchmark: Mean=$([Math]::Round($meanLat, 1))ms, P95=${p95Lat}ms, StdDev=$([Math]::Round($stdDevLat, 1))ms (Range: ${minLat}-${maxLat}ms) | Avg Wire: $([Math]::Round($meanWire, 2)) KB" -ForegroundColor Gray
 
 if ($meanLat -gt 25.0) {
     throw "Benchmark Gate Failed: Mean steady-state latency ($([Math]::Round($meanLat, 1))ms) exceeded 25.0 ms ceiling."
@@ -320,6 +328,16 @@ foreach ($xf in $xamlFiles) {
     }
 
     Write-Host "  Verified $($xf.File): All $($xf.RequiredControls.Count) required named controls resolved cleanly." -ForegroundColor Gray
+    if ($xf.File -eq "MainWindow.xaml") {
+        $gridProcTest = $winObj.FindName("GridProcesses")
+        $colHeaders = @($gridProcTest.Columns | ForEach-Object { [string]$_.Header })
+        $cpuIdx = [Array]::IndexOf($colHeaders, "CPU")
+        $treeCpuIdx = [Array]::IndexOf($colHeaders, "Tree CPU Usage")
+        if ($cpuIdx -lt 0 -or $treeCpuIdx -ne ($cpuIdx + 1)) {
+            throw "MainWindow.xaml expected 'Tree CPU Usage' column directly to the right of 'CPU' (CPU=$cpuIdx, TreeCPU=$treeCpuIdx)."
+        }
+        Write-Host "  Verified MainWindow.xaml: 'Tree CPU Usage' column positioned immediately right of 'CPU' (index $treeCpuIdx)." -ForegroundColor Gray
+    }
 }
 
 # Verify ViewModel instantiation and methods
@@ -327,6 +345,31 @@ $vmTest = [ProcessItemViewModel]::new()
 $vmTest.SetStaticMetadata($selfMeta, $false)
 $vmTest.UpdateDynamic(1.25, 65536000, 45056000, 14, 420, 0)
 $vmTest.UpdateTreeState(2, $true, $true, "M 7.5,0 L 7.5,22 M 23.5,0 L 23.5,11.5 L 31,11.5", 1.0)
+$vmTest.UpdateTreeCpu(0.04)
+if ($vmTest.TreeCPU -ne 0.04 -or $vmTest.TreeCPUFormatted -ne "") {
+    throw "UpdateTreeCpu(0.04) expected TreeCPU=0.04 and blank TreeCPUFormatted, got TreeCPU=$($vmTest.TreeCPU), Fmt='$($vmTest.TreeCPUFormatted)'."
+}
+$vmTest.UpdateTreeCpu(1.85)
+if ($vmTest.TreeCPU -ne 1.85 -or $vmTest.TreeCPUFormatted -ne "1.85") {
+    throw "UpdateTreeCpu(1.85) expected TreeCPU=1.85 and '1.85', got TreeCPU=$($vmTest.TreeCPU), Fmt='$($vmTest.TreeCPUFormatted)'."
+}
+$vmTest.UpdateTreeCpu(125.0)
+if ($vmTest.TreeCPU -ne 100.0 -or $vmTest.TreeCPUFormatted -ne "100.00") {
+    throw "UpdateTreeCpu(125.0) expected clamped 100.00, got TreeCPU=$($vmTest.TreeCPU), Fmt='$($vmTest.TreeCPUFormatted)'."
+}
+$vmTest.UpdateDynamic(0.03, 65536000, 45056000, 14, 420, 0)
+if ($vmTest.CPUFormatted -ne "0.03") {
+    throw "UpdateDynamic(0.03) expected CPUFormatted='0.03', got '$($vmTest.CPUFormatted)'."
+}
+$vmTest.UpdateDynamic(0.005, 65536000, 45056000, 14, 420, 0)
+if ($vmTest.CPUFormatted -ne "< 0.01") {
+    throw "UpdateDynamic(0.005) expected CPUFormatted='< 0.01', got '$($vmTest.CPUFormatted)'."
+}
+$vmTest.UpdateDynamic(0.0, 65536000, 45056000, 14, 420, 0)
+if ($vmTest.CPUFormatted -ne "") {
+    throw "UpdateDynamic(0.0) expected blank CPUFormatted, got '$($vmTest.CPUFormatted)'."
+}
+$vmTest.UpdateDynamic(1.25, 65536000, 45056000, 14, 420, 0)
 $vmTest.SetTheme($true)
 $vmTest.SetTheme($false)
 
@@ -461,11 +504,26 @@ try {
     $eng.ProcessMap[90002] = $pChild1
     $eng.ProcessMap[90003] = $pGrandChild
 
+    $pRoot.UpdateDynamic(0.10, 1024000, 512000, 2, 20, 0)
+    $pChild1.UpdateDynamic(0.00, 1024000, 512000, 2, 20, 0)
+    $pGrandChild.UpdateDynamic(0.37, 1024000, 512000, 2, 20, 0)
+
     & $eng.RefreshTree
     if ($pGrandChild.Level -ne 2 -or [string]::IsNullOrWhiteSpace($pGrandChild.TreeGuideGeometry)) {
         throw "Tree builder failed to compute Level=2 and SVG guide geometry for grandchild node (Level=$($pGrandChild.Level), Geom='$($pGrandChild.TreeGuideGeometry)')."
     }
-    Write-Host "  Verified 3-Tier Tree Hierarchy: Root(L$($pRoot.Level)) -> Child(L$($pChild1.Level)) -> GrandChild(L$($pGrandChild.Level), Geom='$($pGrandChild.TreeGuideGeometry)')" -ForegroundColor Gray
+    if ($pRoot.TreeCPU -ne 0.47 -or $pRoot.TreeCPUFormatted -ne "0.47" -or $pChild1.TreeCPU -ne 0.37 -or $pChild1.TreeCPUFormatted -ne "0.37" -or $pGrandChild.TreeCPU -ne 0.37) {
+        throw "TreeCPU aggregation mismatch in Tree mode: Root=$($pRoot.TreeCPU) ('$($pRoot.TreeCPUFormatted)'), Child=$($pChild1.TreeCPU) ('$($pChild1.TreeCPUFormatted)'), GrandChild=$($pGrandChild.TreeCPU)."
+    }
+    Write-Host "  Verified 3-Tier Tree Hierarchy: Root(L$($pRoot.Level)) -> Child(L$($pChild1.Level)) -> GrandChild(L$($pGrandChild.Level), Geom='$($pGrandChild.TreeGuideGeometry)'), TreeCPU=$($pRoot.TreeCPUFormatted)/$($pChild1.TreeCPUFormatted)/$($pGrandChild.TreeCPUFormatted)" -ForegroundColor Gray
+
+    # Verify TreeCPU remains accurate when parent is collapsed
+    $pRoot.IsExpanded = $false
+    & $eng.RefreshTree
+    if ($pRoot.TreeCPU -ne 0.47 -or $pRoot.TreeCPUFormatted -ne "0.47") {
+        throw "Collapsed parent lost TreeCPU total: got $($pRoot.TreeCPU) ('$($pRoot.TreeCPUFormatted)')."
+    }
+    $pRoot.IsExpanded = $true
 
     # Test Ancestor-Preserving Search Filter (searching 'psrpm_test_proc' should keep 90001, 90002, 90003 in Tree Mode)
     $eng.StateContainer.FilterText = "psrpm_test_proc"
@@ -475,15 +533,82 @@ try {
     }
     Write-Host "  Verified Ancestor-Preserving Filter: Matched leaf + 2 ancestors ($($procCol.Count) rows visible, ancestor opacity=$($pRoot.RowOpacity))." -ForegroundColor Gray
 
-    # Test Flat Mode & Reset Filter
+    # Test Flat Mode & Reset Filter (TreeCPU must still reflect full tree total for parents in Flat View)
     $eng.StateContainer.IsTreeMode = $false
+    $eng.StateContainer.FilterText = "services.exe"
+    & $eng.RefreshTree
+    if ($pRoot.TreeCPU -ne 0.47 -or $pRoot.TreeCPUFormatted -ne "0.47") {
+        throw "Flat mode filtered view failed to preserve parent TreeCPU total: got $($pRoot.TreeCPU) ('$($pRoot.TreeCPUFormatted)')."
+    }
+
+    $eng.StateContainer.FilterText = "psrpm_test_proc"
     & $eng.RefreshTree
     if ($procCol.Count -ne 1) {
         throw "Flat mode filter expected 1 direct match, got $($procCol.Count)."
     }
-    $eng.StateContainer.IsTreeMode = $true
+
+    # Test Flat Mode Sorting by TreeCPU Descending
+    $eng.StateContainer.FilterText = ""
+    $eng.StateContainer.SortProperty = "TreeCPU"
+    $eng.StateContainer.SortDescending = $true
+    & $eng.RefreshTree
+    $rootSortIdx = $procCol.IndexOf($pRoot)
+    $childSortIdx = $procCol.IndexOf($pChild1)
+    if ($rootSortIdx -lt 0 -or $childSortIdx -lt 0 -or $rootSortIdx -gt $childSortIdx) {
+        throw "Flat mode sorting by TreeCPU descending expected Root (0.47) before Child (0.37), got RootIdx=$rootSortIdx, ChildIdx=$childSortIdx."
+    }
+
+    # Test Process Explorer 3-Way Column Header Sort Cycle (Tree -> Flat Asc -> Flat Desc -> Tree)
+    $psrpmMod = Get-Module PSRPM
+    $s1 = & $psrpmMod { Get-PSRPMNextColumnSortState -IsTreeMode $true -CurrentSortProperty "PID" -CurrentSortDescending $false -ClickedSortProperty "Name" }
+    if ($s1.IsTreeMode -or $s1.SortProperty -ne "Name" -or $s1.SortDescending) {
+        throw "Process header click 1 (from Tree) expected Flat Name Asc, got IsTree=$($s1.IsTreeMode), Prop=$($s1.SortProperty), Desc=$($s1.SortDescending)."
+    }
+    $s2 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s1
+    if ($s2.IsTreeMode -or $s2.SortProperty -ne "Name" -or -not $s2.SortDescending) {
+        throw "Process header click 2 (from Flat Name Asc) expected Flat Name Desc, got IsTree=$($s2.IsTreeMode), Prop=$($s2.SortProperty), Desc=$($s2.SortDescending)."
+    }
+    $s3 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s2
+    if (-not $s3.IsTreeMode -or $s3.SortProperty -ne "PID" -or $s3.SortDescending) {
+        throw "Process header click 3 (from Flat Name Desc) expected Tree View reset, got IsTree=$($s3.IsTreeMode), Prop=$($s3.SortProperty), Desc=$($s3.SortDescending)."
+    }
+    $sFromCpu = & $psrpmMod { Get-PSRPMNextColumnSortState -IsTreeMode $false -CurrentSortProperty "CPU" -CurrentSortDescending $true -ClickedSortProperty "Name" }
+    if ($sFromCpu.IsTreeMode -or $sFromCpu.SortProperty -ne "Name" -or $sFromCpu.SortDescending) {
+        throw "Process header click from Flat CPU Desc expected Flat Name Asc, got IsTree=$($sFromCpu.IsTreeMode), Prop=$($sFromCpu.SortProperty), Desc=$($sFromCpu.SortDescending)."
+    }
+    $sCpu1 = & $psrpmMod { Get-PSRPMNextColumnSortState -IsTreeMode $true -CurrentSortProperty "PID" -CurrentSortDescending $false -ClickedSortProperty "CPU" }
+    $sCpu2 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "CPU" } $sCpu1
+    $sCpu3 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "CPU" } $sCpu2
+    if ($sCpu1.IsTreeMode -or -not $sCpu1.SortDescending -or $sCpu2.IsTreeMode -or $sCpu2.SortDescending -or $sCpu3.IsTreeMode -or -not $sCpu3.SortDescending) {
+        throw "CPU header clicks should toggle Flat Desc <-> Asc without returning to Tree."
+    }
+
+    # Verify RunspaceEngine ordering across Process column 3-way cycle
+    $eng.StateContainer.IsTreeMode     = $s1.IsTreeMode
+    $eng.StateContainer.SortProperty   = $s1.SortProperty
+    $eng.StateContainer.SortDescending = $s1.SortDescending
+    & $eng.RefreshTree
+    if ($procCol.IndexOf($pGrandChild) -gt $procCol.IndexOf($pRoot) -or $procCol.IndexOf($pRoot) -gt $procCol.IndexOf($pChild1)) {
+        throw "Flat Name Asc ordering mismatch for psrpm_test_proc.exe < services.exe < svchost.exe."
+    }
+
+    $eng.StateContainer.IsTreeMode     = $s2.IsTreeMode
+    $eng.StateContainer.SortProperty   = $s2.SortProperty
+    $eng.StateContainer.SortDescending = $s2.SortDescending
+    & $eng.RefreshTree
+    if ($procCol.IndexOf($pChild1) -gt $procCol.IndexOf($pRoot) -or $procCol.IndexOf($pRoot) -gt $procCol.IndexOf($pGrandChild)) {
+        throw "Flat Name Desc ordering mismatch for svchost.exe > services.exe > psrpm_test_proc.exe."
+    }
+
+    $eng.StateContainer.IsTreeMode     = $s3.IsTreeMode
+    $eng.StateContainer.SortProperty   = $s3.SortProperty
+    $eng.StateContainer.SortDescending = $s3.SortDescending
     $eng.StateContainer.FilterText = ""
     & $eng.RefreshTree
+    if ($pGrandChild.Level -ne 2 -or $procCol.IndexOf($pRoot) -gt $procCol.IndexOf($pChild1) -or $procCol.IndexOf($pChild1) -gt $procCol.IndexOf($pGrandChild)) {
+        throw "Tree View restoration after 3rd Process header click failed."
+    }
+    Write-Host "  Verified Process Header 3-Way Sort Cycle: Tree -> Flat Name Asc -> Flat Name Desc -> Tree." -ForegroundColor Gray
 
     # Test Bracket & Wildcard Metacharacter Resilience (spe[, [, *spe[*, [host], regex+, etc.)
     $testFilterInputs = @("spe[", "[", "*spe[*", "[[", "][", "[]", "[host]", "regex+", "c:\windows")
@@ -819,6 +944,32 @@ if ($sysKill['Status'] -notin @("Failed", "Refused")) {
     throw "Expected KillProcess against PID 4 to report Status 'Failed' or 'Refused', got '$($sysKill['Status'])'."
 }
 Write-Host "  Verified ProcessActions against PID 4: Correctly trapped with Status='$($sysKill['Status'])', Error='$($sysKill['ErrorId'])' (Message: $($sysKill['Message']))." -ForegroundColor Gray
+
+# Test 10C: Reflection.Emit SetLastError accuracy + Fail-Closed Identity & Input Allowlist Guards
+$noProcJson = & $script:PSRPMActionScriptBlock "SetPriority" 999998 "" "" "Normal" "" "Mini" 0
+$noProc = $jss.DeserializeObject($noProcJson)
+if ($noProc['Success'] -eq $true -or -not ($noProc['Message'] -match '\b87\b')) {
+    throw "Expected OpenProcess(999998) to fail with real Win32 error 87 via SetLastError=true, got: $($noProc['Message'])."
+}
+
+$rtPrioJson = & $script:PSRPMActionScriptBlock "SetPriority" $PID "powershell" "" "RealTime" "" "Mini" 0
+$rtPrio = $jss.DeserializeObject($rtPrioJson)
+if ($rtPrio['Success'] -eq $true -or $rtPrio['Status'] -ne "Refused") {
+    throw "Security Anomaly: SetPriority('RealTime') should be Refused, got Success=$($rtPrio['Success']), Status=$($rtPrio['Status'])."
+}
+
+$badSvcJson = & $script:PSRPMActionScriptBlock "ControlService" 0 "" "__NoSuchSvc__" "InvalidOp__Test" "" "Mini" 0
+$badSvc = $jss.DeserializeObject($badSvcJson)
+if ($badSvc['Success'] -eq $true) {
+    throw "ControlService with unknown operation should fail closed."
+}
+
+$mismatchJson = & $script:PSRPMActionScriptBlock "SetPriority" $PID "__MismatchImage__.exe" "" "Normal" "" "Mini" 0
+$mismatch = $jss.DeserializeObject($mismatchJson)
+if ($mismatch['Success'] -eq $true -or $mismatch['Status'] -ne "Refused") {
+    throw "Identity verification should refuse mismatched process name, got Success=$($mismatch['Success']), Status=$($mismatch['Status'])."
+}
+Write-Host "  Verified SetLastError=87, RealTime priority refusal, unknown ControlService refusal, and PID-reuse identity check." -ForegroundColor Gray
 Write-Host "  [PASS] Protected process / access-denied degradation verified." -ForegroundColor Green
 
 # ------------------------------------------------------------------

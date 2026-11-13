@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.6.1"
+$script:AppVersion = "1.7.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -52,6 +52,65 @@ try {
         }
     }
 } catch {}
+
+function Get-PSRPMNextColumnSortState {
+    <#
+    .SYNOPSIS
+        Computes the next Process Grid view mode and sort state when a column header is clicked.
+    .DESCRIPTION
+        Matches Sysinternals Process Explorer behavior:
+        - Clicking the 'Process' column (SortMemberPath 'Name') cycles:
+          Tree View -> Flat Ascending -> Flat Descending -> Tree View.
+        - Clicking any other column auto-switches from Tree View to Flat View and toggles Asc/Desc.
+    #>
+    param(
+        [bool]$IsTreeMode,
+        [string]$CurrentSortProperty,
+        [bool]$CurrentSortDescending,
+        [string]$ClickedSortProperty
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ClickedSortProperty)) {
+        $ClickedSortProperty = "PID"
+    }
+
+    if ($ClickedSortProperty -eq "Name") {
+        if ($IsTreeMode -or $CurrentSortProperty -ne "Name") {
+            return @{
+                IsTreeMode     = $false
+                SortProperty   = "Name"
+                SortDescending = $false
+            }
+        }
+        if (-not $CurrentSortDescending) {
+            return @{
+                IsTreeMode     = $false
+                SortProperty   = "Name"
+                SortDescending = $true
+            }
+        }
+        return @{
+            IsTreeMode     = $true
+            SortProperty   = "PID"
+            SortDescending = $false
+        }
+    }
+
+    $defaultDescending = $ClickedSortProperty -in @("CPU", "TreeCPU", "PrivateBytes", "MemoryBytes", "Handles")
+    if ($IsTreeMode -or $CurrentSortProperty -ne $ClickedSortProperty) {
+        return @{
+            IsTreeMode     = $false
+            SortProperty   = $ClickedSortProperty
+            SortDescending = $defaultDescending
+        }
+    }
+
+    return @{
+        IsTreeMode     = $false
+        SortProperty   = $ClickedSortProperty
+        SortDescending = (-not $CurrentSortDescending)
+    }
+}
 
 function Start-PSRPM {
     <#
@@ -154,6 +213,16 @@ function Start-PSRPM {
 
         if (-not $script:BackgroundRunspaces) {
             $script:BackgroundRunspaces = [System.Collections.Generic.List[Object]]::new()
+        } else {
+            for ($bi = $script:BackgroundRunspaces.Count - 1; $bi -ge 0; $bi--) {
+                $bgItem = $script:BackgroundRunspaces[$bi]
+                if ($bgItem.Handle -and $bgItem.Handle.IsCompleted) {
+                    try { $bgItem.PowerShell.EndInvoke($bgItem.Handle) } catch {}
+                    try { $bgItem.PowerShell.Dispose() } catch {}
+                    try { $bgItem.Runspace.Close(); $bgItem.Runspace.Dispose() } catch {}
+                    $script:BackgroundRunspaces.RemoveAt($bi)
+                }
+            }
         }
         $handle = $ps.BeginInvoke()
         $script:BackgroundRunspaces.Add(@{ Runspace = $rs; PowerShell = $ps; Handle = $handle })
@@ -268,6 +337,9 @@ function Start-PSRPM {
     $writeAuditLog = {
         param([string]$category, [string]$message)
         if ($txtLogConsole) {
+            if ($txtLogConsole.Text.Length -gt 24000) {
+                $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 16000)
+            }
             $ts = (Get-Date).ToString("HH:mm:ss.fff")
             $txtLogConsole.AppendText("[$ts] [$category] $message`r`n")
             $txtLogConsole.ScrollToEnd()
@@ -531,7 +603,7 @@ function Start-PSRPM {
         }
     })
 
-    # 7. View Mode Switching (Tree vs Flat) & Column Header Sorting (Auto-Switches to Flat View on Sort)
+    # 7. View Mode Switching (Tree vs Flat) & Column Header Sorting (Process Explorer 3-Way Cycle on Process Column)
     $menuViewTree     = $window.FindName("MenuViewTree")
     $menuViewFlat     = $window.FindName("MenuViewFlat")
     $btnToolbarTree   = $window.FindName("BtnToolbarTree")
@@ -546,6 +618,21 @@ function Start-PSRPM {
             $stateContainer.SortProperty   = "PID"
             $stateContainer.SortDescending = $false
             foreach ($c in $gridProcesses.Columns) { $c.SortDirection = $null }
+        } else {
+            $hasActiveGlyph = $false
+            foreach ($c in $gridProcesses.Columns) {
+                if ($null -ne $c.SortDirection) { $hasActiveGlyph = $true; break }
+            }
+            if (-not $hasActiveGlyph) {
+                $targetSortProp = if ($stateContainer.SortProperty) { [string]$stateContainer.SortProperty } else { "PID" }
+                $dir = if ($stateContainer.SortDescending) { [System.ComponentModel.ListSortDirection]::Descending } else { [System.ComponentModel.ListSortDirection]::Ascending }
+                foreach ($c in $gridProcesses.Columns) {
+                    if ($c.SortMemberPath -eq $targetSortProp) {
+                        $c.SortDirection = $dir
+                        break
+                    }
+                }
+            }
         }
         if ($menuViewTree)     { $menuViewTree.IsChecked   = $treeMode }
         if ($menuViewFlat)     { $menuViewFlat.IsChecked   = (-not $treeMode) }
@@ -560,29 +647,28 @@ function Start-PSRPM {
         $sortProp = $col.SortMemberPath
         if (-not $sortProp) { $sortProp = "PID" }
 
-        # Automatically switch from Tree View to Flat View when sorting by any column
-        if ($stateContainer.IsTreeMode) {
-            $stateContainer.IsTreeMode = $false
-            if ($menuViewTree)     { $menuViewTree.IsChecked = $false }
-            if ($menuViewFlat)     { $menuViewFlat.IsChecked = $true }
-            if ($txtModeIndicator) { $txtModeIndicator.Text  = "Flat" }
-            $stateContainer.SortProperty   = $sortProp
-            $stateContainer.SortDescending = ($sortProp -in @("CPU", "PrivateBytes", "MemoryBytes", "Handles"))
-        } elseif ($stateContainer.SortProperty -eq $sortProp) {
-            $stateContainer.SortDescending = -not [bool]$stateContainer.SortDescending
-        } else {
-            $stateContainer.SortProperty = $sortProp
-            $stateContainer.SortDescending = ($sortProp -in @("CPU", "PrivateBytes", "MemoryBytes", "Handles"))
+        $next = Get-PSRPMNextColumnSortState `
+            -IsTreeMode ([bool]$stateContainer.IsTreeMode) `
+            -CurrentSortProperty ([string]$stateContainer.SortProperty) `
+            -CurrentSortDescending ([bool]$stateContainer.SortDescending) `
+            -ClickedSortProperty $sortProp
+
+        if ($next.IsTreeMode) {
+            &$setViewMode $true
+            return
         }
 
+        $stateContainer.SortProperty   = $next.SortProperty
+        $stateContainer.SortDescending = $next.SortDescending
+
         foreach ($c in $gridProcesses.Columns) { $c.SortDirection = $null }
-        $col.SortDirection = if ($stateContainer.SortDescending) {
+        $col.SortDirection = if ($next.SortDescending) {
             [System.ComponentModel.ListSortDirection]::Descending
         } else {
             [System.ComponentModel.ListSortDirection]::Ascending
         }
 
-        & $engineHandle.RefreshTree
+        &$setViewMode $false
     })
 
     if ($menuViewTree)   { $menuViewTree.add_Click({ &$setViewMode $true }) }
@@ -1207,17 +1293,22 @@ function Start-PSRPM {
             ServiceName  = $sName
             Priority     = ""
         }
-        $localJss   = $jssAction
-        $localLog   = $writeAuditLog
-        $localState = $stateContainer
-        $localSvcOp = $svcOp
-        $localSName = $sName
-        $localCb    = $onComplete
+        $localJss    = $jssAction
+        $localLog    = $writeAuditLog
+        $localState  = $stateContainer
+        $localEngine = $engineHandle
+        $localSvcOp  = $svcOp
+        $localSName  = $sName
+        $localCb     = $onComplete
 
         & $engineHandle.SendCommand $cmdPayload ({
             param($res)
-            $localState.ForceFullSync = $true
-            [void]$localState.WakeEvent.Set()
+            if ($localEngine -and $localEngine.RequestFullSync) {
+                & $localEngine.RequestFullSync
+            } else {
+                $localState.ForceFullSync = $true
+                [void]$localState.WakeEvent.Set()
+            }
             if ($res.Success -and $res.PayloadJson) {
                 $parsed = $localJss.DeserializeObject($res.PayloadJson)
                 &$localLog "SERVICE" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
@@ -1318,11 +1409,9 @@ function Start-PSRPM {
         $svcWin.Owner = $window
         if ($appIconFrame) { $svcWin.Icon = $appIconFrame }
 
-        if ($stateContainer.IsDarkTheme) {
-            foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
-                if ($window.Resources.Contains($key)) {
-                    $svcWin.Resources[$key] = $window.Resources[$key]
-                }
+        foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+            if ($window.Resources.Contains($key)) {
+                $svcWin.Resources[$key] = $window.Resources[$key]
             }
         }
 
@@ -1933,7 +2022,7 @@ function Start-PSRPM {
                         $perf = $d['Performance']
                         if ($perf) {
                             $curVm = if ($localProcessMap -and $localProcessMap.ContainsKey($localTargetPid)) { $localProcessMap[$localTargetPid] } else { $localSelectedVm }
-                            $cpuTxt = if ($curVm.CPUFormatted) { "$($curVm.CPUFormatted)%" } else { "0.00%" }
+                            $cpuTxt = if (-not $curVm.CPUFormatted) { "0.00%" } elseif ($curVm.CPUFormatted -eq "Suspended") { "Suspended" } else { "$($curVm.CPUFormatted)%" }
                             $localPropWin.FindName("PropCpu").Text                = "CPU Usage: $cpuTxt (Base Priority: $($curVm.BasePriority))"
                             $localPropWin.FindName("PropTotalCpuTime").Text       = "Total Processor Time: $($perf['TotalCpuTime'])"
                             $localPropWin.FindName("PropKernelUserTime").Text     = "Kernel: $($perf['KernelTime']) | User: $($perf['UserTime'])"
@@ -2017,10 +2106,10 @@ function Start-PSRPM {
 
             $liveTargetVm = $engineHandle.ProcessMap[$targetPid]
 
-            # 1. Update CPU Counter (fix 0.00% idle formatting)
+            # 1. Update CPU Counter (fix 0.00% idle and Suspended formatting)
             $txtCpu = $propWin.FindName("PropCpu")
             if ($txtCpu) {
-                $cpuDisplay = if ($liveTargetVm.CPUFormatted) { "$($liveTargetVm.CPUFormatted)%" } else { "0.00%" }
+                $cpuDisplay = if (-not $liveTargetVm.CPUFormatted) { "0.00%" } elseif ($liveTargetVm.CPUFormatted -eq "Suspended") { "Suspended" } else { "$($liveTargetVm.CPUFormatted)%" }
                 $txtCpu.Text = "CPU Usage: $cpuDisplay (Base Priority: $($liveTargetVm.BasePriority))"
                 $txtCpu.Foreground = if ($liveTargetVm.CPU -gt 0) {
                     [System.Windows.Media.BrushConverter]::new().ConvertFromString("#16A34A")
@@ -2283,9 +2372,17 @@ function Start-PSRPM {
 
         # 1. Snapshot current active tab state into its own viewmodel
         if ($script:ActiveHostTab -and $engine -and $engine.ProcessMap) {
+            $script:ActiveHostTab.ConnState      = [string]$stateContainer.ConnectionState
             $script:ActiveHostTab.ProcessMap     = [System.Collections.Generic.Dictionary[int, Object]]::new($engine.ProcessMap)
             $script:ActiveHostTab.ServicesMap    = [System.Collections.Generic.Dictionary[string, Object]]::new($engine.ServicesMap)
             $script:ActiveHostTab.PidServicesMap = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[string]]]::new($engine.PidServicesMap)
+            if ($engine.TelemStats -and $script:ActiveHostTab.TelemStats) {
+                $script:ActiveHostTab.TelemStats.TotalWireBytes  = [long]$engine.TelemStats.TotalWireBytes
+                $script:ActiveHostTab.TelemStats.TotalRawBytes   = [long]$engine.TelemStats.TotalRawBytes
+                $script:ActiveHostTab.TelemStats.TotalTicks      = [long]$engine.TelemStats.TotalTicks
+                $script:ActiveHostTab.TelemStats.TotalRttMs      = [long]$engine.TelemStats.TotalRttMs
+                $script:ActiveHostTab.TelemStats.LastReceivedSeq = [int]$engine.TelemStats.LastReceivedSeq
+            }
         }
 
         # 2. Switch Active Tab reference
@@ -2293,9 +2390,16 @@ function Start-PSRPM {
         $stateContainer.ActiveTabId       = $targetTabVm.TabId
         $stateContainer.TargetDisplayName = $targetTabVm.Title
         $stateContainer.TransportBadge    = $targetTabVm.Transport
-        $stateContainer.ConnectionState   = if ($targetTabVm.IsLocal) { "LocalMode" } else { "Connected" }
+        $stateContainer.ConnectionState   = if ($targetTabVm.ConnState) { $targetTabVm.ConnState } elseif ($targetTabVm.IsLocal) { "LocalMode" } else { "Connected" }
 
-        # 3. Swap process maps into engineHandle
+        # 3. Swap process maps and per-tab telemetry accumulators into engineHandle
+        if ($engine -and $engine.TelemStats -and $targetTabVm.TelemStats) {
+            $engine.TelemStats.TotalWireBytes  = [long]$targetTabVm.TelemStats.TotalWireBytes
+            $engine.TelemStats.TotalRawBytes   = [long]$targetTabVm.TelemStats.TotalRawBytes
+            $engine.TelemStats.TotalTicks      = [long]$targetTabVm.TelemStats.TotalTicks
+            $engine.TelemStats.TotalRttMs      = [long]$targetTabVm.TelemStats.TotalRttMs
+            $engine.TelemStats.LastReceivedSeq = [int]$targetTabVm.TelemStats.LastReceivedSeq
+        }
         if ($engine -and $engine.ProcessMap) {
             $engine.ProcessMap.Clear()
             if ($targetTabVm.ProcessMap) {
@@ -2321,12 +2425,25 @@ function Start-PSRPM {
             }
         }
 
-        # 4. Swap SummaryBar & ServicesCollection
+        # 4. Swap SummaryBar, Engine SummaryVm Target, and Reconcile ServicesCollection In-Place (Zero .Clear())
         if ($summaryBar) { $summaryBar.DataContext = $targetTabVm.SummaryVm }
+        if ($engine -and $engine.SetSummaryViewModel) {
+            & $engine.SetSummaryViewModel $targetTabVm.SummaryVm
+        }
         if ($null -ne $servicesCollection) {
-            $servicesCollection.Clear()
+            $desiredServices = [System.Collections.Generic.List[Object]]::new()
             if ($null -ne $targetTabVm.ServicesMap) {
                 foreach ($sItem in $targetTabVm.ServicesMap.Values) {
+                    $desiredServices.Add($sItem)
+                }
+            }
+            if ($engine -and $engine.ReconcileServices) {
+                & $engine.ReconcileServices $desiredServices
+            } else {
+                for ($si = $servicesCollection.Count - 1; $si -ge 0; $si--) {
+                    $servicesCollection.RemoveAt($si)
+                }
+                foreach ($sItem in $desiredServices) {
                     $servicesCollection.Add($sItem)
                 }
             }
@@ -2548,6 +2665,7 @@ function Start-PSRPM {
                             }
 
                             $newTabVm = & $localCreateTabVm $res.TabId $res.Target $tabTitle $res.Transport ([bool]$res.IsLocal)
+                            if ($res.ConnState) { $newTabVm.ConnState = [string]$res.ConnState }
                             $localTabsCol.Add($newTabVm)
 
                             try {
@@ -2602,6 +2720,14 @@ function Start-PSRPM {
                                 $curTab.Title        = $localState.TargetDisplayName
                                 $curTab.Transport    = $localState.TransportBadge
                                 $curTab.IsLocal      = ($localState.ConnectionState -eq "LocalMode")
+                                $curTab.ConnState    = [string]$localState.ConnectionState
+                                if ($curTab.TelemStats) {
+                                    $curTab.TelemStats.TotalWireBytes  = 0L
+                                    $curTab.TelemStats.TotalRawBytes   = 0L
+                                    $curTab.TelemStats.TotalTicks      = 0L
+                                    $curTab.TelemStats.TotalRttMs      = 0L
+                                    $curTab.TelemStats.LastReceivedSeq = 0
+                                }
                                 $canClose = ($localTabsCol.Count -gt 1)
                                 $isDark   = [bool]$localState.IsDarkTheme
                                 $curTab.UpdateVisualState($true, $isDark, $canClose, $localState.ConnectionState, [bool]$localState.IsPaused, $localState.PollLatencyMs)
@@ -2700,6 +2826,7 @@ function Start-PSRPM {
                         ParentPID      = $vm.ParentPID
                         Name           = $vm.Name
                         CPU            = $vm.CPU
+                        TreeCPU        = $vm.TreeCPU
                         PrivateBytesKB = [Math]::Round($vm.PrivateBytes / 1024.0, 0)
                         WorkingSetKB   = [Math]::Round($vm.MemoryBytes / 1024.0, 0)
                         Threads        = $vm.Threads
@@ -3008,7 +3135,7 @@ function Start-PSRPM {
                     if ($btnSearch) { $btnSearch.IsEnabled = $true }
                     if ($res.Success -and $res.PayloadJson) {
                         $parsedList = $localJss.DeserializeObject($res.PayloadJson)
-                        $localCol.Clear()
+                        for ($i = $localCol.Count - 1; $i -ge 0; $i--) { $localCol.RemoveAt($i) }
                         if ($parsedList -and $parsedList.Count -gt 0) {
                             foreach ($item in $parsedList) {
                                 [void]$localCol.Add([PSCustomObject]@{
@@ -3170,7 +3297,7 @@ function Start-PSRPM {
         }
 
         # Clear any previous search results so fresh modal opens cleanly
-        $script:FindHandleResultsCol.Clear()
+        for ($i = $script:FindHandleResultsCol.Count - 1; $i -ge 0; $i--) { $script:FindHandleResultsCol.RemoveAt($i) }
 
         $fBytes  = [System.IO.File]::ReadAllBytes($findHandleXamlPath)
         $msFind  = [System.IO.MemoryStream]::new($fBytes)
@@ -3258,7 +3385,7 @@ function Start-PSRPM {
         })
 
         $findWin.add_Closed({
-            $script:FindHandleResultsCol.Clear()
+            for ($i = $script:FindHandleResultsCol.Count - 1; $i -ge 0; $i--) { $script:FindHandleResultsCol.RemoveAt($i) }
             $script:ActiveFindHandleWin = $null
             $script:FindHandleControls.Clear()
         })
@@ -3395,17 +3522,33 @@ function Start-PSRPM {
     $window.add_Closed({
         try {
             $stateContainer.IsStopping = $true
-            [void]$stateContainer.WakeEvent.Set()
-            if ($engineHandle.Timer) { $engineHandle.Timer.Stop() }
-            if ($engineHandle.PowerShell) { $engineHandle.PowerShell.Dispose() }
-            if ($engineHandle.Runspace) {
-                $engineHandle.Runspace.Close()
-                $engineHandle.Runspace.Dispose()
+            if ($stateContainer.WakeEvent) {
+                try { [void]$stateContainer.WakeEvent.Set() } catch {}
             }
-            if ($session) {
-                Remove-PSSession -Session $session -ErrorAction SilentlyContinue
+            if ($engineHandle.Timer) { $engineHandle.Timer.Stop() }
+            if ($engineHandle.Handle -and $engineHandle.Handle.AsyncWaitHandle) {
+                if ($engineHandle.Handle.AsyncWaitHandle.WaitOne(2500)) {
+                    try { [void]$engineHandle.PowerShell.EndInvoke($engineHandle.Handle) } catch {}
+                }
             }
         } catch {}
+        finally {
+            try { if ($engineHandle.PowerShell) { $engineHandle.PowerShell.Dispose() } } catch {}
+            try {
+                if ($engineHandle.Runspace) {
+                    $engineHandle.Runspace.Close()
+                    $engineHandle.Runspace.Dispose()
+                }
+            } catch {}
+            try {
+                if ($stateContainer.WakeEvent) {
+                    $stateContainer.WakeEvent.Dispose()
+                }
+            } catch {}
+            if ($session) {
+                try { Remove-PSSession -Session $session -ErrorAction SilentlyContinue } catch {}
+            }
+        }
     })
 
     [void]$window.ShowDialog()
