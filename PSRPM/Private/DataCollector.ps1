@@ -10,6 +10,8 @@ $script:PSRPMCollectorScriptBlock = {
         [string]$NetEtwAction = ""
     )
 
+    $swCol = [System.Diagnostics.Stopwatch]::StartNew()
+
     # 1. One-Time In-Memory Native P/Invoke & State Initialization (0 Disk Writes, 0 csc.exe)
     if (-not ('PSRPM.NativeCollectorV3' -as [type])) {
         $dynAsm = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
@@ -55,6 +57,45 @@ $script:PSRPMCollectorScriptBlock = {
         &$addPInvoke "FreeMibTable"               "iphlpapi.dll" ([void])   @([IntPtr])
 
         [void]$tb.CreateType()
+    }
+
+    # Native Service Control Manager Enumeration Type (EnumServicesStatusExW - Zero WMI)
+    if (-not ('PSRPM.NativeServiceEnumV1' -as [type])) {
+        $svcAsm = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
+            [System.Reflection.AssemblyName]::new("PSRPMNativeServiceEnumV1Asm"),
+            [System.Reflection.Emit.AssemblyBuilderAccess]::Run
+        )
+        $svcMod = $svcAsm.DefineDynamicModule("PSRPMNativeServiceEnumV1Mod")
+        $svcTb  = $svcMod.DefineType("PSRPM.NativeServiceEnumV1", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
+
+        $dllImpCtorS = [System.Runtime.InteropServices.DllImportAttribute].GetConstructor(@([string]))
+        $fSetLastS   = [System.Runtime.InteropServices.DllImportAttribute].GetField("SetLastError")
+        $fCharSetS   = [System.Runtime.InteropServices.DllImportAttribute].GetField("CharSet")
+        $fCallConvS  = [System.Runtime.InteropServices.DllImportAttribute].GetField("CallingConvention")
+        $fEntryPtS   = [System.Runtime.InteropServices.DllImportAttribute].GetField("EntryPoint")
+
+        $addSvcPInvoke = {
+            param($name, $dll, $retType, [type[]]$paramTypes)
+            $mb = $svcTb.DefineMethod(
+                $name,
+                [System.Reflection.MethodAttributes]"Public,Static,PinvokeImpl",
+                $retType, $paramTypes
+            )
+            $mb.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+            $cab = [System.Reflection.Emit.CustomAttributeBuilder]::new(
+                $dllImpCtorS,
+                @($dll),
+                @($fSetLastS, $fCharSetS, $fCallConvS, $fEntryPtS),
+                @([bool]$true, [System.Runtime.InteropServices.CharSet]::Unicode, [System.Runtime.InteropServices.CallingConvention]::Winapi, $name)
+            )
+            $mb.SetCustomAttribute($cab)
+        }
+
+        &$addSvcPInvoke "OpenSCManagerW"        "advapi32.dll" ([IntPtr]) @([IntPtr], [IntPtr], [uint32])
+        &$addSvcPInvoke "EnumServicesStatusExW" "advapi32.dll" ([int])    @([IntPtr], [int], [uint32], [uint32], [IntPtr], [uint32], [uint32].MakeByRefType(), [uint32].MakeByRefType(), [uint32].MakeByRefType(), [IntPtr])
+        &$addSvcPInvoke "CloseServiceHandle"    "advapi32.dll" ([int])    @([IntPtr])
+
+        [void]$svcTb.CreateType()
     }
 
     if (-not $script:CollectorInitialized) {
@@ -174,6 +215,8 @@ $script:PSRPMCollectorScriptBlock = {
         # Reusable Unmanaged Buffers (Zero Per-Tick Allocation Churn)
         $script:SysBufSize     = 524288 # 512 KB initial buffer for SystemProcessInformation
         $script:SysBufPtr      = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:SysBufSize)
+        $script:SvcBufSize     = 262144 # 256 KB initial buffer for EnumServicesStatusExW
+        $script:SvcBufPtr      = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:SvcBufSize)
         $script:ScratchBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8192)
         $script:ExePathSb      = [System.Text.StringBuilder]::new(1024)
 
@@ -196,11 +239,15 @@ $script:PSRPMCollectorScriptBlock = {
         $script:ProcCpuCache   = @{} # Key: "PID_CreateTime" -> long (UserTime + KernelTime in 100ns ticks)
         $script:ProcCycleCache = @{} # Key: "PID_CreateTime" -> long (CycleTime for sub-tick CPU activity)
         $script:ProcMetaCache  = @{} # Key: "PID_CreateTime" -> Hashtable static metadata
+        $script:PendingMetaMap = @{} # Key: "PID_CreateTime" -> @{ sid = string; path = string } for time-budgeted deferred lookups
         $script:SentMetaKeys   = [System.Collections.Generic.HashSet[string]]::new()
         $script:LastDynState   = @{} # Key: "PID_CreateTime" -> [double cpu, long ws, long pb, int th, int hnd, int flags]
         $script:ActivePidToKey = @{} # Key: int PID -> "PID_CreateTime"
         $script:ServicePidSet  = [System.Collections.Generic.HashSet[int]]::new()
         $script:LastSvcState   = @{}
+        $script:SvcStaticCache = @{} # Key: ServiceName -> @{ sm; u; dep; rev; dsc; bin } (cached 10 min)
+        $script:LastSvcStaticRefresh = [DateTime]::MinValue
+        $script:CachedServices = $null
         $script:FileMetaCache  = @{
             "n/a" = @{ d = ""; c = "" }
         }
@@ -234,6 +281,8 @@ $script:PSRPMCollectorScriptBlock = {
         $script:SentMetaKeys.Clear()
         $script:LastDynState.Clear()
         $script:LastSvcState.Clear()
+        $script:SvcStaticCache.Clear()
+        $script:LastSvcStaticRefresh = [DateTime]::MinValue
         $script:LastSvcRefresh = [DateTime]::MinValue
     }
 
@@ -1231,115 +1280,27 @@ $script:PSRPMCollectorScriptBlock = {
         $script:SidCache["S-1-5-20"] = "NT AUTHORITY\NETWORK SERVICE"
     }
 
-    # Refresh Windows Services Cache first on initial sync or every 30s so ServicePidSet is ready
+    # Refresh Windows Services Cache first on initial sync, early refresh flag, or every 15s so ServicePidSet is ready
     $servicesPayload = $null
     $deadSvcNames    = [System.Collections.Generic.List[string]]::new()
-    $nowUtc = [DateTime]::UtcNow
-    if (($nowUtc - $script:LastSvcRefresh).TotalSeconds -ge 30.0) {
-        $svcArr = [System.Collections.Generic.List[Object]]::new()
-        $script:ServicePidSet.Clear()
+    $svcMs           = 0
+    $svcFullNum      = 0
+    $nowUtc          = [DateTime]::UtcNow
 
-        # Extract service dependencies, descriptions, and binary paths from registry (fast ~25-45ms, 100% non-elevated)
-        $depMap  = @{}
-        $revMap  = @{}
-        $descMap = @{}
-        $binMap  = @{}
-        try {
-            $regServices = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services")
-            if ($regServices) {
-                foreach ($subName in $regServices.GetSubKeyNames()) {
-                    try {
-                        $sKey = $regServices.OpenSubKey($subName)
-                        if ($sKey) {
-                            $rawDeps = $sKey.GetValue("DependOnService")
-                            if ($rawDeps) {
-                                $dList = [System.Collections.Generic.List[string]]::new()
-                                foreach ($d in $rawDeps) {
-                                    $dClean = [string]$d
-                                    if ($dClean.StartsWith("+")) { $dClean = $dClean.Substring(1) }
-                                    if (-not [string]::IsNullOrWhiteSpace($dClean)) {
-                                        $dList.Add($dClean)
-                                        if (-not $revMap.ContainsKey($dClean)) {
-                                            $revMap[$dClean] = [System.Collections.Generic.List[string]]::new()
-                                        }
-                                        $revMap[$dClean].Add($subName)
-                                    }
-                                }
-                                if ($dList.Count -gt 0) {
-                                    $depMap[$subName] = ($dList -join ", ")
-                                }
-                            }
-                            $descVal = $sKey.GetValue("Description")
-                            if ($descVal -and -not [string]::IsNullOrWhiteSpace($descVal)) {
-                                $descMap[$subName] = [string]$descVal
-                            }
-                            $imgPath = $sKey.GetValue("ImagePath")
-                            if ($imgPath -and -not [string]::IsNullOrWhiteSpace($imgPath)) {
-                                $binMap[$subName] = [string]$imgPath
-                            }
-                            $sKey.Close()
-                        }
-                    } catch {}
-                }
-                $regServices.Close()
-            }
-        } catch {}
-
-        # Tier 1: Query Win32_Service (ProcessId, State, StartMode, StartName)
-        $svcs = $null
-        try {
-            $svcs = Get-CimInstance Win32_Service -Property Name, DisplayName, ProcessId, State, StartMode, StartName, Description, PathName -ErrorAction Stop
-        } catch {}
-
-        # Tier 2: Fallback to Get-Service if CIM fails
-        if (-not $svcs -or $svcs.Count -eq 0) {
-            try {
-                $svcs = Get-Service -ErrorAction SilentlyContinue
-            } catch {}
+    try {
+        if ([bool][AppDomain]::CurrentDomain.GetData("PSRPM_ForceSvcRefresh")) {
+            [AppDomain]::CurrentDomain.SetData("PSRPM_ForceSvcRefresh", $false)
+            $script:LastSvcRefresh = [DateTime]::MinValue
         }
+    } catch {}
 
-        if ($svcs -and $svcs.Count -gt 0) {
-            foreach ($s in $svcs) {
-                $sName = [string]$s.Name
-                if ([string]::IsNullOrWhiteSpace($sName)) { $sName = [string]$s.ServiceName }
-                $sDisp = [string]$s.DisplayName
-                if ([string]::IsNullOrWhiteSpace($sDisp)) { $sDisp = $sName }
+    if (($nowUtc - $script:LastSvcRefresh).TotalSeconds -ge 15.0) {
+        $swSvc = [System.Diagnostics.Stopwatch]::StartNew()
 
-                $sPid = 0
-                if ($s.ProcessId) {
-                    $sPid = try { [int]$s.ProcessId } catch { 0 }
-                }
-                if ($sPid -gt 0) {
-                    [void]$script:ServicePidSet.Add($sPid)
-                }
-
-                $sState = if ($s.State) { [string]$s.State } elseif ($s.Status) { [string]$s.Status } else { "Stopped" }
-                $sStart = if ($s.StartMode) { [string]$s.StartMode } elseif ($s.StartType) { [string]$s.StartType } else { "Manual" }
-                $sUser  = if ($s.StartName) { [string]$s.StartName } else { "LocalSystem" }
-                $sDesc  = if ($s.Description) { [string]$s.Description } elseif ($descMap.ContainsKey($sName)) { $descMap[$sName] } else { "" }
-                $sBin   = if ($s.PathName) { [string]$s.PathName } elseif ($binMap.ContainsKey($sName)) { $binMap[$sName] } else { "" }
-
-                $sDep = if ($depMap.ContainsKey($sName)) { $depMap[$sName] } else { "" }
-                if (-not $sDep -and $s.ServicesDependedOn) {
-                    $sDep = (($s.ServicesDependedOn | Select-Object -ExpandProperty Name -ErrorAction SilentlyContinue) -join ", ")
-                }
-                $sRev = if ($revMap.ContainsKey($sName)) { ($revMap[$sName] -join ", ") } else { "" }
-
-                $svcArr.Add(@{
-                    n   = $sName
-                    d   = $sDisp
-                    p   = $sPid
-                    st  = $sState
-                    sm  = $sStart
-                    u   = $sUser
-                    dep = $sDep
-                    rev = $sRev
-                    dsc = $sDesc
-                    bin = $sBin
-                })
-            }
-        } elseif ($depMap.Count -gt 0 -or $binMap.Count -gt 0) {
-            # Tier 3: Registry fallback when both CIM and SCM are restricted
+        # 1. Static Registry Service Metadata (Cached 10 min, reset on full sync)
+        if ($script:SvcStaticCache.Count -eq 0 -or ($nowUtc - $script:LastSvcStaticRefresh).TotalMinutes -ge 10.0) {
+            $newStatic = @{}
+            $revMap    = @{}
             try {
                 $regServices = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services")
                 if ($regServices) {
@@ -1347,8 +1308,26 @@ $script:PSRPMCollectorScriptBlock = {
                         try {
                             $sKey = $regServices.OpenSubKey($subName)
                             if ($sKey) {
-                                $disp = [string]$sKey.GetValue("DisplayName")
-                                if (-not $disp) { $disp = $subName }
+                                $depStr = ""
+                                $rawDeps = $sKey.GetValue("DependOnService")
+                                if ($rawDeps) {
+                                    $dList = [System.Collections.Generic.List[string]]::new()
+                                    foreach ($d in $rawDeps) {
+                                        $dClean = [string]$d
+                                        if ($dClean.StartsWith("+")) { $dClean = $dClean.Substring(1) }
+                                        if (-not [string]::IsNullOrWhiteSpace($dClean)) {
+                                            $dList.Add($dClean)
+                                            if (-not $revMap.ContainsKey($dClean)) {
+                                                $revMap[$dClean] = [System.Collections.Generic.List[string]]::new()
+                                            }
+                                            $revMap[$dClean].Add($subName)
+                                        }
+                                    }
+                                    if ($dList.Count -gt 0) {
+                                        $depStr = ($dList -join ", ")
+                                    }
+                                }
+
                                 $startVal = $sKey.GetValue("Start")
                                 $sm = switch ($startVal) {
                                     2 { "Auto" }
@@ -1359,59 +1338,179 @@ $script:PSRPMCollectorScriptBlock = {
                                     default { "Manual" }
                                 }
                                 $usr = [string]$sKey.GetValue("ObjectName")
-                                if (-not $usr) { $usr = "LocalSystem" }
-                                $sDep = if ($depMap.ContainsKey($subName)) { $depMap[$subName] } else { "" }
-                                $sRev = if ($revMap.ContainsKey($subName)) { ($revMap[$subName] -join ", ") } else { "" }
-                                $sDesc = if ($descMap.ContainsKey($subName)) { $descMap[$subName] } else { "" }
-                                $sBin = if ($binMap.ContainsKey($subName)) { $binMap[$subName] } else { "" }
+                                if ([string]::IsNullOrWhiteSpace($usr)) { $usr = "LocalSystem" }
 
-                                $svcArr.Add(@{
-                                    n   = $subName
-                                    d   = $disp
-                                    p   = 0
-                                    st  = "Stopped"
+                                $descVal = $sKey.GetValue("Description")
+                                $dscStr  = if ($descVal -and -not [string]::IsNullOrWhiteSpace($descVal)) { [string]$descVal } else { "" }
+
+                                $imgPath = $sKey.GetValue("ImagePath")
+                                $binStr  = if ($imgPath -and -not [string]::IsNullOrWhiteSpace($imgPath)) { [string]$imgPath } else { "" }
+
+                                $newStatic[$subName] = @{
                                     sm  = $sm
                                     u   = $usr
-                                    dep = $sDep
-                                    rev = $sRev
-                                    dsc = $sDesc
-                                    bin = $sBin
-                                })
+                                    dep = $depStr
+                                    rev = ""
+                                    dsc = $dscStr
+                                    bin = $binStr
+                                }
                                 $sKey.Close()
                             }
                         } catch {}
                     }
                     $regServices.Close()
                 }
+                foreach ($rk in $revMap.Keys) {
+                    if ($newStatic.ContainsKey($rk)) {
+                        $newStatic[$rk].rev = ($revMap[$rk] -join ", ")
+                    }
+                }
+                if ($newStatic.Count -gt 0) {
+                    $script:SvcStaticCache = $newStatic
+                    $script:LastSvcStaticRefresh = $nowUtc
+                }
             } catch {}
         }
 
-        $sendFullSvc = ($script:LastSvcState.Count -eq 0 -or $ForceFullSync)
-        $deltaSvc = [System.Collections.Generic.List[Object]]::new()
-        $seenSvcNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        # 2. Live Service State & PID via Native EnumServicesStatusExW (No WMI, No Fallback on Failure)
+        $hScm = [PSRPM.NativeServiceEnumV1]::OpenSCManagerW([IntPtr]::Zero, [IntPtr]::Zero, [uint32]0x0004) # SC_MANAGER_ENUMERATE_SERVICE
+        if ($hScm -ne [IntPtr]::Zero) {
+            try {
+                $bytesNeeded  = [uint32]0
+                $svcsReturned = [uint32]0
+                $resumeHandle = [uint32]0
+                # InfoLevel = 0 (SC_ENUM_PROCESS_INFO), dwServiceType = 0x30 (SERVICE_WIN32), dwServiceState = 0x03 (SERVICE_STATE_ALL)
+                $okEnum = [PSRPM.NativeServiceEnumV1]::EnumServicesStatusExW(
+                    $hScm, 0, [uint32]0x30, [uint32]0x03,
+                    $script:SvcBufPtr, [uint32]$script:SvcBufSize,
+                    [ref]$bytesNeeded, [ref]$svcsReturned, [ref]$resumeHandle, [IntPtr]::Zero
+                )
+                $maxSvcBufSize = 4194304 # 4 MB ceiling
+                $svcRealloc = 0
+                while ($okEnum -eq 0 -and [System.Runtime.InteropServices.Marshal]::GetLastWin32Error() -eq 234 -and $svcRealloc -lt 4 -and $script:SvcBufSize -lt $maxSvcBufSize) {
+                    $svcRealloc++
+                    $reqBytes = [int]$bytesNeeded + 16384
+                    $newSvcSz = [Math]::Min($maxSvcBufSize, [Math]::Max($script:SvcBufSize * 2, $reqBytes))
+                    if ($newSvcSz -le $script:SvcBufSize) { break }
+                    $newSvcPtr = [IntPtr]::Zero
+                    try {
+                        $newSvcPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($newSvcSz)
+                    } catch {
+                        break
+                    }
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:SvcBufPtr)
+                    $script:SvcBufPtr  = $newSvcPtr
+                    $script:SvcBufSize = $newSvcSz
+                    $bytesNeeded  = [uint32]0
+                    $svcsReturned = [uint32]0
+                    $resumeHandle = [uint32]0
+                    $okEnum = [PSRPM.NativeServiceEnumV1]::EnumServicesStatusExW(
+                        $hScm, 0, [uint32]0x30, [uint32]0x03,
+                        $script:SvcBufPtr, [uint32]$script:SvcBufSize,
+                        [ref]$bytesNeeded, [ref]$svcsReturned, [ref]$resumeHandle, [IntPtr]::Zero
+                    )
+                }
 
-        foreach ($entry in $svcArr) {
-            $sKey = [string]$entry.n
-            [void]$seenSvcNames.Add($sKey)
-            $sig = "$($entry.p)|$($entry.st)|$($entry.sm)|$($entry.u)|$($entry.d)|$($entry.dep)|$($entry.rev)|$($entry.dsc)|$($entry.bin)"
-            if ($sendFullSvc -or -not $script:LastSvcState.ContainsKey($sKey) -or $script:LastSvcState[$sKey] -ne $sig) {
-                $script:LastSvcState[$sKey] = $sig
-                $deltaSvc.Add($entry)
+                if ($okEnum -ne 0 -and $svcsReturned -gt 0) {
+                    $svcArr = [System.Collections.Generic.List[Object]]::new([int]$svcsReturned)
+                    $script:ServicePidSet.Clear()
+
+                    $is64Svc     = ([IntPtr]::Size -eq 8)
+                    $ptrSzSvc    = [IntPtr]::Size
+                    $svcStride   = if ($is64Svc) { 56 } else { 44 }
+                    $offSvcState = ($ptrSzSvc * 2) + 4
+                    $offSvcPid   = ($ptrSzSvc * 2) + 28
+                    $countSvc    = [int]$svcsReturned
+
+                    for ($si = 0; $si -lt $countSvc; $si++) {
+                        $ePtr    = [IntPtr]::Add($script:SvcBufPtr, $si * $svcStride)
+                        $pName   = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($ePtr, 0)
+                        $pDisp   = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($ePtr, $ptrSzSvc)
+                        $stCode  = [System.Runtime.InteropServices.Marshal]::ReadInt32($ePtr, $offSvcState)
+                        $sPid    = [int]([long][System.Runtime.InteropServices.Marshal]::ReadInt32($ePtr, $offSvcPid) -band 0xFFFFFFFFL)
+
+                        $sName = if ($pName -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::PtrToStringUni($pName) } else { "" }
+                        if ([string]::IsNullOrWhiteSpace($sName)) { continue }
+                        $sDisp = if ($pDisp -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::PtrToStringUni($pDisp) } else { $sName }
+                        if ([string]::IsNullOrWhiteSpace($sDisp)) { $sDisp = $sName }
+
+                        if ($sPid -gt 0) {
+                            [void]$script:ServicePidSet.Add($sPid)
+                        }
+
+                        $sState = switch ($stCode) {
+                            4 { "Running" }
+                            1 { "Stopped" }
+                            2 { "Start Pending" }
+                            3 { "Stop Pending" }
+                            5 { "Continue Pending" }
+                            6 { "Pause Pending" }
+                            7 { "Paused" }
+                            default { "Stopped" }
+                        }
+
+                        $stMeta = if ($script:SvcStaticCache.ContainsKey($sName)) {
+                            $script:SvcStaticCache[$sName]
+                        } elseif ($sName -match '^(.+)_[0-9a-fA-F]{4,8}$' -and $script:SvcStaticCache.ContainsKey($matches[1])) {
+                            $script:SvcStaticCache[$matches[1]]
+                        } else {
+                            $null
+                        }
+
+                        $svcArr.Add(@{
+                            n   = $sName
+                            d   = $sDisp
+                            p   = $sPid
+                            st  = $sState
+                            sm  = if ($stMeta) { $stMeta.sm }  else { "Manual" }
+                            u   = if ($stMeta) { $stMeta.u }   else { "LocalSystem" }
+                            dep = if ($stMeta) { $stMeta.dep } else { "" }
+                            rev = if ($stMeta) { $stMeta.rev } else { "" }
+                            dsc = if ($stMeta) { $stMeta.dsc } else { "" }
+                            bin = if ($stMeta) { $stMeta.bin } else { "" }
+                        })
+                    }
+
+                    # Publish live service list to script & AppDomain data so Properties and async workers read it in 0ms
+                    $script:CachedServices = $svcArr
+                    try {
+                        [AppDomain]::CurrentDomain.SetData("PSRPM_CachedServices", $svcArr)
+                    } catch {}
+
+                    $sendFullSvc = ($script:LastSvcState.Count -eq 0 -or $ForceFullSync)
+                    if ($sendFullSvc) { $svcFullNum = 1 }
+                    $deltaSvc = [System.Collections.Generic.List[Object]]::new()
+                    $seenSvcNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+                    foreach ($entry in $svcArr) {
+                        $sKey = [string]$entry.n
+                        [void]$seenSvcNames.Add($sKey)
+                        $sig = "$($entry.p)|$($entry.st)|$($entry.sm)|$($entry.u)|$($entry.d)|$($entry.dep)|$($entry.rev)|$($entry.dsc)|$($entry.bin)"
+                        if ($sendFullSvc -or -not $script:LastSvcState.ContainsKey($sKey) -or $script:LastSvcState[$sKey] -ne $sig) {
+                            $script:LastSvcState[$sKey] = $sig
+                            $deltaSvc.Add($entry)
+                        }
+                    }
+
+                    $oldSvcKeys = @($script:LastSvcState.Keys)
+                    foreach ($oldKey in $oldSvcKeys) {
+                        if (-not $seenSvcNames.Contains($oldKey)) {
+                            [void]$script:LastSvcState.Remove($oldKey)
+                            $deadSvcNames.Add($oldKey)
+                        }
+                    }
+
+                    if ($deltaSvc.Count -gt 0) {
+                        $servicesPayload = $deltaSvc
+                    }
+                    $script:LastSvcRefresh = $nowUtc
+                }
+            } finally {
+                [void][PSRPM.NativeServiceEnumV1]::CloseServiceHandle($hScm)
             }
         }
-
-        $oldSvcKeys = @($script:LastSvcState.Keys)
-        foreach ($oldKey in $oldSvcKeys) {
-            if (-not $seenSvcNames.Contains($oldKey)) {
-                [void]$script:LastSvcState.Remove($oldKey)
-                $deadSvcNames.Add($oldKey)
-            }
-        }
-
-        if ($deltaSvc.Count -gt 0) {
-            $servicesPayload = $deltaSvc
-        }
-        $script:LastSvcRefresh = $nowUtc
+        $swSvc.Stop()
+        $svcMs = [int]$swSvc.ElapsedMilliseconds
     }
 
     $script:SeqNumber++
@@ -1521,6 +1620,8 @@ $script:PSRPMCollectorScriptBlock = {
     $offThWait    = if ($is64) { 72 }  else { 56 }
 
     $validLen = if ($retLen -gt 0 -and $retLen -le $script:SysBufSize) { $retLen } else { $script:SysBufSize }
+    $swMeta = [System.Diagnostics.Stopwatch]::StartNew()
+    $metaBudgetMs = if ($script:SeqNumber -eq 1 -or $ForceFullSync) { 600 } else { 15 }
     $offset = 0
     while (($offset + $spiSize) -le $validLen) {
         $curPtr     = [IntPtr]::Add($script:SysBufPtr, $offset)
@@ -1601,7 +1702,7 @@ $script:PSRPMCollectorScriptBlock = {
             $script:ProcCycleCache[$compKey] = $cycleTime
             $procCpuSum += $cpuPct
 
-            # 3. Static Metadata Enrichment (Executed ONLY ONCE when a new PID+CreateTime spawns)
+            # 3. Static Metadata Enrichment (Executed ONLY ONCE when a new PID+CreateTime spawns; slow SID/FileVersionInfo time-budgeted)
             if (-not $script:ProcMetaCache.ContainsKey($compKey)) {
                 $nameLen = [System.Runtime.InteropServices.Marshal]::ReadInt16($curPtr, 56)
                 $namePtr = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($curPtr, $offNamePtr)
@@ -1620,6 +1721,11 @@ $script:PSRPMCollectorScriptBlock = {
                 $startStr = if ($createTime -gt 0) {
                     try { [DateTime]::FromFileTimeUtc($createTime).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") } catch { "N/A" }
                 } else { "N/A" }
+
+                $sidDeferred  = $false
+                $pendSidVal   = ""
+                $fileDeferred = $false
+                $withinBudget = ($swMeta.ElapsedMilliseconds -lt $metaBudgetMs) -or ($pidVal -eq $PID)
 
                 # Open PROCESS_QUERY_LIMITED_INFORMATION (0x1000) once for this new PID
                 if ($pidVal -gt 4) {
@@ -1651,7 +1757,7 @@ $script:PSRPMCollectorScriptBlock = {
                                 }
                             }
 
-                            # D. User Account via OpenProcessToken + SidCache (Zero WMI GetOwner)
+                            # D. User Account via OpenProcessToken + SidCache (Zero WMI GetOwner, Time-Budgeted)
                             $hTok = [IntPtr]::Zero
                             if ([PSRPM.NativeCollectorV3]::OpenProcessToken($hProc, 0x0008, [ref]$hTok) -ne 0) {
                                 try {
@@ -1662,13 +1768,17 @@ $script:PSRPMCollectorScriptBlock = {
                                         $sidVal = $sidObj.Value
                                         if ($script:SidCache.ContainsKey($sidVal)) {
                                             $userStr = $script:SidCache[$sidVal]
-                                        } else {
+                                        } elseif ($withinBudget) {
                                             try {
                                                 $userStr = $sidObj.Translate([System.Security.Principal.NTAccount]).Value
                                             } catch {
                                                 $userStr = $sidVal
                                             }
                                             $script:SidCache[$sidVal] = $userStr
+                                        } else {
+                                            $userStr     = $sidVal
+                                            $sidDeferred = $true
+                                            $pendSidVal  = $sidVal
                                         }
                                     }
                                 } finally {
@@ -1681,14 +1791,15 @@ $script:PSRPMCollectorScriptBlock = {
                     }
                 }
 
-                # E. FileVersionInfo (Cached per Unique Executable Path)
+                # E. FileVersionInfo (Cached per Unique Executable Path, Time-Budgeted)
+                $withinBudgetFile = ($swMeta.ElapsedMilliseconds -lt $metaBudgetMs) -or ($pidVal -eq $PID)
                 if ($exePath -ne "N/A") {
                     $pathKey = $exePath.ToLowerInvariant()
                     if ($script:FileMetaCache.ContainsKey($pathKey)) {
                         $fMeta   = $script:FileMetaCache[$pathKey]
                         $descStr = $fMeta.d
                         $compStr = $fMeta.c
-                    } else {
+                    } elseif ($withinBudgetFile) {
                         try {
                             if ([System.IO.File]::Exists($exePath)) {
                                 $fvi     = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
@@ -1697,6 +1808,8 @@ $script:PSRPMCollectorScriptBlock = {
                             }
                         } catch {}
                         $script:FileMetaCache[$pathKey] = @{ d = $descStr; c = $compStr }
+                    } else {
+                        $fileDeferred = $true
                     }
                 }
 
@@ -1736,6 +1849,69 @@ $script:PSRPMCollectorScriptBlock = {
                     sid   = $sessionId
                     prio  = $basePrio
                     cat   = $catStr
+                }
+
+                if ($sidDeferred -or $fileDeferred) {
+                    $script:PendingMetaMap[$compKey] = @{
+                        sid  = $pendSidVal
+                        path = if ($fileDeferred) { $exePath } else { "" }
+                    }
+                }
+            } elseif ($script:PendingMetaMap.ContainsKey($compKey) -and $swMeta.ElapsedMilliseconds -lt $metaBudgetMs) {
+                $pendItem = $script:PendingMetaMap[$compKey]
+                $mEntry   = $script:ProcMetaCache[$compKey]
+                $updated  = $false
+
+                if (-not [string]::IsNullOrEmpty($pendItem.sid)) {
+                    $sVal = [string]$pendItem.sid
+                    if ($script:SidCache.ContainsKey($sVal)) {
+                        $mEntry.u = $script:SidCache[$sVal]
+                        $pendItem.sid = ""
+                        $updated = $true
+                    } elseif ($swMeta.ElapsedMilliseconds -lt $metaBudgetMs) {
+                        $uResolved = $sVal
+                        try {
+                            $uResolved = [System.Security.Principal.SecurityIdentifier]::new($sVal).Translate([System.Security.Principal.NTAccount]).Value
+                        } catch {}
+                        $script:SidCache[$sVal] = $uResolved
+                        $mEntry.u = $uResolved
+                        $pendItem.sid = ""
+                        $updated = $true
+                    }
+                }
+
+                if (-not [string]::IsNullOrEmpty($pendItem.path)) {
+                    $pVal = [string]$pendItem.path
+                    $pKey = $pVal.ToLowerInvariant()
+                    if ($script:FileMetaCache.ContainsKey($pKey)) {
+                        $fm = $script:FileMetaCache[$pKey]
+                        if (-not [string]::IsNullOrWhiteSpace($fm.d)) { $mEntry.desc = $fm.d }
+                        if (-not [string]::IsNullOrWhiteSpace($fm.c)) { $mEntry.comp = $fm.c }
+                        $pendItem.path = ""
+                        $updated = $true
+                    } elseif ($swMeta.ElapsedMilliseconds -lt $metaBudgetMs) {
+                        $dRes = ""
+                        $cRes = ""
+                        try {
+                            if ([System.IO.File]::Exists($pVal)) {
+                                $fvi  = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($pVal)
+                                $dRes = [string]$fvi.FileDescription
+                                $cRes = [string]$fvi.CompanyName
+                            }
+                        } catch {}
+                        $script:FileMetaCache[$pKey] = @{ d = $dRes; c = $cRes }
+                        if (-not [string]::IsNullOrWhiteSpace($dRes)) { $mEntry.desc = $dRes }
+                        if (-not [string]::IsNullOrWhiteSpace($cRes)) { $mEntry.comp = $cRes }
+                        $pendItem.path = ""
+                        $updated = $true
+                    }
+                }
+
+                if ([string]::IsNullOrEmpty($pendItem.sid) -and [string]::IsNullOrEmpty($pendItem.path)) {
+                    [void]$script:PendingMetaMap.Remove($compKey)
+                }
+                if ($updated) {
+                    [void]$script:SentMetaKeys.Remove($compKey)
                 }
             }
 
@@ -1811,6 +1987,7 @@ $script:PSRPMCollectorScriptBlock = {
         $script:ProcCpuCache.Remove($sk)
         $script:ProcCycleCache.Remove($sk)
         $script:ProcMetaCache.Remove($sk)
+        $script:PendingMetaMap.Remove($sk)
         $script:LastDynState.Remove($sk)
         [void]$script:SentMetaKeys.Remove($sk)
     }
@@ -2081,9 +2258,17 @@ $script:PSRPMCollectorScriptBlock = {
     $svcJson     = if ($null -ne $servicesPayload) { $jss.Serialize($servicesPayload) } else { 'null' }
     $svcDeadJson = if ($deadSvcNames.Count -gt 0) { $jss.Serialize($deadSvcNames) } else { '[]' }
 
+    $swCol.Stop()
+    $colMs        = [int]$swCol.ElapsedMilliseconds
+    $metaPendCnt  = $script:PendingMetaMap.Count
+
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.8.0","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.8.2","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
+    [void]$sb.Append(',"colMs":').Append($colMs)
+    [void]$sb.Append(',"svcMs":').Append($svcMs)
+    [void]$sb.Append(',"svcFull":').Append($svcFullNum)
+    [void]$sb.Append(',"metaPend":').Append($metaPendCnt)
     [void]$sb.Append(',"sys":[').Append("$sysCpuStr,$ramUsedMB,$ramTotalMB,$totalProcs,$totalThreads,$totalHandles,$commitUsedMB,$commitLimitMB,$kernCpuStr,$commitCurKB,$commitLimKB,$commitPeakKB,$physTotalKB,$physAvailKB,$sysCacheKB,$kernelPagedKB,$kernelNonPagedKB,$pfDelta,$prDelta,$pfwDelta,$mfwDelta,$csDelta,$intrDelta,$scDelta,$ioReadDelta,$ioWriteDelta,$ioOtherDelta,$($netRxKBs.ToString($inv)),$($netTxKBs.ToString($inv)),$($diskReadKBs.ToString($inv)),$($diskWriteKBs.ToString($inv)),$($diskQueueDepth.ToString($inv))").Append(']')
     [void]$sb.Append(',"cores":[').Append(($coreTuples -join ',')).Append(']')
     [void]$sb.Append(',"hw":').Append($hwJson)

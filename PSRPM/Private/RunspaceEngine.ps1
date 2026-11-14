@@ -117,9 +117,227 @@ function Start-PSRPMEngine {
             $initTabId
         )
 
-        $collectorSb = [scriptblock]::Create($collectorCode)
+        $newLocalCollectorSb = {
+            $m = New-Module -ScriptBlock {}
+            $m.NewBoundScriptBlock([scriptblock]::Create($collectorCode))
+        }
         $inspectorSb = [scriptblock]::Create($inspectorCode)
         $actionSb    = [scriptblock]::Create($actionCode)
+
+        $asyncWorkerLoopText = {
+            param($jobQueue, $doneQueue, $wakeEv, $state, $inspCode, $actCode, $coordWakeEv)
+            $wInspSb = [scriptblock]::Create($inspCode)
+            $wActSb  = [scriptblock]::Create($actCode)
+            while (-not $state.IsStopping) {
+                $job = $null
+                while (-not $state.IsStopping -and $jobQueue.TryDequeue([ref]$job)) {
+                    $swJob = [System.Diagnostics.Stopwatch]::StartNew()
+                    try {
+                        $jType = [string]$job.CommandType
+                        $payload = $null
+                        if ($jType -eq "InspectPid") {
+                            $payload = & $wInspSb ([int]$job.TargetPid) ([bool]$job.VerifySignature) ([string]$job.InspectMode)
+                        } elseif ($jType -eq "FindHandles") {
+                            $payload = & $wInspSb 0 $false "FindHandles" ([string]$job.Query)
+                        } elseif ($jType -eq "ProcessAction") {
+                            $payload = & $wActSb ([string]$job.Action) ([int]$job.TargetPid) ([string]$job.ExpectedName) ([string]$job.ServiceName) ([string]$job.Priority) ([string]$job.HandleId) ([string]$job.DumpType) ([long]$job.ExpectedCreateTime)
+                        } elseif ($jType -eq "BatchProcessAction") {
+                            $resItems = [System.Collections.Generic.List[string]]::new()
+                            $pids  = $job.TargetPids
+                            $names = $job.TargetNames
+                            $times = $job.TargetTimes
+                            for ($ti = 0; $ti -lt $pids.Count; $ti++) {
+                                $oneJson = & $wActSb ([string]$job.Action) ([int]$pids[$ti]) ([string]$names[$ti]) "" ([string]$job.Priority) "" ([string]$job.DumpType) ([long]$times[$ti])
+                                if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
+                                    [void]$resItems.Add([string]$oneJson)
+                                }
+                            }
+                            $payload = "[" + ($resItems -join ",") + "]"
+                        }
+                        $swJob.Stop()
+                        $job['Success']     = $true
+                        $job['PayloadJson'] = [string]$payload
+                        $job['ElapsedMs']   = $swJob.ElapsedMilliseconds
+                        $doneQueue.Enqueue($job)
+                    } catch {
+                        $swJob.Stop()
+                        $job['Success']   = $false
+                        $job['Error']     = $_.Exception.Message
+                        $job['ElapsedMs'] = $swJob.ElapsedMilliseconds
+                        $doneQueue.Enqueue($job)
+                    }
+                    if ($coordWakeEv) {
+                        try { [void]$coordWakeEv.Set() } catch {}
+                    }
+                }
+                if (-not $state.IsStopping) {
+                    [void]$wakeEv.WaitOne(200)
+                }
+            }
+        }.ToString()
+
+        $script:CoordLocalWorker = $null
+        $ensureLocalWorker = {
+            if ($null -eq $script:CoordLocalWorker) {
+                $wIss   = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+                $wRs    = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($wIss)
+                $wRs.Open()
+                $wPs    = [System.Management.Automation.PowerShell]::Create()
+                $wPs.Runspace = $wRs
+                $wJobQ  = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+                $wDoneQ = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+                $wWake  = [System.Threading.AutoResetEvent]::new($false)
+                $wState = [hashtable]::Synchronized(@{ IsStopping = $false })
+                [void]$wPs.AddScript($asyncWorkerLoopText).AddArgument($wJobQ).AddArgument($wDoneQ).AddArgument($wWake).AddArgument($wState).AddArgument($inspectorCode).AddArgument($actionCode).AddArgument($stateContainer.WakeEvent)
+                $wHnd = $wPs.BeginInvoke()
+                $script:CoordLocalWorker = @{
+                    Runspace  = $wRs
+                    PowerShell = $wPs
+                    Handle    = $wHnd
+                    JobQueue  = $wJobQ
+                    DoneQueue = $wDoneQ
+                    WakeEvent = $wWake
+                    State     = $wState
+                }
+            }
+            return $script:CoordLocalWorker
+        }
+
+        $stopRemoteWorker = {
+            param($sessObj)
+            if (-not $sessObj -or $sessObj.IsLocal -or -not $sessObj.WorkerInitialized) { return }
+            if ($sessObj.Session -and $sessObj.Session.State -eq 'Opened') {
+                try {
+                    Invoke-Command -Session $sessObj.Session -ScriptBlock {
+                        if ($script:PSRPMAsyncWorker) {
+                            try { $script:PSRPMAsyncWorker.State.IsStopping = $true } catch {}
+                            try { [void]$script:PSRPMAsyncWorker.WakeEvent.Set() } catch {}
+                            try { $script:PSRPMAsyncWorker.PowerShell.Dispose() } catch {}
+                            try { $script:PSRPMAsyncWorker.Runspace.Close(); $script:PSRPMAsyncWorker.Runspace.Dispose() } catch {}
+                            try { $script:PSRPMAsyncWorker.WakeEvent.Dispose() } catch {}
+                            $script:PSRPMAsyncWorker = $null
+                        }
+                    } -ErrorAction SilentlyContinue
+                } catch {}
+            }
+            $sessObj.WorkerInitialized = $false
+        }
+
+        $failSessionPendingJobs = {
+            param($sessObj, [string]$reason)
+            if (-not $sessObj -or -not $sessObj.PendingJobs -or $sessObj.PendingJobs.Count -eq 0) { return }
+            $pKeys = @($sessObj.PendingJobs.Keys)
+            foreach ($rk in $pKeys) {
+                $pj = $sessObj.PendingJobs[$rk]
+                [void]$sessObj.PendingJobs.Remove($rk)
+                $pj['Success'] = $false
+                $pj['Error']   = $reason
+                $stateContainer.ResultQueue.Enqueue($pj)
+            }
+        }
+
+        $submitAsyncJob = {
+            param($sessObj, [hashtable]$jobDesc)
+            $jobDesc['TabId'] = $activeTabId
+            if ($sessObj) {
+                $sessObj.PendingJobs[$jobDesc.RequestId] = $jobDesc
+            }
+            $useLoc = if ($sessObj) { [bool]$sessObj.IsLocal } else { $isLocalMode }
+            if ($useLoc) {
+                $lw = &$ensureLocalWorker
+                $lw.JobQueue.Enqueue($jobDesc)
+                [void]$lw.WakeEvent.Set()
+            } else {
+                $uSess = if ($sessObj) { $sessObj.Session } else { $session }
+                if (-not $uSess -or $uSess.State -ne 'Opened') {
+                    if ($sessObj) { [void]$sessObj.PendingJobs.Remove($jobDesc.RequestId) }
+                    throw "WinRM session is not open for async job submission."
+                }
+                if ($sessObj -and -not $sessObj.WorkerInitialized) {
+                    Invoke-Command -Session $uSess -ScriptBlock {
+                        param($loopCode, $iCode, $aCode)
+                        if (-not $script:PSRPMAsyncWorker) {
+                            $wIss   = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+                            $wRs    = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($wIss)
+                            $wRs.Open()
+                            $wPs    = [System.Management.Automation.PowerShell]::Create()
+                            $wPs.Runspace = $wRs
+                            $wJobQ  = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+                            $wDoneQ = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+                            $wWake  = [System.Threading.AutoResetEvent]::new($false)
+                            $wState = [hashtable]::Synchronized(@{ IsStopping = $false })
+                            [void]$wPs.AddScript($loopCode).AddArgument($wJobQ).AddArgument($wDoneQ).AddArgument($wWake).AddArgument($wState).AddArgument($iCode).AddArgument($aCode).AddArgument($null)
+                            $wHnd = $wPs.BeginInvoke()
+                            $script:PSRPMAsyncWorker = @{
+                                Runspace   = $wRs
+                                PowerShell = $wPs
+                                Handle     = $wHnd
+                                JobQueue   = $wJobQ
+                                DoneQueue  = $wDoneQ
+                                WakeEvent  = $wWake
+                                State      = $wState
+                            }
+                        }
+                    } -ArgumentList @($asyncWorkerLoopText, $inspectorCode, $actionCode) -ErrorAction Stop
+                    $sessObj.WorkerInitialized = $true
+                }
+                $enqOk = Invoke-Command -Session $uSess -ScriptBlock {
+                    param($j)
+                    if ($script:PSRPMAsyncWorker) {
+                        $script:PSRPMAsyncWorker.JobQueue.Enqueue($j)
+                        [void]$script:PSRPMAsyncWorker.WakeEvent.Set()
+                        $true
+                    } else {
+                        $false
+                    }
+                } -ArgumentList @($jobDesc) -ErrorAction Stop
+                if (-not $enqOk) {
+                    if ($sessObj) { $sessObj.WorkerInitialized = $false }
+                    throw "Target async worker was not initialized on remote host."
+                }
+            }
+        }
+
+        $harvestAsyncJobs = {
+            if ($script:CoordLocalWorker) {
+                $dJob = $null
+                while ($script:CoordLocalWorker.DoneQueue.TryDequeue([ref]$dJob)) {
+                    $jTab = [string]$dJob.TabId
+                    $rId  = [string]$dJob.RequestId
+                    if ($sessions.ContainsKey($jTab) -and $sessions[$jTab].PendingJobs.ContainsKey($rId)) {
+                        [void]$sessions[$jTab].PendingJobs.Remove($rId)
+                        $stateContainer.ResultQueue.Enqueue($dJob)
+                    }
+                }
+            }
+            foreach ($sItem in $sessions.Values) {
+                if (-not $sItem.IsLocal -and $sItem.PendingJobs.Count -gt 0 -and $sItem.Session -and $sItem.Session.State -eq 'Opened') {
+                    try {
+                        $remDone = Invoke-Command -Session $sItem.Session -ScriptBlock {
+                            $list = [System.Collections.Generic.List[hashtable]]::new()
+                            if ($script:PSRPMAsyncWorker) {
+                                $it = $null
+                                while ($script:PSRPMAsyncWorker.DoneQueue.TryDequeue([ref]$it)) {
+                                    $list.Add($it)
+                                }
+                            }
+                            return ,$list
+                        } -ErrorAction Stop
+                        if ($remDone) {
+                            foreach ($rd in $remDone) {
+                                if ($null -ne $rd -and $rd.ContainsKey('RequestId')) {
+                                    $rId = [string]$rd['RequestId']
+                                    if ($sItem.PendingJobs.ContainsKey($rId)) {
+                                        [void]$sItem.PendingJobs.Remove($rId)
+                                        $stateContainer.ResultQueue.Enqueue($rd)
+                                    }
+                                }
+                            }
+                        }
+                    } catch {}
+                }
+            }
+        }
 
         # Multi-Host Session Dictionary (TabId -> @{ Session, IsLocal, Target, Badge, CollectorSb, ... })
         $sessions = @{}
@@ -130,10 +348,12 @@ function Start-PSRPMEngine {
             IsLocal              = $isLocalMode
             Target               = $stateContainer.TargetDisplayName
             Badge                = $initBadge
-            CollectorSb          = $collectorSb
+            CollectorSb          = &$newLocalCollectorSb
             CollectorInitialized = $false
             InspectorInitialized = $false
             ActionInitialized    = $false
+            WorkerInitialized    = $false
+            PendingJobs          = @{}
             ConnectionConfig     = @{
                 ComputerName = $initComp
                 IsLocal      = $isLocalMode
@@ -207,31 +427,25 @@ function Start-PSRPMEngine {
                             $useLocal    = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
                             $useSess     = if ($activeSessObj) { $activeSessObj.Session } else { $session }
 
-                            $jsonRes = if ($useLocal) {
-                                & $inspectorSb $targetPid $verifySig $inspectMode
-                            } else {
-                                if ($activeSessObj -and -not $activeSessObj.InspectorInitialized) {
-                                    Invoke-Command -Session $useSess -ScriptBlock {
-                                        param($code)
-                                        $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
-                                    } -ArgumentList @($inspectorCode) -ErrorAction Stop
-                                    $activeSessObj.InspectorInitialized = $true
+                            if ($verifySig -or $inspectMode -in @("Modules", "Handles", "All")) {
+                                &$submitAsyncJob $activeSessObj @{
+                                    RequestId       = $cmd.RequestId
+                                    CommandType     = "InspectPid"
+                                    InspectMode     = $inspectMode
+                                    TargetPid       = $targetPid
+                                    VerifySignature = $verifySig
                                 }
-                                $resInsp = Invoke-Command -Session $useSess -ScriptBlock {
-                                    param($p, $v, $m)
-                                    if ($script:PSRPMInspectorInvoker) {
-                                        & $script:PSRPMInspectorInvoker $p $v $m
-                                    } else {
-                                        $null
+                            } else {
+                                $jsonRes = if ($useLocal) {
+                                    & $inspectorSb $targetPid $verifySig $inspectMode
+                                } else {
+                                    if ($activeSessObj -and -not $activeSessObj.InspectorInitialized) {
+                                        Invoke-Command -Session $useSess -ScriptBlock {
+                                            param($code)
+                                            $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
+                                        } -ArgumentList @($inspectorCode) -ErrorAction Stop
+                                        $activeSessObj.InspectorInitialized = $true
                                     }
-                                } -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
-
-                                if (-not $resInsp) {
-                                    Invoke-Command -Session $useSess -ScriptBlock {
-                                        param($code)
-                                        $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
-                                    } -ArgumentList @($inspectorCode) -ErrorAction Stop
-                                    $activeSessObj.InspectorInitialized = $true
                                     $resInsp = Invoke-Command -Session $useSess -ScriptBlock {
                                         param($p, $v, $m)
                                         if ($script:PSRPMInspectorInvoker) {
@@ -240,19 +454,35 @@ function Start-PSRPMEngine {
                                             $null
                                         }
                                     } -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
+
+                                    if (-not $resInsp) {
+                                        Invoke-Command -Session $useSess -ScriptBlock {
+                                            param($code)
+                                            $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
+                                        } -ArgumentList @($inspectorCode) -ErrorAction Stop
+                                        $activeSessObj.InspectorInitialized = $true
+                                        $resInsp = Invoke-Command -Session $useSess -ScriptBlock {
+                                            param($p, $v, $m)
+                                            if ($script:PSRPMInspectorInvoker) {
+                                                & $script:PSRPMInspectorInvoker $p $v $m
+                                            } else {
+                                                $null
+                                            }
+                                        } -ArgumentList @($targetPid, $verifySig, $inspectMode) -ErrorAction Stop
+                                    }
+                                    $resInsp
                                 }
-                                $resInsp
+                                $swCmd.Stop()
+                                $stateContainer.ResultQueue.Enqueue(@{
+                                    RequestId   = $cmd.RequestId
+                                    CommandType = "InspectPid"
+                                    InspectMode = $inspectMode
+                                    Success     = $true
+                                    TargetPid   = $targetPid
+                                    PayloadJson = [string]$jsonRes
+                                    ElapsedMs   = $swCmd.ElapsedMilliseconds
+                                })
                             }
-                            $swCmd.Stop()
-                            $stateContainer.ResultQueue.Enqueue(@{
-                                RequestId   = $cmd.RequestId
-                                CommandType = "InspectPid"
-                                InspectMode = $inspectMode
-                                Success     = $true
-                                TargetPid   = $targetPid
-                                PayloadJson = [string]$jsonRes
-                                ElapsedMs   = $swCmd.ElapsedMilliseconds
-                            })
                         }
 
                         "ProcessAction" {
@@ -267,34 +497,49 @@ function Start-PSRPMEngine {
                             $useLocal  = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
                             $useSess   = if ($activeSessObj) { $activeSessObj.Session } else { $session }
 
-                            $jsonRes = if ($useLocal) {
-                                & $actionSb $actName $tPid $expName $svcName $prio $hId $dType $expCreate
-                            } else {
-                                if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
-                                    Invoke-Command -Session $useSess -ScriptBlock {
-                                        param($code)
-                                        $script:PSRPMActionInvoker = [scriptblock]::Create($code)
-                                    } -ArgumentList @($actionCode) -ErrorAction Stop
-                                    $activeSessObj.ActionInitialized = $true
+                            if ($actName -in @("CreateDump", "ControlService")) {
+                                &$submitAsyncJob $activeSessObj @{
+                                    RequestId          = $cmd.RequestId
+                                    CommandType        = "ProcessAction"
+                                    Action             = $actName
+                                    TargetPid          = $tPid
+                                    ExpectedName       = $expName
+                                    ServiceName        = $svcName
+                                    Priority           = $prio
+                                    HandleId           = $hId
+                                    DumpType           = $dType
+                                    ExpectedCreateTime = $expCreate
                                 }
-                                Invoke-Command -Session $useSess -ScriptBlock {
-                                    param($a, $p, $e, $s, $pr, $h, $dt, $ct)
-                                    if ($script:PSRPMActionInvoker) {
-                                        & $script:PSRPMActionInvoker $a $p $e $s $pr $h $dt $ct
-                                    } else {
-                                        $null
+                            } else {
+                                $jsonRes = if ($useLocal) {
+                                    & $actionSb $actName $tPid $expName $svcName $prio $hId $dType $expCreate
+                                } else {
+                                    if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
+                                        Invoke-Command -Session $useSess -ScriptBlock {
+                                            param($code)
+                                            $script:PSRPMActionInvoker = [scriptblock]::Create($code)
+                                        } -ArgumentList @($actionCode) -ErrorAction Stop
+                                        $activeSessObj.ActionInitialized = $true
                                     }
-                                } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio, $hId, $dType, $expCreate) -ErrorAction Stop
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($a, $p, $e, $s, $pr, $h, $dt, $ct)
+                                        if ($script:PSRPMActionInvoker) {
+                                            & $script:PSRPMActionInvoker $a $p $e $s $pr $h $dt $ct
+                                        } else {
+                                            $null
+                                        }
+                                    } -ArgumentList @($actName, $tPid, $expName, $svcName, $prio, $hId, $dType, $expCreate) -ErrorAction Stop
+                                }
+                                $swCmd.Stop()
+                                $stateContainer.ResultQueue.Enqueue(@{
+                                    RequestId   = $cmd.RequestId
+                                    CommandType = "ProcessAction"
+                                    Action      = $actName
+                                    Success     = $true
+                                    PayloadJson = [string]$jsonRes
+                                    ElapsedMs   = $swCmd.ElapsedMilliseconds
+                                })
                             }
-                            $swCmd.Stop()
-                            $stateContainer.ResultQueue.Enqueue(@{
-                                RequestId   = $cmd.RequestId
-                                CommandType = "ProcessAction"
-                                Action      = $actName
-                                Success     = $true
-                                PayloadJson = [string]$jsonRes
-                                ElapsedMs   = $swCmd.ElapsedMilliseconds
-                            })
                         }
 
                         "BatchProcessAction" {
@@ -315,81 +560,68 @@ function Start-PSRPMEngine {
                                 $tTimes[$ti] = if ($tObj.ExpectedCreateTime) { [long]$tObj.ExpectedCreateTime } else { 0L }
                             }
 
-                            $jsonRes = if ($useLocal) {
-                                $resItems = [System.Collections.Generic.List[string]]::new()
-                                for ($ti = 0; $ti -lt $tPids.Count; $ti++) {
-                                    $oneJson = & $actionSb $actName $tPids[$ti] $tNames[$ti] "" $prio "" $dType $tTimes[$ti]
-                                    if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
-                                        [void]$resItems.Add([string]$oneJson)
-                                    }
+                            if ($targets.Count -gt 3 -or $actName -eq "CreateDump") {
+                                &$submitAsyncJob $activeSessObj @{
+                                    RequestId   = $cmd.RequestId
+                                    CommandType = "BatchProcessAction"
+                                    Action      = $actName
+                                    Priority    = $prio
+                                    DumpType    = $dType
+                                    TargetPids  = $tPids
+                                    TargetNames = $tNames
+                                    TargetTimes = $tTimes
                                 }
-                                "[" + ($resItems -join ",") + "]"
                             } else {
-                                if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
-                                    Invoke-Command -Session $useSess -ScriptBlock {
-                                        param($code)
-                                        $script:PSRPMActionInvoker = [scriptblock]::Create($code)
-                                    } -ArgumentList @($actionCode) -ErrorAction Stop
-                                    $activeSessObj.ActionInitialized = $true
-                                }
-                                Invoke-Command -Session $useSess -ScriptBlock {
-                                    param($a, $pids, $names, $times, $pr, $dt)
+                                $jsonRes = if ($useLocal) {
                                     $resItems = [System.Collections.Generic.List[string]]::new()
-                                    if ($script:PSRPMActionInvoker) {
-                                        for ($ti = 0; $ti -lt $pids.Count; $ti++) {
-                                            $oneJson = & $script:PSRPMActionInvoker $a ([int]$pids[$ti]) ([string]$names[$ti]) "" $pr "" $dt ([long]$times[$ti])
-                                            if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
-                                                [void]$resItems.Add([string]$oneJson)
-                                            }
+                                    for ($ti = 0; $ti -lt $tPids.Count; $ti++) {
+                                        $oneJson = & $actionSb $actName $tPids[$ti] $tNames[$ti] "" $prio "" $dType $tTimes[$ti]
+                                        if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
+                                            [void]$resItems.Add([string]$oneJson)
                                         }
                                     }
                                     "[" + ($resItems -join ",") + "]"
-                                } -ArgumentList @($actName, $tPids, $tNames, $tTimes, $prio, $dType) -ErrorAction Stop
+                                } else {
+                                    if ($activeSessObj -and -not $activeSessObj.ActionInitialized) {
+                                        Invoke-Command -Session $useSess -ScriptBlock {
+                                            param($code)
+                                            $script:PSRPMActionInvoker = [scriptblock]::Create($code)
+                                        } -ArgumentList @($actionCode) -ErrorAction Stop
+                                        $activeSessObj.ActionInitialized = $true
+                                    }
+                                    Invoke-Command -Session $useSess -ScriptBlock {
+                                        param($a, $pids, $names, $times, $pr, $dt)
+                                        $resItems = [System.Collections.Generic.List[string]]::new()
+                                        if ($script:PSRPMActionInvoker) {
+                                            for ($ti = 0; $ti -lt $pids.Count; $ti++) {
+                                                $oneJson = & $script:PSRPMActionInvoker $a ([int]$pids[$ti]) ([string]$names[$ti]) "" $pr "" $dt ([long]$times[$ti])
+                                                if (-not [string]::IsNullOrWhiteSpace($oneJson)) {
+                                                    [void]$resItems.Add([string]$oneJson)
+                                                }
+                                            }
+                                        }
+                                        "[" + ($resItems -join ",") + "]"
+                                    } -ArgumentList @($actName, $tPids, $tNames, $tTimes, $prio, $dType) -ErrorAction Stop
+                                }
+                                $swCmd.Stop()
+                                $stateContainer.ResultQueue.Enqueue(@{
+                                    RequestId   = $cmd.RequestId
+                                    CommandType = "BatchProcessAction"
+                                    Action      = $actName
+                                    Success     = $true
+                                    PayloadJson = [string]$jsonRes
+                                    ElapsedMs   = $swCmd.ElapsedMilliseconds
+                                })
                             }
-                            $swCmd.Stop()
-                            $stateContainer.ResultQueue.Enqueue(@{
-                                RequestId   = $cmd.RequestId
-                                CommandType = "BatchProcessAction"
-                                Action      = $actName
-                                Success     = $true
-                                PayloadJson = [string]$jsonRes
-                                ElapsedMs   = $swCmd.ElapsedMilliseconds
-                            })
                         }
 
                         "FindHandles" {
-                            $query       = [string]$cmd.Query
-                            $useLocal    = if ($activeSessObj) { [bool]$activeSessObj.IsLocal } else { $isLocalMode }
-                            $useSess     = if ($activeSessObj) { $activeSessObj.Session } else { $session }
-
-                            $jsonRes = if ($useLocal) {
-                                & $inspectorSb 0 $false "FindHandles" $query
-                            } else {
-                                if ($activeSessObj -and -not $activeSessObj.InspectorInitialized) {
-                                    Invoke-Command -Session $useSess -ScriptBlock {
-                                        param($code)
-                                        $script:PSRPMInspectorInvoker = [scriptblock]::Create($code)
-                                    } -ArgumentList @($inspectorCode) -ErrorAction Stop
-                                    $activeSessObj.InspectorInitialized = $true
-                                }
-                                Invoke-Command -Session $useSess -ScriptBlock {
-                                    param($q)
-                                    if ($script:PSRPMInspectorInvoker) {
-                                        & $script:PSRPMInspectorInvoker 0 $false "FindHandles" $q
-                                    } else {
-                                        $null
-                                    }
-                                } -ArgumentList @($query) -ErrorAction Stop
-                            }
-                            $swCmd.Stop()
-                            $stateContainer.ResultQueue.Enqueue(@{
+                            $query = [string]$cmd.Query
+                            &$submitAsyncJob $activeSessObj @{
                                 RequestId   = $cmd.RequestId
                                 CommandType = "FindHandles"
                                 Query       = $query
-                                Success     = $true
-                                PayloadJson = [string]$jsonRes
-                                ElapsedMs   = $swCmd.ElapsedMilliseconds
-                            })
+                            }
                         }
 
                         "AddTabSession" {
@@ -405,7 +637,7 @@ function Start-PSRPMEngine {
                             $targetName = if ($newLocal) { "$env:COMPUTERNAME" } else { $newComp }
 
                             if (-not $newLocal) {
-                                $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 15000 -CancelTimeout 5000 -NoMachineProfile
+                                $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000 -NoMachineProfile
                                 $sParams = @{
                                     ComputerName  = $newComp
                                     SessionOption = $so
@@ -424,10 +656,12 @@ function Start-PSRPMEngine {
                                 IsLocal              = $newLocal
                                 Target               = $targetName
                                 Badge                = $badge
-                                CollectorSb          = [scriptblock]::Create($collectorCode)
+                                CollectorSb          = &$newLocalCollectorSb
                                 CollectorInitialized = $false
                                 InspectorInitialized = $false
                                 ActionInitialized    = $false
+                                WorkerInitialized    = $false
+                                PendingJobs          = @{}
                                 ConnectionConfig     = @{
                                     ComputerName = $newComp
                                     IsLocal      = $newLocal
@@ -547,6 +781,8 @@ function Start-PSRPMEngine {
                             $closeTabId = [string]$cmd.TabId
                             if ($sessions.ContainsKey($closeTabId)) {
                                 $sessToClose = $sessions[$closeTabId]
+                                &$failSessionPendingJobs $sessToClose "Tab session closed."
+                                &$stopRemoteWorker $sessToClose
                                 &$stopSessionNetEtw $sessToClose
                                 if ($sessToClose.Session) {
                                     Remove-PSSession -Session $sessToClose.Session -ErrorAction SilentlyContinue
@@ -584,6 +820,8 @@ function Start-PSRPMEngine {
                             $newSsl   = [bool]$cmd.UseSSL
 
                             if ($sessions.ContainsKey($activeTabId)) {
+                                &$failSessionPendingJobs $sessions[$activeTabId] "Target switched."
+                                &$stopRemoteWorker $sessions[$activeTabId]
                                 &$stopSessionNetEtw $sessions[$activeTabId]
                             }
                             $oldSess = if ($sessions.ContainsKey($activeTabId)) { $sessions[$activeTabId].Session } else { $null }
@@ -600,7 +838,7 @@ function Start-PSRPMEngine {
                                 $stateContainer.TargetDisplayName = "$env:COMPUTERNAME"
                                 $stateContainer.TransportBadge    = "LOCAL"
                             } else {
-                                $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 15000 -CancelTimeout 5000 -NoMachineProfile
+                                $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000 -NoMachineProfile
                                 $sParams = @{
                                     ComputerName  = $newComp
                                     SessionOption = $so
@@ -622,10 +860,12 @@ function Start-PSRPMEngine {
                                 IsLocal              = $newLocal
                                 Target               = $targetName
                                 Badge                = $badge
-                                CollectorSb          = [scriptblock]::Create($collectorCode)
+                                CollectorSb          = &$newLocalCollectorSb
                                 CollectorInitialized = $false
                                 InspectorInitialized = $false
                                 ActionInitialized    = $false
+                                WorkerInitialized    = $false
+                                PendingJobs          = @{}
                                 ConnectionConfig     = @{
                                     ComputerName = $newComp
                                     IsLocal      = $newLocal
@@ -666,6 +906,9 @@ function Start-PSRPMEngine {
 
             if ($stateContainer.IsStopping) { break }
 
+            # 1b. Harvest Non-Blocking Async Worker Jobs
+            &$harvestAsyncJobs
+
             # 2. Periodic Telemetry Snapshot Poll on Active Host Session (Wall-Clock Anchored & Reconnect Protected)
             $nowTicks = [DateTime]::UtcNow.Ticks
             $isDue = ($nowTicks -ge $nextScheduledUtcTicks) -or [bool]$stateContainer.ForceFullSync
@@ -684,6 +927,7 @@ function Start-PSRPMEngine {
             }
 
             if (-not $curPaused -and $activeSessObj -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
+                $pollStartTicks = [DateTime]::UtcNow.Ticks
                 $swPoll = [System.Diagnostics.Stopwatch]::StartNew()
                 try {
                     [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
@@ -734,26 +978,37 @@ function Start-PSRPMEngine {
 
                     $swPoll.Stop()
                     if ($rawResult) {
-                        if ($forceFull) {
-                            [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
-                            try {
-                                if ([long]$stateContainer.FullSyncGen -eq $syncGenBefore) {
-                                    $stateContainer.ForceFullSync = $false
-                                }
-                            } finally {
-                                [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
-                            }
-                        }
                         $pollFinishTicks = [DateTime]::UtcNow.Ticks
                         $lastPollUtcTicks = $pollFinishTicks
                         $stateContainer.LastSampleUtcTicks = $pollFinishTicks
                         $currInterval = [Math]::Max(250, [int]$stateContainer.IntervalMs)
-                        $nextScheduledUtcTicks = $pollFinishTicks + ([long]$currInterval * 10000L)
+                        $nextScheduledUtcTicks = $pollStartTicks + ([long]$currInterval * 10000L)
+                        if ($nextScheduledUtcTicks -le $pollFinishTicks) {
+                            $nextScheduledUtcTicks = $pollFinishTicks + 100000L
+                        }
 
-                        $stateContainer.PollLatencyMs   = [int]$swPoll.ElapsedMilliseconds
-                        $stateContainer.PayloadBytes    = [int]([string]$rawResult).Length
-                        $stateContainer.PayloadTabId    = $activeTabId
-                        $stateContainer.Payload         = [string]$rawResult
+                        $rawResultStr = [string]$rawResult
+                        $calcWireBytes = if ($rawResultStr.StartsWith("GZIP:")) {
+                            $b64Len = $rawResultStr.Length - 5
+                            $pad = if ($rawResultStr.EndsWith("==")) { 2 } elseif ($rawResultStr.EndsWith("=")) { 1 } else { 0 }
+                            [int](($b64Len * 3) / 4) - $pad
+                        } else {
+                            [System.Text.Encoding]::UTF8.GetByteCount($rawResultStr)
+                        }
+
+                        [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
+                        try {
+                            if ($forceFull -and ([long]$stateContainer.FullSyncGen -eq $syncGenBefore)) {
+                                $stateContainer.ForceFullSync = $false
+                            }
+                            $stateContainer.PollLatencyMs = [int]$swPoll.ElapsedMilliseconds
+                            $stateContainer.PayloadBytes  = $calcWireBytes
+                            $stateContainer.PayloadTabId  = $activeTabId
+                            $stateContainer.Payload       = $rawResultStr
+                        } finally {
+                            [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
+                        }
+
                         $stateContainer.ConnectionState = if ($activeSessObj.IsLocal) { "LocalMode" } else { "Connected" }
                         $stateContainer.LastErr         = $null
 
@@ -764,6 +1019,8 @@ function Start-PSRPMEngine {
                     }
                 } catch {
                     $swPoll.Stop()
+                    $currIntervalErr = [Math]::Max(250, [int]$stateContainer.IntervalMs)
+                    $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks + ([long]$currIntervalErr * 10000L)
                     $activeSessObj.ConsecutiveFailures++
                     $fails = $activeSessObj.ConsecutiveFailures
                     if ($forceFull) {
@@ -779,6 +1036,8 @@ function Start-PSRPMEngine {
                             $stateContainer.ConnectionState = "Degraded"
                             $stateContainer.LastErr = "Telemetry poll warning: $($_.Exception.Message)"
                         } else {
+                            &$failSessionPendingJobs $activeSessObj "WinRM connection interrupted."
+                            $activeSessObj.WorkerInitialized = $false
                             $activeSessObj.ConnState = "Reconnecting"
                             $activeSessObj.ReconnectAttempts++
                             $attempts = $activeSessObj.ReconnectAttempts
@@ -811,7 +1070,7 @@ function Start-PSRPMEngine {
                                             Remove-PSSession -Session $activeSessObj.Session -ErrorAction SilentlyContinue
                                         }
                                         $cfg = $activeSessObj.ConnectionConfig
-                                        $so = New-PSSessionOption -OpenTimeout 8000 -OperationTimeout 10000 -CancelTimeout 3000 -NoMachineProfile
+                                        $so = New-PSSessionOption -OpenTimeout 8000 -OperationTimeout 30000 -CancelTimeout 3000 -NoMachineProfile
                                         $sParams = @{
                                             ComputerName  = $cfg.ComputerName
                                             SessionOption = $so
@@ -832,6 +1091,7 @@ function Start-PSRPMEngine {
                                     $activeSessObj.CollectorInitialized = $false
                                     $activeSessObj.InspectorInitialized = $false
                                     $activeSessObj.ActionInitialized    = $false
+                                    $activeSessObj.WorkerInitialized    = $false
                                     $activeSessObj.ConnState            = "Connected"
                                     $activeSessObj.ConsecutiveFailures  = 0
                                     $activeSessObj.ReconnectAttempts    = 0
@@ -855,7 +1115,18 @@ function Start-PSRPMEngine {
             [void]$stateContainer.WakeEvent.WaitOne($waitMs)
         }
         } finally {
+            if ($script:CoordLocalWorker) {
+                try {
+                    $script:CoordLocalWorker.State.IsStopping = $true
+                    [void]$script:CoordLocalWorker.State.WakeEvent.Set()
+                    $script:CoordLocalWorker.PowerShell.Dispose()
+                    $script:CoordLocalWorker.Runspace.Close()
+                    $script:CoordLocalWorker.Runspace.Dispose()
+                } catch {}
+            }
             foreach ($sItem in $sessions.Values) {
+                &$failSessionPendingJobs $sItem "Engine stopped."
+                &$stopRemoteWorker $sItem
                 &$stopSessionNetEtw $sItem
                 if ($sItem.Session) {
                     Remove-PSSession -Session $sItem.Session -ErrorAction SilentlyContinue
@@ -898,11 +1169,21 @@ function Start-PSRPMEngine {
     $appendLogSafe = {
         param([string]$text)
         if ($LogConsole -and -not [string]::IsNullOrEmpty($text)) {
-            if ($LogConsole.Text.Length -gt 24000) {
-                $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 16000)
+            $isPinned = ($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0))
+            if ($isPinned) {
+                if ($LogConsole.Text.Length -gt 72000) {
+                    $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
+                }
+                $LogConsole.AppendText($text)
+                $LogConsole.ScrollToEnd()
+            } else {
+                if ($LogConsole.Text.Length -gt 192000) {
+                    $savedOffset = $LogConsole.VerticalOffset
+                    $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
+                    $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
+                }
+                $LogConsole.AppendText($text)
             }
-            $LogConsole.AppendText($text)
-            $LogConsole.ScrollToEnd()
         }
     }.GetNewClosure()
 
@@ -1393,11 +1674,13 @@ function Start-PSRPMEngine {
     $txtTelemDelta     = $Window.FindName("TxtTelemDelta")
 
     $telemStats = @{
-        TotalWireBytes  = 0L
-        TotalRawBytes   = 0L
-        TotalTicks      = 0L
-        TotalRttMs      = 0L
-        LastReceivedSeq = 0
+        TotalWireBytes   = 0L
+        TotalRawBytes    = 0L
+        TotalTicks       = 0L
+        TotalRttMs       = 0L
+        LastReceivedSeq  = 0
+        RttSamples       = [System.Collections.Generic.Queue[int]]::new(240)
+        LastTickUtcTicks = 0L
     }
 
     $createProcessVm = { [ProcessItemViewModel]::new() }
@@ -1441,6 +1724,8 @@ function Start-PSRPMEngine {
         if ($stateContainer.ClearHostMaps) {
             $stateContainer.ClearHostMaps = $false
             $telemStats.LastReceivedSeq = 0
+            $telemStats.RttSamples.Clear()
+            $telemStats.LastTickUtcTicks = 0L
             $processMap.Clear()
             $servicesMap.Clear()
             $pidServicesMap.Clear()
@@ -1502,21 +1787,35 @@ function Start-PSRPMEngine {
         }
         if ($badgePaused)  { $badgePaused.Visibility = if ($stateContainer.IsPaused) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed } }
 
-        # 4. Consume Differential Telemetry Payload
-        $payloadStr = $stateContainer.Payload
+        # 4. Consume Differential Telemetry Payload (Synchronized Hand-Off)
+        $payloadStr   = $null
+        $payloadTabId = $null
+        $wireBytes    = 0
+        $pollRttMs    = 0
+        [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
+        try {
+            $payloadStr = $stateContainer.Payload
+            if ($payloadStr) {
+                $stateContainer.Payload = $null
+                $payloadTabId = $stateContainer.PayloadTabId
+                $wireBytes    = [int]$stateContainer.PayloadBytes
+                $pollRttMs    = [int]$stateContainer.PollLatencyMs
+            }
+        } finally {
+            [System.Threading.Monitor]::Exit($stateContainer.SyncRoot)
+        }
         if (-not $payloadStr) { return }
-        $stateContainer.Payload = $null
 
-        if ($stateContainer.PayloadTabId -and $stateContainer.ActiveTabId -and $stateContainer.PayloadTabId -ne $stateContainer.ActiveTabId) {
+        if ($payloadTabId -and $stateContainer.ActiveTabId -and $payloadTabId -ne $stateContainer.ActiveTabId) {
             return
         }
 
         try {
-            $wireBytes = [int]$stateContainer.PayloadBytes
-            $wasGzip   = $payloadStr.StartsWith("GZIP:")
+            $wasGzip = $payloadStr.StartsWith("GZIP:")
             if ($wasGzip) {
                 $b64 = $payloadStr.Substring(5)
                 $compBytes = [Convert]::FromBase64String($b64)
+                $wireBytes = $compBytes.Length
                 $msIn = [System.IO.MemoryStream]::new($compBytes, $false)
                 $gsIn = [System.IO.Compression.GZipStream]::new($msIn, [System.IO.Compression.CompressionMode]::Decompress)
                 $sr   = [System.IO.StreamReader]::new($gsIn, [System.Text.Encoding]::UTF8)
@@ -1525,16 +1824,17 @@ function Start-PSRPMEngine {
                 $gsIn.Close()
                 $msIn.Close()
             }
-            $rawBytes = [int]$payloadStr.Length
+            $rawBytes = [System.Text.Encoding]::UTF8.GetByteCount($payloadStr)
 
             $data = $jss.DeserializeObject($payloadStr)
             if (-not $data) { return }
 
-            $wireVer = if ($data.ContainsKey('ver')) { [int]$data['ver'] } else { 1 }
-            $seq = [int]$data['seq']
+            $wireVer    = if ($data.ContainsKey('ver'))  { [int]$data['ver'] }  else { 1 }
+            $seq        = [int]$data['seq']
+            $isFullSnap = ($data.ContainsKey('full') -and [int]$data['full'] -eq 1)
 
             $lastSeq = [int]$telemStats.LastReceivedSeq
-            if ($lastSeq -gt 0 -and $seq -gt ($lastSeq + 1)) {
+            if ($lastSeq -gt 0 -and $seq -gt ($lastSeq + 1) -and -not $isFullSnap) {
                 $gapCount = $seq - $lastSeq - 1
                 if ($LogConsole) {
                     $tsGap = (Get-Date).ToString("HH:mm:ss.fff")
@@ -1711,9 +2011,10 @@ function Start-PSRPMEngine {
                 }
             }
 
-            # D. Ingest Static Metadata for Newly Spawned Processes
+            # D. Ingest Static Metadata for Newly Spawned Processes (and Deferred Metadata Resolution)
             $metaArr = $data['meta']
             $spawnedLogNames = [System.Collections.Generic.List[string]]::new()
+            $newSpawnedVms   = [System.Collections.Generic.List[Object]]::new()
             if ($metaArr -and $metaArr.Count -gt 0) {
                 foreach ($m in $metaArr) {
                     try {
@@ -1752,9 +2053,29 @@ function Start-PSRPMEngine {
                         # Flash Lime Green for 1 Tick if Spawned After Initial Load
                         if ($isBrandNew -and $seq -gt 1) {
                             $vm.SetLifecycleState(1)
-                            $spawnedLogNames.Add("$($vm.Name) (PID $pidVal, PPID $($vm.ParentPID), User: $($vm.User))")
+                            $newSpawnedVms.Add($vm)
                         }
                     } catch {}
+                }
+
+                # Second Pass: Resolve Parent & Grandparent Lineage for Newly Spawned Processes
+                foreach ($spVm in $newSpawnedVms) {
+                    $ppid = [int]$spVm.ParentPID
+                    $lineageTag = ""
+                    if ($ppid -gt 0 -and $ppid -ne $spVm.PID -and $processMap.ContainsKey($ppid)) {
+                        $parentVm = $processMap[$ppid]
+                        if ($parentVm.CreateTime -le 0 -or $spVm.CreateTime -le 0 -or $parentVm.CreateTime -le $spVm.CreateTime) {
+                            $lineageTag = " <- Parent: $($parentVm.Name) ($ppid)"
+                            $gppid = [int]$parentVm.ParentPID
+                            if ($gppid -gt 0 -and $gppid -ne $ppid -and $gppid -ne $spVm.PID -and $processMap.ContainsKey($gppid)) {
+                                $grandParentVm = $processMap[$gppid]
+                                if ($grandParentVm.CreateTime -le 0 -or $parentVm.CreateTime -le 0 -or $grandParentVm.CreateTime -le $parentVm.CreateTime) {
+                                    $lineageTag += " <- Grandparent: $($grandParentVm.Name) ($gppid)"
+                                }
+                            }
+                        }
+                    }
+                    $spawnedLogNames.Add("$($spVm.Name) (PID $($spVm.PID), PPID $ppid, User: $($spVm.User))$lineageTag")
                 }
             }
 
@@ -1784,14 +2105,35 @@ function Start-PSRPMEngine {
             $telemStats.TotalWireBytes += $wireBytes
             $telemStats.TotalRawBytes  += $rawBytes
             $telemStats.TotalTicks++
-            $telemStats.TotalRttMs     += $stateContainer.PollLatencyMs
+            $telemStats.TotalRttMs     += $pollRttMs
+
+            if (-not $isFullSnap) {
+                if ($telemStats.RttSamples.Count -ge 240) { [void]$telemStats.RttSamples.Dequeue() }
+                $telemStats.RttSamples.Enqueue($pollRttMs)
+            }
+            $p50Rtt = $pollRttMs
+            $p95Rtt = $pollRttMs
+            if ($telemStats.RttSamples.Count -gt 0) {
+                $sortedRtt = [int[]]$telemStats.RttSamples.ToArray()
+                [Array]::Sort($sortedRtt)
+                $p50Idx = [int][Math]::Floor(($sortedRtt.Length - 1) * 0.50)
+                $p95Idx = [int][Math]::Floor(($sortedRtt.Length - 1) * 0.95)
+                $p50Rtt = $sortedRtt[$p50Idx]
+                $p95Rtt = $sortedRtt[$p95Idx]
+            }
 
             $wireKB       = [Math]::Round($wireBytes / 1024.0, 2)
             $rawKB        = [Math]::Round($rawBytes / 1024.0, 2)
             $gzipSavedPct = if ($rawBytes -gt 0 -and $rawBytes -gt $wireBytes) { [Math]::Round((1.0 - ($wireBytes / [double]$rawBytes)) * 100.0, 0) } else { 0 }
-            $avgRtt       = [Math]::Round($telemStats.TotalRttMs / [double]$telemStats.TotalTicks, 1)
-            $intervalSec  = [Math]::Max(0.25, $stateContainer.IntervalMs / 1000.0)
-            $bwKBs        = [Math]::Round($wireKB / $intervalSec, 2)
+
+            $nowTickUtc = [DateTime]::UtcNow.Ticks
+            $elapsedSec = if ($telemStats.LastTickUtcTicks -gt 0L) {
+                [Math]::Max(0.1, ($nowTickUtc - $telemStats.LastTickUtcTicks) / 10000000.0)
+            } else {
+                [Math]::Max(0.25, $stateContainer.IntervalMs / 1000.0)
+            }
+            $telemStats.LastTickUtcTicks = $nowTickUtc
+            $bwKBs        = [Math]::Round($wireKB / $elapsedSec, 2)
             $totRxKB      = [Math]::Round($telemStats.TotalWireBytes / 1024.0, 1)
             $totRawKB     = [Math]::Round($telemStats.TotalRawBytes / 1024.0, 1)
 
@@ -1800,8 +2142,8 @@ function Start-PSRPMEngine {
             $deadCount = if ($deadArr) { $deadArr.Count } else { 0 }
 
             if ($txtTelemTransport) {
-                $txtTelemTransport.Text = "$($stateContainer.TransportBadge) | RTT: $($stateContainer.PollLatencyMs)ms (avg $($avgRtt.ToString('F0'))ms)"
-                $txtTelemTransport.ToolTip = "$($stateContainer.TransportBadge) [$($stateContainer.TargetDisplayName)] | RTT: $($stateContainer.PollLatencyMs)ms (Avg: $($avgRtt.ToString('F1'))ms)"
+                $txtTelemTransport.Text = "$($stateContainer.TransportBadge) | RTT: ${pollRttMs}ms (P50: ${p50Rtt}ms / P95: ${p95Rtt}ms)"
+                $txtTelemTransport.ToolTip = "$($stateContainer.TransportBadge) [$($stateContainer.TargetDisplayName)] | RTT: ${pollRttMs}ms (Delta P50: ${p50Rtt}ms, P95: ${p95Rtt}ms)"
             }
             if ($txtTelemPayload) {
                 $encLabel = if ($wasGzip) { "${gzipSavedPct}% GZIP" } else { "Uncompressed" }
@@ -1847,7 +2189,7 @@ function Start-PSRPMEngine {
                         3 { " | Net ETW: NON-ADMIN" }
                         default { "" }
                     }
-                    $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag$etwTag | Wire: $($wireKB.ToString('F2')) KB ($($stateContainer.PollLatencyMs) ms)"
+                    $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag$etwTag | Wire: $($wireKB.ToString('F2')) KB (${pollRttMs} ms)"
                     $stateContainer.LastStatusText = $telemMsg
                     if ($stateContainer.IsPaused) {
                         $statusText.Text = "[PAUSED] $telemMsg"
@@ -1861,13 +2203,22 @@ function Start-PSRPMEngine {
             if ($LogConsole) {
                 $ts = (Get-Date).ToString("HH:mm:ss.fff")
                 $sbLog = [System.Text.StringBuilder]::new()
+                $colMsVal    = if ($data.ContainsKey('colMs'))    { [int]$data['colMs'] }    else { 0 }
+                $svcMsVal    = if ($data.ContainsKey('svcMs'))    { [int]$data['svcMs'] }    else { 0 }
+                $svcFullVal  = if ($data.ContainsKey('svcFull'))  { [int]$data['svcFull'] }  else { 0 }
+                $metaPendVal = if ($data.ContainsKey('metaPend')) { [int]$data['metaPend'] } else { 0 }
+                $svcDeadCnt  = if ($svcDeadArr) { $svcDeadArr.Count } else { 0 }
+                $svcUpdCnt   = if ($svcArr)     { $svcArr.Count }     else { 0 }
 
-                if ($seq -eq 1) {
+                if ($seq -eq 1 -or $isFullSnap) {
                     $svcCount = if ($svcArr) { $svcArr.Count } else { 0 }
-                    [void]$sbLog.AppendLine("[$ts] [SYNC #1] Full Snapshot from '$($stateContainer.TargetDisplayName)' ($($stateContainer.TransportBadge)) | RTT: $($stateContainer.PollLatencyMs)ms | Wire: $($wireKB.ToString('F2')) KB -> Raw: $($rawKB.ToString('F2')) KB (GZIP ${gzipSavedPct}% saved) | Procs: $metaCount, Services: $svcCount")
+                    $pendSyncTag = if ($metaPendVal -gt 0) { " (MetaPending: $metaPendVal)" } else { "" }
+                    [void]$sbLog.AppendLine("[$ts] [SYNC #$seq] Full Snapshot from '$($stateContainer.TargetDisplayName)' ($($stateContainer.TransportBadge)) | RTT: ${pollRttMs}ms (Col: ${colMsVal}ms, SvcScan: ${svcMsVal}ms) | Wire: $($wireKB.ToString('F2')) KB -> Raw: $($rawKB.ToString('F2')) KB (GZIP ${gzipSavedPct}% saved) | Procs: $metaCount$pendSyncTag, Services: $svcCount")
                 } elseif ($stateContainer.VerboseTelemetryLog) {
-                    $svcTag = if ($svcArr) { ", SvcSync: $($svcArr.Count)" } else { "" }
-                    [void]$sbLog.AppendLine("[$ts] [TELEM]   Seq #$($seq.ToString().PadLeft(4)) | RTT: $($stateContainer.PollLatencyMs.ToString().PadLeft(3))ms (Avg: $($avgRtt.ToString('F1'))ms) | Wire: $($wireKB.ToString('F2').PadLeft(5)) KB -> Raw: $($rawKB.ToString('F2').PadLeft(5)) KB (GZIP ${gzipSavedPct}%) | BW: $($bwKBs.ToString('F2')) KB/s (RX: $($totRxKB.ToString('F1')) KB) | Dyn: $dynCount, +Meta: $metaCount, -Exit: $deadCount$svcTag")
+                    $svcSyncMode = if ($svcFullVal -eq 1) { "full" } else { "delta" }
+                    $svcTag  = if ($svcUpdCnt -gt 0 -or $svcDeadCnt -gt 0 -or $svcMsVal -gt 0) { ", SvcSync ($svcSyncMode): +$svcUpdCnt/-$svcDeadCnt, SvcScan: ${svcMsVal}ms" } else { "" }
+                    $pendTag = if ($metaPendVal -gt 0) { ", MetaPending: $metaPendVal" } else { "" }
+                    [void]$sbLog.AppendLine("[$ts] [TELEM]   Seq #$($seq.ToString().PadLeft(4)) | RTT: $($pollRttMs.ToString().PadLeft(3))ms (Col: ${colMsVal}ms, P50: ${p50Rtt}ms, P95: ${p95Rtt}ms) | Wire: $($wireKB.ToString('F2').PadLeft(5)) KB -> Raw: $($rawKB.ToString('F2').PadLeft(5)) KB (GZIP ${gzipSavedPct}%) | BW: $($bwKBs.ToString('F2')) KB/s (RX: $($totRxKB.ToString('F1')) KB) | Dyn: $dynCount, +Meta: $metaCount, -Exit: $deadCount$svcTag$pendTag")
                 }
 
                 foreach ($spName in $spawnedLogNames) {
@@ -1878,11 +2229,21 @@ function Start-PSRPMEngine {
                 }
 
                 if ($sbLog.Length -gt 0) {
-                    if ($LogConsole.Text.Length -gt 24000) {
-                        $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 16000)
+                    $isPinned = ($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0))
+                    if ($isPinned) {
+                        if ($LogConsole.Text.Length -gt 72000) {
+                            $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
+                        }
+                        $LogConsole.AppendText($sbLog.ToString())
+                        $LogConsole.ScrollToEnd()
+                    } else {
+                        if ($LogConsole.Text.Length -gt 192000) {
+                            $savedOffset = $LogConsole.VerticalOffset
+                            $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
+                            $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
+                        }
+                        $LogConsole.AppendText($sbLog.ToString())
                     }
-                    $LogConsole.AppendText($sbLog.ToString())
-                    $LogConsole.ScrollToEnd()
                 }
             }
 

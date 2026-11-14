@@ -4,18 +4,19 @@
 
 # PSRPM -- PowerShell Remote Process Manager
 
-[![Version: 1.7.0](https://img.shields.io/badge/version-1.8.0-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.7.0](https://img.shields.io/badge/version-1.8.2-0284c7.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
 
-An enterprise-grade, ultra-low-overhead, **100% fileless** remote process monitoring and operations GUI built for Windows System Administrators, Desktop Engineers, and Security Analysts.
+**Process Explorer-inspired remote process, service, and handle management -- with zero RMM, zero remote agents, and zero disk footprint.**
 
-Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hierarchical **Tree-Grid**, semantic process color coding, real-time telemetry sparklines, an interactive **Multi-Host Tabbed Session Bar**, a live **Audit Trail & Network Telemetry Console**, a **4-tab System Information** window, and a **7-tab Deep Process Properties Inspector** over persistent WinRM sessions (`-ComputerName`) or zero-privilege local execution (`-LocalOnly`).
+Not every team has an enterprise RMM, and even fewer environments allow deploying persistent third-party agents onto sensitive servers or workstations. **PSRPM** brings the familiar **Sysinternals Process Explorer** workflow—hierarchical **Tree-Grid**, semantic color coding, **7-Tab Process Properties**, **4-Tab System Information** graphs, and live **Audit/Network Telemetry**—to any Windows endpoint over built-in **WinRM** (`-ComputerName`), or locally without admin rights (`-LocalOnly`). Troubleshoot remote machines in real time without installing an agent, dropping `procexp.exe` on disk, or interrupting the user with an RDP/screen-sharing session.
 
 ---
 
 ## Table of Contents
 
+- [Why PSRPM?](#why-psrpm)
 - [Key Capabilities & Highlights](#key-capabilities--highlights)
 - [Architectural Overview](#architectural-overview)
 - [Performance & Network Benchmarks](#performance--network-benchmarks)
@@ -28,6 +29,37 @@ Inspired by **Sysinternals Process Explorer**, **PSRPM** delivers a unified hier
 - [Repository Structure & Documentation](#repository-structure--documentation)
 - [License](#license)
 - [Development Note](#development-note)
+
+---
+
+## Why PSRPM?
+
+### Agentless Remote Control Without an Enterprise RMM
+
+| Approach | Remote Agent Required? | Endpoint Disk Footprint | User Disruption | Live GUI Tree, Handles & Graphs |
+| :--- | :--- | :--- | :--- | :--- |
+| **Enterprise RMM** | Yes (persistent service + licensing) | High | None | Varies (often delayed polling) |
+| **RDP / Screen Sharing** | No | Session artifacts | **High** (locks/interrupts user) | Local only |
+| **Sysinternals Process Explorer** | N/A (local GUI) | Binary on target | Requires interactive session | **Yes (local)** |
+| **CLI-Only (`Enter-PSSession` / `Get-Process`)** | No (built-in WinRM) | Zero | None | **No** (flat static text; manual correlation) |
+| **PSRPM (WinRM)** | **No (built-in WinRM)** | **Zero (100% fileless)** | **None (silent background)** | **Yes (multi-host remote)** |
+
+- **Built for Teams Without an RMM (or Restricted Environments):** Manage servers and workstations in SMBs, labs, air-gapped networks, or incident-response engagements where installing a third-party RMM agent is impossible or prohibited.
+- **Non-Intrusive Triage:** Diagnose runaway processes, inspect open file/registry handles, check TCP/IP sockets, or restart stuck services in the background while the end user keeps working.
+- **Least-Privilege Friendly:** Even Tier-1/Helpdesk operators in `Remote Management Users` can monitor remote endpoints read-only without needing Local Administrator rights (see [Security & Least Privilege Access Model](#security--least-privilege-access-model-rbac)).
+
+### Familiar to Sysinternals Process Explorer Users
+If you already know **Process Explorer**, you already know how to use PSRPM:
+- **Same Visual Grammar:** Parent-child Tree-Grid with guide lines, `Process` header cycling (`Tree -> Flat Asc -> Flat Desc -> Tree`), semantic row colors (Services, Own User, Packaged/WebView2, Suspended, New/Exiting flashes), and `CPU` / `Private Bytes` / `Working Set` column tints.
+- **Same Deep Inspection:** `Double-Click` / `Enter` opens the **7-Tab Process Properties** (`Image`, `Performance`, `TCP/IP`, `Services`, `Environment`, plus lazy-loaded `DLLs` and `Handles`); `Ctrl+I` or double-clicking mini-graphs opens **System Information** (`Summary`, `CPU`, `Memory`, `I/O`).
+- **Same Power Actions:** `Del` (`KillProcess`), `Shift+Del` (atomic `KillTree`), Suspend/Resume, Priority control, and Handle closure—extended across **Multi-Host Tabs** (`Ctrl+Shift+K`) over WinRM.
+
+### Why a Live GUI Over Command-Line Only?
+PowerShell remoting (`Enter-PSSession`, `Get-Process`, `Get-CimInstance`) is great for scripted automation, but interactive troubleshooting in a terminal forces you to piece together flat text tables by hand. PSRPM gives you a live visual workspace over that same WinRM connection:
+- **Instant Parent-Child Context:** Instead of manually cross-referencing `PID` and `ParentProcessId` in flat CLI output, the **Tree-Grid** and semantic color coding (Services, Own/User, Packaged/WebView2, Suspended, plus 1-tick New/Exiting flashes) make anomalous process trees obvious at a glance.
+- **Continuous Trends, Not Static Snapshots:** CLI commands show a single frozen moment unless you write polling loops. PSRPM streams differential 1-second updates into **live sparklines** and **4-tab System Information graphs** (`Summary`, `CPU`, `Memory`, `I/O`, and per-core curves) so spikes and memory leaks are immediately visible.
+- **Zero-Cmdlet Deep Forensics:** Checking a process's command line, PEB environment variables, Authenticode signature, TCP/IP sockets, hosted services, loaded DLLs, and open file handles over CLI requires chaining multiple commands and parsing text. PSRPM puts all seven views in one **Process Properties Inspector** (`Enter` / `Double-Click`) with lazy-loaded `DLLs` and `Handles`.
+- **Safer, Faster Triage Across Multiple Hosts:** Point-and-click `KillTree` (`Shift+Del`), Suspend/Resume, Priority changes, and Handle closure—paired with `PID` + `CreationTime` + `ImageName` validation—reduce PID-typo mistakes, while the **Multi-Host Tabbed Session Bar** lets you flip between remote machines in `< 5 ms` without juggling terminal tabs.
 
 ---
 
@@ -126,7 +158,7 @@ PSRPM is engineered for continuous multi-hour and multi-day monitoring sessions 
 
 ### Prerequisites
 - **Local Workstation**: Windows 10, Windows 11, or Windows Server 2016+ with Windows PowerShell 5.1 (or PowerShell 7+ via Windows PowerShell compatibility).
-- **Remote Target (`-ComputerName`)**: PowerShell Remoting / WinRM enabled (`Enable-PSRemoting -Force`). No files or agents are installed on the remote computer.
+- **Remote Target (`-ComputerName`)**: Built-in Windows PowerShell Remoting / WinRM (enabled by default on Windows Server 2012+ and commonly enabled via GPO in domain environments; otherwise `Enable-PSRemoting -Force`). **No PSRPM files, services, or agents are installed on the remote computer.**
 
 ### Option 1: Import Directly from Repository
 ```powershell

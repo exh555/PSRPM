@@ -104,11 +104,20 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     $hProc = [PSRPM.NativeInspectorV2]::OpenProcess(0x0410, 0, $pidVal)
                     if ($hProc -ne [IntPtr]::Zero) {
                         try {
-                            $modBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
+                            $modBufSz = 8192
+                            $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
                             try {
                                 $cbNeeded = 0
-                                if ([PSRPM.NativeInspectorV2]::EnumProcessModulesEx($hProc, $modBuf, 4096, [ref]$cbNeeded, 0x03) -ne 0) {
-                                    $numMods = [Math]::Min([int]($cbNeeded / $ptrSize), 200)
+                                $enumOk   = [PSRPM.NativeInspectorV2]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
+                                if ($enumOk -ne 0 -and $cbNeeded -gt $modBufSz -and $cbNeeded -le 262144) {
+                                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                                    $modBufSz = $cbNeeded
+                                    $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
+                                    $enumOk   = [PSRPM.NativeInspectorV2]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
+                                }
+                                if ($enumOk -ne 0 -and $cbNeeded -gt 0) {
+                                    $effBytes  = [Math]::Min($cbNeeded, $modBufSz)
+                                    $numMods   = [int]($effBytes / $ptrSize)
                                     $sbModPath = [System.Text.StringBuilder]::new(1024)
                                     for ($mIdx = 0; $mIdx -lt $numMods; $mIdx++) {
                                         $hMod = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($modBuf, $mIdx * $ptrSize)
@@ -414,11 +423,15 @@ $script:PSRPMDeepInspectorScriptBlock = {
                 }
             }
 
-            # 3. Hosted Services & Autostart Detection (Uses in-memory CachedServices first for 0ms WMI overhead)
+            # 3. Hosted Services & Autostart Detection (Reads shared AppDomain service list first for 0ms WMI overhead)
             $autostartHits = [System.Collections.Generic.List[string]]::new()
             try {
-                if ($null -ne $script:CachedServices) {
-                    foreach ($cs in $script:CachedServices) {
+                $sharedSvcs = $null
+                try { $sharedSvcs = [AppDomain]::CurrentDomain.GetData("PSRPM_CachedServices") } catch {}
+                if ($null -eq $sharedSvcs) { $sharedSvcs = $script:CachedServices }
+
+                if ($null -ne $sharedSvcs) {
+                    foreach ($cs in $sharedSvcs) {
                         if ($cs.p -eq $TargetPid) {
                             $result.Services.Add(@{
                                 Name        = [string]$cs.n
@@ -447,23 +460,46 @@ $script:PSRPMDeepInspectorScriptBlock = {
                 }
                 if ($autostartHits.Count -eq 0 -and $exePath -ne "N/A") {
                     $leafName = [System.IO.Path]::GetFileName($exePath)
-                    $runPaths = @(
-                        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
-                        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+                    $runSubKeys = @(
+                        "Software\Microsoft\Windows\CurrentVersion\Run",
+                        "Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
                     )
-                    foreach ($rp in $runPaths) {
-                        if (Test-Path $rp) {
-                            $props = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue
-                            if ($props) {
-                                foreach ($p in $props.PSObject.Properties) {
-                                    $pval = [string]$p.Value
-                                    if ($p.Name -notmatch '^PS' -and $pval.IndexOf($leafName, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                                        $autostartHits.Add("$rp\$($p.Name)")
+                    foreach ($rSub in $runSubKeys) {
+                        try {
+                            $rk = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($rSub)
+                            if ($rk) {
+                                foreach ($vName in $rk.GetValueNames()) {
+                                    $vStr = [string]$rk.GetValue($vName)
+                                    if ($vStr -and $vStr.IndexOf($leafName, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                                        $autostartHits.Add("HKLM\$rSub\$vName")
                                     }
+                                }
+                                $rk.Close()
+                            }
+                        } catch {}
+                    }
+                    try {
+                        $hkuRoot = [Microsoft.Win32.Registry]::Users
+                        if ($hkuRoot) {
+                            foreach ($sidName in $hkuRoot.GetSubKeyNames()) {
+                                if ($sidName -match '_Classes$' -or $sidName -eq '.DEFAULT') { continue }
+                                foreach ($rSub in $runSubKeys) {
+                                    try {
+                                        $uk = $hkuRoot.OpenSubKey("$sidName\$rSub")
+                                        if ($uk) {
+                                            foreach ($vName in $uk.GetValueNames()) {
+                                                $vStr = [string]$uk.GetValue($vName)
+                                                if ($vStr -and $vStr.IndexOf($leafName, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                                                    $autostartHits.Add("HKU\$sidName\$rSub\$vName")
+                                                }
+                                            }
+                                            $uk.Close()
+                                        }
+                                    } catch {}
                                 }
                             }
                         }
-                    }
+                    } catch {}
                 }
             } catch {}
             if ($autostartHits.Count -gt 0) { $result.Autostart = ($autostartHits -join "; ") }

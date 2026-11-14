@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.8.0'
+    ModuleVersion     = '1.8.2'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,11 +77,10 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-PSRPM v1.8.0 - Opt-In Per-Process Network ETW Telemetry & Multi-Select Batch Actions
-- Opt-In Per-Process & Tree Network ETW Telemetry: Lazy pure-IL Reflection.Emit ETW consumer supporting classic System Logger MOF and Kernel-Network fallback, double-buffered slot recycling, 25k/50k ev/s circuit breaker, and 4 opt-in columns (Network, Tree Net, Net Recv, Net Send).
-- Multi-Select Process Selection & Batch Actions: Enabled Extended row selection (Ctrl+Click, Shift+Click, Shift+Arrows), right-click selection preservation, and batch KillProcess, KillTree (with ancestor deduplication), SuspendProcess, ResumeProcess, and SetPriority actions.
-- Per-Tab ETW State Isolation & Non-Admin Guardrails: Added per-tab NetEtwCap/banner isolation, automatic ETW teardown on tab close/disconnect, and PID <= 4 kernel protection across batch actions.
-- Expanded Verification Suite: Added Test 12 for ETW zero-cost off path, pure-IL OnEventRecord/DrainAndReset, live OpenTraceW+ProcessTrace delivery, 3-tier TreeNet rollup, >4096 PID bank recycling, and multi-select batch dispatch verification.
+- Replaced WMI/CIM service polling with zero-WMI native service enumeration (NativeServiceEnumV1 / EnumServicesStatusExW), 10-minute static metadata caching, and shared AppDomain service cache (PSRPM_CachedServices).
+- Added dynamic EnumProcessModulesEx buffer resizing, direct .NET Registry autostart enumeration, and ServiceController 30s timeouts with wildcard service-name refusal.
+- Hardened UI and session resilience with per-tab NewBoundScriptBlock routing, Parent/Grandparent lineage, sticky-to-bottom Audit Console scrolling, in-memory icon loading, and 30s WinRM OperationTimeout.
+- Updated README.md with agentless RMM/CLI/Process Explorer comparison and added Test 12J to Test-PSRPMEngine.ps1.
 '@
         }
     }

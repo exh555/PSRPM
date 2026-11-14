@@ -235,7 +235,7 @@ function Start-PSRPM {
     if (-not $isLocalMode) {
         try {
             Write-Host "[PSRPM] Connecting to '$ComputerName' via WinRM..." -ForegroundColor Cyan
-            $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 15000 -CancelTimeout 5000 -NoMachineProfile
+            $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000 -NoMachineProfile
             $sessParams = @{
                 ComputerName  = $ComputerName
                 SessionOption = $so
@@ -303,7 +303,15 @@ function Start-PSRPM {
     }
     if ($resolvedIconPath) {
         try {
-            $appIconFrame = [System.Windows.Media.Imaging.BitmapFrame]::Create([System.Uri]::new($resolvedIconPath))
+            $icoBytes = [System.IO.File]::ReadAllBytes($resolvedIconPath)
+            $msIco = [System.IO.MemoryStream]::new($icoBytes)
+            $appIconFrame = [System.Windows.Media.Imaging.BitmapFrame]::Create(
+                $msIco,
+                [System.Windows.Media.Imaging.BitmapCreateOptions]::None,
+                [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+            )
+            $appIconFrame.Freeze()
+            $msIco.Close()
             $window.Icon = $appIconFrame
         } catch {}
     }
@@ -337,12 +345,23 @@ function Start-PSRPM {
     $writeAuditLog = {
         param([string]$category, [string]$message)
         if ($txtLogConsole) {
-            if ($txtLogConsole.Text.Length -gt 24000) {
-                $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 16000)
-            }
             $ts = (Get-Date).ToString("HH:mm:ss.fff")
-            $txtLogConsole.AppendText("[$ts] [$category] $message`r`n")
-            $txtLogConsole.ScrollToEnd()
+            $lineStr = "[$ts] [$category] $message`r`n"
+            $isPinned = ($txtLogConsole.ViewportHeight -le 0) -or (($txtLogConsole.VerticalOffset + $txtLogConsole.ViewportHeight) -ge ($txtLogConsole.ExtentHeight - 4.0))
+            if ($isPinned) {
+                if ($txtLogConsole.Text.Length -gt 72000) {
+                    $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 48000)
+                }
+                $txtLogConsole.AppendText($lineStr)
+                $txtLogConsole.ScrollToEnd()
+            } else {
+                if ($txtLogConsole.Text.Length -gt 192000) {
+                    $savedOffset = $txtLogConsole.VerticalOffset
+                    $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 144000)
+                    $txtLogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
+                }
+                $txtLogConsole.AppendText($lineStr)
+            }
         }
     }
 
@@ -1435,7 +1454,7 @@ function Start-PSRPM {
             return
         }
         $typeLabel = if ($dumpType -eq "Full") { "Full Memory Dump (~$([Math]::Round($procVm.MemoryBytes / 1MB, 1)) MB)" } else { "Minidump" }
-        $msg = "Generate $typeLabel for '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?`n`nThe dump will be saved directly to 'C:\temp\' on the target host."
+        $msg = "Generate $typeLabel for '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?`n`nThe dump will be saved directly to '%SystemRoot%\Temp\PSRPM_Dumps' (or '%LOCALAPPDATA%\PSRPM\Dumps') on the target host."
         $confirm = [System.Windows.MessageBox]::Show(
             $msg,
             "PSRPM - Confirm Process Dump",

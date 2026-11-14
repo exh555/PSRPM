@@ -1499,6 +1499,45 @@ if ($psm1Src12 -notmatch '\$stateContainer\.NetEtwCap\s*=\s*\[int\]\$targetTabVm
 }
 Write-Host "  Verified 12I: Per-tab NetEtwCap (including Paused/Unavailable), NetBannerDismissedCap isolation, and theme-aware banner sync." -ForegroundColor Gray
 
+# 12J: v1.8.2 Code Review & Audit Console Enhancements Verification
+$svcEnumType = 'PSRPM.NativeServiceEnumV1' -as [type]
+if ($null -eq $svcEnumType) {
+    throw "Expected PSRPM.NativeServiceEnumV1 Reflection.Emit type to be compiled in memory."
+}
+if (-not $dataTick1.ContainsKey('colVer') -or [string]$dataTick1['colVer'] -ne "1.8.2" -or -not $dataTick1.ContainsKey('colMs') -or -not $dataTick1.ContainsKey('svcMs') -or -not $dataTick1.ContainsKey('svcFull') -or -not $dataTick1.ContainsKey('metaPend')) {
+    throw "Expected colVer='1.8.2', colMs, svcMs, svcFull, and metaPend in DataCollector payload."
+}
+$appDomainSvcs = [AppDomain]::CurrentDomain.GetData("PSRPM_CachedServices")
+if ($null -eq $appDomainSvcs -or $appDomainSvcs.Count -lt 5) {
+    throw "Expected PSRPM_CachedServices to be published to AppDomain data by DataCollector."
+}
+
+# Verify ControlService wildcard refusal
+$actWcJson = & $script:PSRPMActionScriptBlock -Action "ControlService" -TargetPid 0 -ExpectedName "Stop" -ServiceName "wuauserv*"
+$actWcObj  = $jss.DeserializeObject($actWcJson)
+if ([bool]$actWcObj['Success'] -or [string]$actWcObj['Status'] -ne "Refused") {
+    throw "Expected ControlService with wildcard 'wuauserv*' to be refused, got Success=$($actWcObj['Success']), Status=$($actWcObj['Status'])."
+}
+
+# Verify RunspaceEngine, PSRPM.psm1, DeepInspector.ps1, and ProcessActions.ps1 structural invariants
+$reSrc12j = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\RunspaceEngine.ps1"))
+$diSrc12j = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\DeepInspector.ps1"))
+$paSrc12j = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\ProcessActions.ps1"))
+
+if ($diSrc12j -notmatch 'PSRPM_CachedServices' -or $diSrc12j -notmatch '\[Microsoft\.Win32\.Registry\]::Users') {
+    throw "DeepInspector.ps1 missing AppDomain PSRPM_CachedServices reader or HKU Registry::Users autostart enumeration."
+}
+if ($paSrc12j -notmatch 'PSRPM_ForceSvcRefresh' -or $paSrc12j -notmatch 'System\.ServiceProcess\.ServiceController') {
+    throw "ProcessActions.ps1 missing PSRPM_ForceSvcRefresh flag or ServiceController 30s timeout implementation."
+}
+if ($reSrc12j -notmatch 'NewBoundScriptBlock' -or $reSrc12j -notmatch 'Grandparent:' -or $reSrc12j -notmatch '72000' -or $reSrc12j -notmatch 'ViewportHeight') {
+    throw "RunspaceEngine.ps1 missing per-tab NewBoundScriptBlock, Grandparent lineage, 72000 char buffer, or Sticky-to-Bottom ViewportHeight check."
+}
+if ($psm1Src12 -notmatch '72000' -or $psm1Src12 -notmatch 'BitmapCacheOption\]::OnLoad' -or $psm1Src12 -notmatch 'PSRPM_Dumps') {
+    throw "PSRPM.psm1 missing 72000 char buffer, in-memory BitmapCacheOption::OnLoad icon loader, or PSRPM_Dumps prompt path."
+}
+Write-Host "  Verified 12J: NativeServiceEnumV1 (colVer 1.8.2), AppDomain service cache, wildcard service refusal, async worker routing, sticky auto-scroll, and parent/grandparent lineage." -ForegroundColor Gray
+
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()
 foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {

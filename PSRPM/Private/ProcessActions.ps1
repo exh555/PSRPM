@@ -303,6 +303,7 @@ $script:PSRPMActionScriptBlock = {
                     }
 
                     $script:LastSvcRefresh = [DateTime]::MinValue
+                    try { [AppDomain]::CurrentDomain.SetData("PSRPM_ForceSvcRefresh", $true) } catch {}
                     $res.Success         = ($killedCount -gt 0)
                     $res.Status          = if ($failedPids.Count -eq 0) { "Success" } elseif ($killedCount -gt 0) { "PartialSuccess" } else { "Failed" }
                     $res.TotalTargets    = $orderedTree.Count
@@ -582,16 +583,44 @@ $script:PSRPMActionScriptBlock = {
             "ControlService" {
                 # ExpectedName holds the service operation: Start, Stop, or Restart
                 $op = $ExpectedName
-                if ($op -eq "Start") {
-                    Start-Service -Name $ServiceName -ErrorAction Stop
-                } elseif ($op -eq "Stop") {
-                    Stop-Service -Name $ServiceName -Force -ErrorAction Stop
-                } elseif ($op -eq "Restart") {
-                    Restart-Service -Name $ServiceName -Force -ErrorAction Stop
-                } else {
+                if ($op -notin @("Start", "Stop", "Restart")) {
                     throw "Unknown service operation '$op'."
                 }
+                if ([string]::IsNullOrWhiteSpace($ServiceName) -or $ServiceName.IndexOfAny([char[]]@('*', '?', '[', ']')) -ge 0) {
+                    throw "Refused service operation: wildcard or invalid service name '$ServiceName'."
+                }
+
+                Add-Type -AssemblyName System.ServiceProcess -ErrorAction SilentlyContinue
+                $sc = [System.ServiceProcess.ServiceController]::new($ServiceName)
+                try {
+                    $sc.Refresh()
+                    $timeout = [TimeSpan]::FromSeconds(30)
+                    $swSvcOp = [System.Diagnostics.Stopwatch]::StartNew()
+                    if ($op -eq "Start") {
+                        if ($sc.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+                            $sc.Start()
+                            $sc.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, $timeout)
+                        }
+                    } elseif ($op -eq "Stop") {
+                        if ($sc.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+                            $sc.Stop()
+                            $sc.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped, $timeout)
+                        }
+                    } elseif ($op -eq "Restart") {
+                        if ($sc.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+                            $sc.Stop()
+                            $sc.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped, $timeout)
+                        }
+                        $remSec = [Math]::Max(5.0, 30.0 - $swSvcOp.Elapsed.TotalSeconds)
+                        $sc.Start()
+                        $sc.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds($remSec))
+                    }
+                } finally {
+                    $sc.Dispose()
+                }
+
                 $script:LastSvcRefresh = [DateTime]::MinValue
+                try { [AppDomain]::CurrentDomain.SetData("PSRPM_ForceSvcRefresh", $true) } catch {}
                 $res.Success = $true
                 $res.Status  = "Success"
                 $res.Message = "Service '$ServiceName' action '$op' completed successfully."
