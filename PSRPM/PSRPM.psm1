@@ -58,13 +58,13 @@ function Get-PSRPMNextColumnSortState {
     .SYNOPSIS
         Computes the next Process Grid view mode and sort state when a column header is clicked.
     .DESCRIPTION
-        Matches Sysinternals Process Explorer behavior:
-        - Clicking the 'Process' column (SortMemberPath 'Name') cycles:
-          Tree View -> Flat Ascending -> Flat Descending -> Tree View.
+        - Clicking the 'Process' column (SortMemberPath 'Name') cycles through 4 views:
+          Tree View (Newest First) -> Tree View (Classic Oldest First) -> Flat Ascending -> Flat Descending -> Tree View (Newest First).
         - Clicking any other column auto-switches from Tree View to Flat View and toggles Asc/Desc.
     #>
     param(
         [bool]$IsTreeMode,
+        [bool]$CurrentTreeNewestFirst = $false,
         [string]$CurrentSortProperty,
         [bool]$CurrentSortDescending,
         [string]$ClickedSortProperty
@@ -75,40 +75,61 @@ function Get-PSRPMNextColumnSortState {
     }
 
     if ($ClickedSortProperty -eq "Name") {
-        if ($IsTreeMode -or $CurrentSortProperty -ne "Name") {
+        if ($IsTreeMode) {
+            if ($CurrentTreeNewestFirst) {
+                return @{
+                    IsTreeMode          = $true
+                    TreeSortNewestFirst = $false
+                    SortProperty        = "PID"
+                    SortDescending      = $false
+                }
+            }
             return @{
-                IsTreeMode     = $false
-                SortProperty   = "Name"
-                SortDescending = $false
+                IsTreeMode          = $false
+                TreeSortNewestFirst = $false
+                SortProperty        = "Name"
+                SortDescending      = $false
+            }
+        }
+        if ($CurrentSortProperty -ne "Name") {
+            return @{
+                IsTreeMode          = $false
+                TreeSortNewestFirst = $CurrentTreeNewestFirst
+                SortProperty        = "Name"
+                SortDescending      = $false
             }
         }
         if (-not $CurrentSortDescending) {
             return @{
-                IsTreeMode     = $false
-                SortProperty   = "Name"
-                SortDescending = $true
+                IsTreeMode          = $false
+                TreeSortNewestFirst = $CurrentTreeNewestFirst
+                SortProperty        = "Name"
+                SortDescending      = $true
             }
         }
         return @{
-            IsTreeMode     = $true
-            SortProperty   = "PID"
-            SortDescending = $false
+            IsTreeMode          = $true
+            TreeSortNewestFirst = $true
+            SortProperty        = "PID"
+            SortDescending      = $false
         }
     }
 
     $defaultDescending = $ClickedSortProperty -in @("CPU", "TreeCPU", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "Handles")
     if ($IsTreeMode -or $CurrentSortProperty -ne $ClickedSortProperty) {
         return @{
-            IsTreeMode     = $false
-            SortProperty   = $ClickedSortProperty
-            SortDescending = $defaultDescending
+            IsTreeMode          = $false
+            TreeSortNewestFirst = $CurrentTreeNewestFirst
+            SortProperty        = $ClickedSortProperty
+            SortDescending      = $defaultDescending
         }
     }
 
     return @{
-        IsTreeMode     = $false
-        SortProperty   = $ClickedSortProperty
-        SortDescending = (-not $CurrentSortDescending)
+        IsTreeMode          = $false
+        TreeSortNewestFirst = $CurrentTreeNewestFirst
+        SortProperty        = $ClickedSortProperty
+        SortDescending      = (-not $CurrentSortDescending)
     }
 }
 
@@ -172,6 +193,10 @@ function Start-PSRPM {
 
         [Parameter(Mandatory = $false)]
         [switch]$Dark,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Topmost")]
+        [switch]$AlwaysOnTop,
 
         [Parameter(Mandatory = $false)]
         [string]$IconPath
@@ -347,20 +372,25 @@ function Start-PSRPM {
         if ($txtLogConsole) {
             $ts = (Get-Date).ToString("HH:mm:ss.fff")
             $lineStr = "[$ts] [$category] $message`r`n"
-            $isPinned = ($txtLogConsole.ViewportHeight -le 0) -or (($txtLogConsole.VerticalOffset + $txtLogConsole.ViewportHeight) -ge ($txtLogConsole.ExtentHeight - 4.0))
-            if ($isPinned) {
-                if ($txtLogConsole.Text.Length -gt 72000) {
-                    $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 48000)
+            $autoScrollOn = if ($null -ne $stateContainer -and $stateContainer.ContainsKey('LogAutoScroll')) { [bool]$stateContainer.LogAutoScroll } else { ($txtLogConsole.ViewportHeight -le 0) -or (($txtLogConsole.VerticalOffset + $txtLogConsole.ViewportHeight) -ge ($txtLogConsole.ExtentHeight - 4.0)) }
+            try {
+                if ($null -ne $stateContainer) { $stateContainer.IsAppendingLog = $true }
+                if ($autoScrollOn) {
+                    if ($txtLogConsole.Text.Length -gt 72000) {
+                        $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 48000)
+                    }
+                    $txtLogConsole.AppendText($lineStr)
+                    $txtLogConsole.ScrollToEnd()
+                } else {
+                    if ($txtLogConsole.Text.Length -gt 192000) {
+                        $savedOffset = $txtLogConsole.VerticalOffset
+                        $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 144000)
+                        $txtLogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
+                    }
+                    $txtLogConsole.AppendText($lineStr)
                 }
-                $txtLogConsole.AppendText($lineStr)
-                $txtLogConsole.ScrollToEnd()
-            } else {
-                if ($txtLogConsole.Text.Length -gt 192000) {
-                    $savedOffset = $txtLogConsole.VerticalOffset
-                    $txtLogConsole.Text = $txtLogConsole.Text.Substring($txtLogConsole.Text.Length - 144000)
-                    $txtLogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
-                }
-                $txtLogConsole.AppendText($lineStr)
+            } finally {
+                if ($null -ne $stateContainer) { $stateContainer.IsAppendingLog = $false }
             }
         }
     }
@@ -606,6 +636,29 @@ function Start-PSRPM {
         })
     }
 
+    # 5C. Always On Top (Topmost) Window Controller
+    $menuAlwaysOnTop = $window.FindName("MenuAlwaysOnTop")
+    $setAlwaysOnTop = {
+        param([bool]$enable)
+        $stateContainer.AlwaysOnTop = $enable
+        $window.Topmost = $enable
+        if ($menuAlwaysOnTop) { $menuAlwaysOnTop.IsChecked = $enable }
+        foreach ($activeModal in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
+            if ($activeModal -and $activeModal.IsLoaded) {
+                $activeModal.Topmost = $enable
+            }
+        }
+        &$writeAuditLog "OPTIONS" ("Always On Top window pinning {0}." -f $(if ($enable) { "enabled" } else { "disabled" }))
+    }
+    if ($menuAlwaysOnTop) {
+        $menuAlwaysOnTop.add_Click({
+            &$setAlwaysOnTop ([bool]$menuAlwaysOnTop.IsChecked)
+        })
+    }
+    if ($AlwaysOnTop.IsPresent) {
+        &$setAlwaysOnTop $true
+    }
+
     # 6. Tree Node Expander Click Handler (PreviewMouseLeftButtonDown on GridProcesses)
     $gridProcesses.add_PreviewMouseLeftButtonDown({
         param($sender, $e)
@@ -651,12 +704,16 @@ function Start-PSRPM {
     })
 
     # 7. View Mode Switching (Tree vs Flat) & Column Header Sorting (Process Explorer 3-Way Cycle on Process Column)
-    $menuViewTree     = $window.FindName("MenuViewTree")
-    $menuViewFlat     = $window.FindName("MenuViewFlat")
-    $btnToolbarTree   = $window.FindName("BtnToolbarTree")
-    $txtModeIndicator = $window.FindName("TxtModeIndicator")
-    $menuExpandAll    = $window.FindName("MenuExpandAll")
-    $menuCollapseAll  = $window.FindName("MenuCollapseAll")
+    $menuViewTree         = $window.FindName("MenuViewTree")
+    $menuViewFlat         = $window.FindName("MenuViewFlat")
+    $menuTreeOrderNewest  = $window.FindName("MenuTreeOrderNewest")
+    $menuTreeOrderClassic = $window.FindName("MenuTreeOrderClassic")
+    $btnToolbarTree       = $window.FindName("BtnToolbarTree")
+    $txtModeIndicator     = $window.FindName("TxtModeIndicator")
+    $menuExpandAll        = $window.FindName("MenuExpandAll")
+    $menuCollapseAll      = $window.FindName("MenuCollapseAll")
+
+    $stateContainer.TreeSortNewestFirst = $true
 
     $setViewMode = {
         param([bool]$treeMode)
@@ -683,8 +740,30 @@ function Start-PSRPM {
         }
         if ($menuViewTree)     { $menuViewTree.IsChecked   = $treeMode }
         if ($menuViewFlat)     { $menuViewFlat.IsChecked   = (-not $treeMode) }
-        if ($txtModeIndicator) { $txtModeIndicator.Text    = if ($treeMode) { "Tree" } else { "Flat" } }
+        if ($txtModeIndicator) {
+            $txtModeIndicator.Text = if ($treeMode) {
+                if ([bool]$stateContainer.TreeSortNewestFirst) { "Tree (New)" } else { "Tree" }
+            } else {
+                "Flat"
+            }
+        }
         & $engineHandle.RefreshTree
+    }
+
+    $setTreeSortOrder = {
+        param([bool]$newestFirst)
+        $stateContainer.TreeSortNewestFirst = $newestFirst
+        if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newestFirst }
+        if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newestFirst) }
+        if (-not [bool]$stateContainer.IsTreeMode) {
+            &$setViewMode $true
+        } else {
+            if ($txtModeIndicator) {
+                $txtModeIndicator.Text = if ($newestFirst) { "Tree (New)" } else { "Tree" }
+            }
+            & $engineHandle.RefreshTree
+        }
+        &$writeAuditLog "VIEW" ("Tree View ordering set to {0}." -f $(if ($newestFirst) { "Newest First (Creation Time Descending)" } else { "Classic Process Explorer (Oldest First)" }))
     }
 
     $gridProcesses.add_Sorting({
@@ -696,11 +775,16 @@ function Start-PSRPM {
 
         $next = Get-PSRPMNextColumnSortState `
             -IsTreeMode ([bool]$stateContainer.IsTreeMode) `
+            -CurrentTreeNewestFirst ([bool]$stateContainer.TreeSortNewestFirst) `
             -CurrentSortProperty ([string]$stateContainer.SortProperty) `
             -CurrentSortDescending ([bool]$stateContainer.SortDescending) `
             -ClickedSortProperty $sortProp
 
         if ($next.IsTreeMode) {
+            $newest = [bool]$next.TreeSortNewestFirst
+            $stateContainer.TreeSortNewestFirst = $newest
+            if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newest }
+            if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newest) }
             &$setViewMode $true
             return
         }
@@ -718,9 +802,11 @@ function Start-PSRPM {
         &$setViewMode $false
     })
 
-    if ($menuViewTree)   { $menuViewTree.add_Click({ &$setViewMode $true }) }
-    if ($menuViewFlat)   { $menuViewFlat.add_Click({ &$setViewMode $false }) }
-    if ($btnToolbarTree) { $btnToolbarTree.add_Click({ &$setViewMode (-not [bool]$stateContainer.IsTreeMode) }) }
+    if ($menuViewTree)         { $menuViewTree.add_Click({ &$setViewMode $true }) }
+    if ($menuViewFlat)         { $menuViewFlat.add_Click({ &$setViewMode $false }) }
+    if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.add_Click({ &$setTreeSortOrder $true }) }
+    if ($menuTreeOrderClassic) { $menuTreeOrderClassic.add_Click({ &$setTreeSortOrder $false }) }
+    if ($btnToolbarTree)       { $btnToolbarTree.add_Click({ &$setViewMode (-not [bool]$stateContainer.IsTreeMode) }) }
 
     if ($menuExpandAll) {
         $menuExpandAll.add_Click({
@@ -1113,12 +1199,95 @@ function Start-PSRPM {
     if ($menuRatePaused)  { $menuRatePaused.add_Click({ &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused) }) }
     if ($btnToolbarPause) { $btnToolbarPause.add_Click({ &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused) }) }
     # 11. Audit Log Pane & Telemetry Stream Controls
-    $menuViewLog      = $window.FindName("MenuViewLog")
-    $btnShowLog       = $window.FindName("BtnShowLog")
-    $btnToggleLogPane = $window.FindName("BtnToggleLogPane")
-    $btnClearLog      = $window.FindName("BtnClearLog")
-    $btnCopyLog       = $window.FindName("BtnCopyLog")
-    $chkStreamTicks   = $window.FindName("ChkStreamTicks")
+    $menuViewLog       = $window.FindName("MenuViewLog")
+    $btnShowLog        = $window.FindName("BtnShowLog")
+    $btnToggleLogPane  = $window.FindName("BtnToggleLogPane")
+    $btnClearLog       = $window.FindName("BtnClearLog")
+    $btnCopyLog        = $window.FindName("BtnCopyLog")
+    $chkStreamTicks    = $window.FindName("ChkStreamTicks")
+    $chkLogAutoScroll  = $window.FindName("ChkLogAutoScroll")
+    $logPaneResizer    = $window.FindName("LogPaneResizer")
+    $hostTabBar        = $window.FindName("HostTabBar")
+    $netEtwAlertBanner = $window.FindName("NetEtwAlertBanner")
+    $minLogPaneHeight     = 85.0
+    $defaultLogPaneHeight = 175.0
+    $logResizeState       = @{
+        StartMouseY = 0.0
+        StartHeight = 175.0
+    }
+
+    $getMaxLogPaneHeight = {
+        $winH = if ($window.ActualHeight -gt 0) { [double]$window.ActualHeight } elseif (-not [double]::IsNaN($window.Height) -and $window.Height -gt 0) { [double]$window.Height } else { 780.0 }
+        $twoThirdsCap = [Math]::Floor($winH * (2.0 / 3.0))
+        $chromeH = 54.0
+        if ($hostTabBar -and $hostTabBar.ActualHeight -gt 0) { $chromeH += $hostTabBar.ActualHeight } else { $chromeH += 32.0 }
+        if ($summaryBar -and $summaryBar.ActualHeight -gt 0) { $chromeH += $summaryBar.ActualHeight } else { $chromeH += 38.0 }
+        if ($netEtwAlertBanner -and $netEtwAlertBanner.Visibility -eq [System.Windows.Visibility]::Visible) {
+            $chromeH += $(if ($netEtwAlertBanner.ActualHeight -gt 0) { $netEtwAlertBanner.ActualHeight } else { 32.0 })
+        }
+        $headroomCap = [Math]::Floor($winH - $chromeH - 120.0)
+        $effectiveMax = [Math]::Min($twoThirdsCap, $headroomCap)
+        return [double][Math]::Max($minLogPaneHeight, $effectiveMax)
+    }
+
+    $clampLogPaneHeight = {
+        param([double]$requestedHeight = -1.0)
+        if (-not $logPane) { return }
+        if ($window.WindowState -eq [System.Windows.WindowState]::Minimized) { return }
+        $winH = if ($window.ActualHeight -gt 0) { [double]$window.ActualHeight } elseif (-not [double]::IsNaN($window.Height) -and $window.Height -gt 0) { [double]$window.Height } else { 780.0 }
+        if ($winH -lt 200.0) { return }
+
+        $curH = if ($requestedHeight -gt 0) {
+            $requestedHeight
+        } elseif (-not [double]::IsNaN($logPane.Height) -and $logPane.Height -gt 0) {
+            [double]$logPane.Height
+        } elseif ($logPane.ActualHeight -gt 0) {
+            [double]$logPane.ActualHeight
+        } else {
+            $defaultLogPaneHeight
+        }
+
+        $maxH = [double](& $getMaxLogPaneHeight)
+        $clampedH = [Math]::Max($minLogPaneHeight, [Math]::Min($maxH, $curH))
+        if ([double]::IsNaN($logPane.Height) -or [Math]::Abs($logPane.Height - $clampedH) -ge 0.5) {
+            $logPane.Height = $clampedH
+        }
+    }
+
+    if ($logPaneResizer) {
+        $logPaneResizer.add_DragStarted({
+            param($sender, $e)
+            if (-not $logPane) { return }
+            $logResizeState.StartMouseY = [System.Windows.Input.Mouse]::GetPosition($window).Y
+            $curH = if ($logPane.ActualHeight -gt 0) {
+                [double]$logPane.ActualHeight
+            } elseif (-not [double]::IsNaN($logPane.Height) -and $logPane.Height -gt 0) {
+                [double]$logPane.Height
+            } else {
+                $defaultLogPaneHeight
+            }
+            $logResizeState.StartHeight = $curH
+        })
+        $logPaneResizer.add_DragDelta({
+            param($sender, $e)
+            if (-not $logPane) { return }
+            $curMouseY = [System.Windows.Input.Mouse]::GetPosition($window).Y
+            $deltaY = $logResizeState.StartMouseY - $curMouseY
+            $targetH = $logResizeState.StartHeight + $deltaY
+            & $clampLogPaneHeight $targetH
+        })
+        $logPaneResizer.add_MouseDoubleClick({
+            param($sender, $e)
+            & $clampLogPaneHeight $defaultLogPaneHeight
+            $e.Handled = $true
+        })
+    }
+    $window.add_SizeChanged({ & $clampLogPaneHeight })
+    $window.add_StateChanged({
+        if ($window.WindowState -ne [System.Windows.WindowState]::Minimized) {
+            & $clampLogPaneHeight
+        }
+    })
 
     if ($menuVerbose) {
         $menuVerbose.add_Click({
@@ -1127,7 +1296,16 @@ function Start-PSRPM {
             if ($chkStreamTicks) { $chkStreamTicks.IsChecked = $val }
             if ($val -and $logPane) {
                 $logPane.Visibility = "Visible"
+                & $clampLogPaneHeight
                 if ($menuViewLog) { $menuViewLog.IsChecked = $true }
+                if ($txtLogConsole -and [bool]$stateContainer.LogAutoScroll) {
+                    try {
+                        $stateContainer.IsAppendingLog = $true
+                        $txtLogConsole.ScrollToEnd()
+                    } finally {
+                        $stateContainer.IsAppendingLog = $false
+                    }
+                }
             }
         })
     }
@@ -1138,6 +1316,59 @@ function Start-PSRPM {
             if ($menuVerbose) { $menuVerbose.IsChecked = $val }
         })
     }
+    if ($chkLogAutoScroll) {
+        $chkLogAutoScroll.add_Click({
+            $val = [bool]$chkLogAutoScroll.IsChecked
+            $stateContainer.LogAutoScroll = $val
+            if ($val -and $txtLogConsole) {
+                try {
+                    $stateContainer.IsAppendingLog = $true
+                    $txtLogConsole.ScrollToEnd()
+                } finally {
+                    $stateContainer.IsAppendingLog = $false
+                }
+            }
+        })
+    }
+    if ($txtLogConsole) {
+        $txtLogConsole.AddHandler(
+            [System.Windows.Controls.ScrollViewer]::ScrollChangedEvent,
+            [System.Windows.Controls.ScrollChangedEventHandler]{
+                param($sender, $e)
+                if ($stateContainer.IsAppendingLog) { return }
+                if ($e.ViewportHeight -le 0) { return }
+                if ($e.ViewportHeightChange -ne 0) {
+                    if ([bool]$stateContainer.LogAutoScroll) {
+                        try {
+                            $stateContainer.IsAppendingLog = $true
+                            $txtLogConsole.ScrollToEnd()
+                        } finally {
+                            $stateContainer.IsAppendingLog = $false
+                        }
+                    }
+                    return
+                }
+                if ($e.VerticalChange -eq 0 -and $e.ExtentHeightChange -ne 0) { return }
+
+                $atBottom = ($e.VerticalOffset + $e.ViewportHeight) -ge ($e.ExtentHeight - 4.0)
+                if ($e.VerticalChange -lt 0 -and -not $atBottom) {
+                    if ($stateContainer.LogAutoScroll) {
+                        $stateContainer.LogAutoScroll = $false
+                        if ($chkLogAutoScroll -and $chkLogAutoScroll.IsChecked -ne $false) {
+                            $chkLogAutoScroll.IsChecked = $false
+                        }
+                    }
+                } elseif ($e.VerticalChange -gt 0 -and $atBottom) {
+                    if (-not $stateContainer.LogAutoScroll) {
+                        $stateContainer.LogAutoScroll = $true
+                        if ($chkLogAutoScroll -and $chkLogAutoScroll.IsChecked -ne $true) {
+                            $chkLogAutoScroll.IsChecked = $true
+                        }
+                    }
+                }
+            }
+        )
+    }
 
     $toggleLogPane = {
         if ($logPane.Visibility -eq "Visible") {
@@ -1145,18 +1376,50 @@ function Start-PSRPM {
             if ($menuViewLog) { $menuViewLog.IsChecked = $false }
         } else {
             $logPane.Visibility = "Visible"
+            & $clampLogPaneHeight
             if ($menuViewLog) { $menuViewLog.IsChecked = $true }
+            if ($txtLogConsole -and [bool]$stateContainer.LogAutoScroll) {
+                try {
+                    $stateContainer.IsAppendingLog = $true
+                    $txtLogConsole.ScrollToEnd()
+                } finally {
+                    $stateContainer.IsAppendingLog = $false
+                }
+            }
         }
     }
     if ($menuViewLog)      { $menuViewLog.add_Click($toggleLogPane) }
     if ($btnShowLog)       { $btnShowLog.add_Click($toggleLogPane) }
     if ($btnToggleLogPane) { $btnToggleLogPane.add_Click($toggleLogPane) }
-    if ($btnClearLog)      { $btnClearLog.add_Click({ if ($txtLogConsole) { $txtLogConsole.Clear() } }) }
+    if ($btnClearLog)      {
+        $btnClearLog.add_Click({
+            if ($txtLogConsole) {
+                try {
+                    $stateContainer.IsAppendingLog = $true
+                    $txtLogConsole.Clear()
+                } finally {
+                    $stateContainer.IsAppendingLog = $false
+                }
+            }
+            $stateContainer.LogAutoScroll = $true
+            if ($chkLogAutoScroll) { $chkLogAutoScroll.IsChecked = $true }
+        })
+    }
     if ($btnCopyLog)       { $btnCopyLog.add_Click({ if ($txtLogConsole -and $txtLogConsole.Text) { [System.Windows.Clipboard]::SetText($txtLogConsole.Text) } }) }
 
     # 12. Process & Service Operations Dispatcher
     $menuConfirmKill = $window.FindName("MenuConfirmKill")
     $jssAction = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+
+    $getDialogOwnerWindow = {
+        if ($script:ActivePropWin -and $script:ActivePropWin.IsLoaded -and $script:ActivePropWin.IsVisible) {
+            return $script:ActivePropWin
+        }
+        if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsActive) {
+            return $script:ActiveFindHandleWin
+        }
+        return $window
+    }
 
     $invokeProcessAction = {
         param(
@@ -1185,6 +1448,7 @@ function Start-PSRPM {
         }
         if ($selectedTargets.Count -eq 0) { return }
 
+        $ownerWin = & $getDialogOwnerWindow
         $batchCapable = $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "ResumeProcess", "SetPriority")
         if ($selectedTargets.Count -eq 1 -or -not $batchCapable) {
             $singleVm = $selectedTargets[0]
@@ -1193,6 +1457,7 @@ function Start-PSRPM {
 
             if ($tPid -le 4 -and $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "CreateDump")) {
                 [System.Windows.MessageBox]::Show(
+                    $ownerWin,
                     "Cannot perform '$actionName' on critical Windows kernel process '$tName' (PID $tPid).",
                     "PSRPM - Protected Kernel Process",
                     [System.Windows.MessageBoxButton]::OK,
@@ -1209,6 +1474,7 @@ function Start-PSRPM {
                     "Are you sure you want to terminate '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?"
                 }
                 $confirm = [System.Windows.MessageBox]::Show(
+                    $ownerWin,
                     $promptMsg,
                     "PSRPM - Confirm Process Termination",
                     [System.Windows.MessageBoxButton]::YesNo,
@@ -1236,10 +1502,12 @@ function Start-PSRPM {
             $localState = $stateContainer
             $localAfter = $afterCallback
             $localAct   = $actionName
+            $localOwner = $ownerWin
 
             & $engineHandle.SendCommand $cmdPayload ({
                 param($res)
                 $actSuccess = $false
+                $msgOwner = if ($localOwner -and $localOwner.IsLoaded -and $localOwner.IsVisible) { $localOwner } else { $window }
                 if ($res.Success -and $res.PayloadJson) {
                     $parsed = $localJss.DeserializeObject($res.PayloadJson)
                     if ($parsed['Success']) {
@@ -1249,6 +1517,7 @@ function Start-PSRPM {
                             $dPath = [string]$parsed['DumpPath']
                             try { [System.Windows.Clipboard]::SetText($dPath) } catch { }
                             [System.Windows.MessageBox]::Show(
+                                $msgOwner,
                                 "Process memory dump created successfully!`n`nRemote Path:`n$dPath`n`n(The remote file path has been copied to your clipboard).",
                                 "PSRPM - Memory Dump Created",
                                 [System.Windows.MessageBoxButton]::OK,
@@ -1257,11 +1526,11 @@ function Start-PSRPM {
                         }
                     } else {
                         &$localLog "WARN" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
-                        [System.Windows.MessageBox]::Show($parsed['Message'], "PSRPM - Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                        [System.Windows.MessageBox]::Show($msgOwner, $parsed['Message'], "PSRPM - Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
                     }
                 } else {
                     &$localLog "ERROR" "$localAct failed: $($res.Error)"
-                    [System.Windows.MessageBox]::Show("Action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                    [System.Windows.MessageBox]::Show($msgOwner, "Action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
                 }
                 [void]$localState.WakeEvent.Set()
                 if ($localAfter) { & $localAfter $actSuccess }
@@ -1285,6 +1554,7 @@ function Start-PSRPM {
         if ($validTargets.Count -eq 0) {
             $firstKern = $skippedKernel[0]
             [System.Windows.MessageBox]::Show(
+                $ownerWin,
                 "Cannot perform '$actionName' on critical Windows kernel process(es) such as '$($firstKern.Name)' (PID $($firstKern.PID)).",
                 "PSRPM - Protected Kernel Process",
                 [System.Windows.MessageBoxButton]::OK,
@@ -1352,6 +1622,7 @@ function Start-PSRPM {
                 $promptMsg += "`n`nNote: $($skippedKernel.Count) protected kernel process(es) (PID <= 4) will be skipped."
             }
             $confirm = [System.Windows.MessageBox]::Show(
+                $ownerWin,
                 $promptMsg,
                 "PSRPM - Confirm Batch Process Termination",
                 [System.Windows.MessageBoxButton]::YesNo,
@@ -1385,11 +1656,13 @@ function Start-PSRPM {
         $localAfter = $afterCallback
         $localAct   = $actionName
         $localTotal = $dispatchTargets.Count
+        $localOwner = $ownerWin
 
         & $engineHandle.SendCommand $cmdPayload ({
             param($res)
             $okCount = 0
             $failMsgs = [System.Collections.Generic.List[string]]::new()
+            $msgOwner = if ($localOwner -and $localOwner.IsLoaded -and $localOwner.IsVisible) { $localOwner } else { $window }
             if ($res.Success -and $res.PayloadJson) {
                 $parsedArr = $localJss.DeserializeObject($res.PayloadJson)
                 foreach ($item in $parsedArr) {
@@ -1417,11 +1690,11 @@ function Start-PSRPM {
                         [void]$previewErr.Add("  ...and $($failMsgs.Count - 10) more (see Audit Log).")
                     }
                     $summaryErr = "Batch '$localAct': $okCount succeeded, $($failMsgs.Count) failed:`n`n" + ($previewErr -join "`n")
-                    [System.Windows.MessageBox]::Show($summaryErr, "PSRPM - Batch Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                    [System.Windows.MessageBox]::Show($msgOwner, $summaryErr, "PSRPM - Batch Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
                 }
             } else {
                 &$localLog "ERROR" "Batch $localAct failed: $($res.Error)"
-                [System.Windows.MessageBox]::Show("Batch action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                [System.Windows.MessageBox]::Show($msgOwner, "Batch action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
             }
             [void]$localState.WakeEvent.Set()
             if ($localAfter) { & $localAfter ($okCount -gt 0) }
@@ -1442,10 +1715,12 @@ function Start-PSRPM {
         param([string]$dumpType, [Object]$targetProc = $null)
         $procVm = if ($targetProc) { $targetProc } else { $gridProcesses.SelectedItem }
         if (-not $procVm) { return }
+        $ownerWin = & $getDialogOwnerWindow
         $tPid  = [int]$procVm.PID
         $tName = [string]$procVm.Name
         if ($tPid -le 4) {
             [System.Windows.MessageBox]::Show(
+                $ownerWin,
                 "Cannot generate a memory dump for System process '$tName' (PID $tPid).",
                 "PSRPM - Protected Kernel Process",
                 [System.Windows.MessageBoxButton]::OK,
@@ -1456,6 +1731,7 @@ function Start-PSRPM {
         $typeLabel = if ($dumpType -eq "Full") { "Full Memory Dump (~$([Math]::Round($procVm.MemoryBytes / 1MB, 1)) MB)" } else { "Minidump" }
         $msg = "Generate $typeLabel for '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?`n`nThe dump will be saved directly to '%SystemRoot%\Temp\PSRPM_Dumps' (or '%LOCALAPPDATA%\PSRPM\Dumps') on the target host."
         $confirm = [System.Windows.MessageBox]::Show(
+            $ownerWin,
             $msg,
             "PSRPM - Confirm Process Dump",
             [System.Windows.MessageBoxButton]::OKCancel,
@@ -1671,6 +1947,18 @@ function Start-PSRPM {
             $gridProcesses.SelectedItem = $targetVm
             $gridProcesses.ScrollIntoView($targetVm)
         }
+    }
+
+    $registerDialogRenderFlush = {
+        param([System.Windows.Window]$dlg)
+        if (-not $dlg) { return }
+        $dlg.Topmost = [bool]$window.Topmost
+        $dlg.add_ContentRendered({
+            param($s, $e)
+            if ($s -is [System.Windows.UIElement]) {
+                $s.InvalidateVisual()
+            }
+        })
     }
 
     $actionShowServiceProperties = {
@@ -1901,6 +2189,7 @@ function Start-PSRPM {
             if ($svcTimer) { $svcTimer.Stop() }
         })
 
+        &$registerDialogRenderFlush $svcWin
         [void]$svcWin.ShowDialog()
     }
 
@@ -2289,6 +2578,7 @@ function Start-PSRPM {
                             }
                         }
                         $localPropWin.FindName("GridPropEnv").ItemsSource = $envList
+                        $localPropWin.InvalidateVisual()
 
                         &$localLog "INSPECT" "PID $($localSelectedVm.PID) ($($localSelectedVm.Name)) [Mode: Core] | RTT: $($res.ElapsedMs)ms | Payload: ${inspKB} KB (Sockets: $($connList.Count), Services: $($svcList.Count), Env: $($envList.Count))"
                     }
@@ -2529,6 +2819,7 @@ function Start-PSRPM {
 
             if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or ($tVal -and $tVal.StartsWith("["))) {
                 [System.Windows.MessageBox]::Show(
+                    $propWin,
                     "Cannot close this handle entry ($($tVal): $nVal).",
                     "PSRPM - Close Handle",
                     [System.Windows.MessageBoxButton]::OK,
@@ -2539,6 +2830,7 @@ function Start-PSRPM {
 
             $warnMsg = "WARNING: Forcibly closing an active handle in '$pName' (PID $pidVal) can cause the target process to crash or become unstable.`n`nAre you sure you want to close handle $hVal ($nVal)?"
             $confirm = [System.Windows.MessageBox]::Show(
+                $propWin,
                 $warnMsg,
                 "PSRPM - Confirm Close Handle",
                 [System.Windows.MessageBoxButton]::YesNo,
@@ -2612,8 +2904,19 @@ function Start-PSRPM {
         })
         $propWin.FindName("BtnCloseProp").add_Click({ $propWin.Close() })
 
-        # Trigger Initial On-Demand Core Inspection (Fast < 20ms, skips DLLs & Handles until tab clicked)
-        & $runDeepInspect $false "Core"
+        # Trigger Initial On-Demand Core Inspection on ContentRendered (prevents D3D9 partial dirty-rect race during ShowDialog)
+        $propWin.Topmost = [bool]$window.Topmost
+        $coreInspectState = @{ InitialCoreFired = $false }
+        $propWin.add_ContentRendered({
+            param($s, $e)
+            if ($s -is [System.Windows.UIElement]) {
+                $s.InvalidateVisual()
+            }
+            if (-not $coreInspectState.InitialCoreFired) {
+                $coreInspectState.InitialCoreFired = $true
+                & $runDeepInspect $false "Core"
+            }
+        })
         [void]$propWin.ShowDialog()
     }
 
@@ -2905,7 +3208,7 @@ function Start-PSRPM {
             $useLocal = [bool]$rbLocal.IsChecked
             $compName = $txtComp.Text.Trim()
             if (-not $useLocal -and [string]::IsNullOrWhiteSpace($compName)) {
-                [System.Windows.MessageBox]::Show("Please enter a remote computer name or IP address.", "PSRPM", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                [System.Windows.MessageBox]::Show($connWin, "Please enter a remote computer name or IP address.", "PSRPM", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
                 return
             }
 
@@ -3047,6 +3350,7 @@ function Start-PSRPM {
         })
 
         $connWin.FindName("BtnConnectCancel").add_Click({ $connWin.Close() })
+        &$registerDialogRenderFlush $connWin
         [void]$connWin.ShowDialog()
     }
 
@@ -3212,7 +3516,7 @@ function Start-PSRPM {
                 }
                 &$writeAuditLog "EXPORT" "Exported $($rows.Count) processes ($format) to '$($dlg.FileName)'."
             } catch {
-                [System.Windows.MessageBox]::Show("Failed to export snapshot:`n$($_.Exception.Message)", "PSRPM - Export Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                [System.Windows.MessageBox]::Show($window, "Failed to export snapshot:`n$($_.Exception.Message)", "PSRPM - Export Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
             }
         }
     }
@@ -3307,6 +3611,7 @@ function Start-PSRPM {
         }.GetNewClosure())
 
         $script:ActiveSysInfoWin = $sysWin
+        &$registerDialogRenderFlush $sysWin
         $sysWin.Show()
     }
 
@@ -3406,6 +3711,7 @@ function Start-PSRPM {
                 $btnHelpClose.add_Click({ $helpWin.Close() })
             }
 
+            &$registerDialogRenderFlush $helpWin
             [void]$helpWin.ShowDialog()
         } catch {
             &$writeAuditLog "ERROR" "Failed to display Help window: $($_.Exception.Message)"
@@ -3506,8 +3812,10 @@ function Start-PSRPM {
         $pidVal = [int]$sel.PID
         $nVal   = [string]$sel.Name
 
+        $findOwner = if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsVisible) { $script:ActiveFindHandleWin } else { $window }
         if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or ($tVal -and $tVal.StartsWith("["))) {
             [System.Windows.MessageBox]::Show(
+                $findOwner,
                 "Cannot close this handle entry ($($tVal): $nVal).",
                 "PSRPM - Close Handle",
                 [System.Windows.MessageBoxButton]::OK,
@@ -3518,6 +3826,7 @@ function Start-PSRPM {
 
         $warnMsg = "WARNING: Forcibly closing an active handle in '$pName' (PID $pidVal) can cause the target process to crash or become unstable.`n`nAre you sure you want to close handle $hVal ($nVal)?"
         $confirm = [System.Windows.MessageBox]::Show(
+            $findOwner,
             $warnMsg,
             "PSRPM - Confirm Close Handle",
             [System.Windows.MessageBoxButton]::YesNo,
@@ -3605,7 +3914,8 @@ function Start-PSRPM {
             $gridProcesses.ScrollIntoView($targetVm)
             $window.Activate()
         } else {
-            [System.Windows.MessageBox]::Show("Process '$($sel.ProcessName)' (PID $pidVal) is no longer active in the process tree.", "PSRPM - Process Not Found", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information) | Out-Null
+            $findOwner = if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsVisible) { $script:ActiveFindHandleWin } else { $window }
+            [System.Windows.MessageBox]::Show($findOwner, "Process '$($sel.ProcessName)' (PID $pidVal) is no longer active in the process tree.", "PSRPM - Process Not Found", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information) | Out-Null
         }
     }
 
@@ -3722,6 +4032,7 @@ function Start-PSRPM {
             $script:FindHandleControls.Clear()
         })
 
+        &$registerDialogRenderFlush $findWin
         $findWin.Show()
         if ($txtSearchHandle) {
             [void]$txtSearchHandle.Focus()
@@ -3985,6 +4296,9 @@ function Start-PSRPM {
                 $gridProcesses.Focus()
                 $e.Handled = $true
             }
+        } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::T) {
+            &$setAlwaysOnTop (-not [bool]$window.Topmost)
+            $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::T) {
             &$setViewMode (-not [bool]$stateContainer.IsTreeMode)
             $e.Handled = $true
@@ -4154,6 +4468,10 @@ function Start-RemoteProcessManager {
 
         [Parameter(Mandatory = $false)]
         [switch]$Dark,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Topmost")]
+        [switch]$AlwaysOnTop,
 
         [Parameter(Mandatory = $false)]
         [string]$IconPath

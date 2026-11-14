@@ -69,7 +69,7 @@
         <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="#0284C7" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.8.2" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.9.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -108,31 +108,35 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
                                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+T" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="Toggle between Hierarchical Process Tree and Flat List view" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+F" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Focus the instant search/filter box (preserves parent-child hierarchy in tree)" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+Shift+T" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Toggle Always On Top window pinning" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Esc" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Clear search filter and restore full process hierarchy with focus on grid" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+F" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Focus the instant search/filter box (preserves parent-child hierarchy in tree)" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Left Arrow" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Collapse branch in Tree View, or jump to parent process if leaf/collapsed" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Esc" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Clear search filter and restore full process hierarchy with focus on grid" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Right Arrow" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Expand branch in Tree View, or jump to first child process if expanded" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Left Arrow" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Collapse branch in Tree View, or jump to parent process if leaf/collapsed" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+I" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Open System Information graphs modal (Summary, CPU, Memory, I/O)" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Right Arrow" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Expand branch in Tree View, or jump to first child process if expanded" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+L" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Toggle bottom Audit Trail &amp; Network Telemetry Console pane" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+I" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Open System Information graphs modal (Summary, CPU, Memory, I/O)" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+D" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="7" Grid.Column="1" Text="Toggle between Clean Light (Sysinternals) and Precision Dark themes" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+L" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="7" Grid.Column="1" Text="Toggle bottom Audit Trail &amp; Network Telemetry Console pane" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="8" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+D" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="8" Grid.Column="1" Text="Toggle between Clean Light (Sysinternals) and Precision Dark themes" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
@@ -382,7 +386,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
                                         <Border Background="#E0F2FE" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.8.2" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.9.0" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="#475569" FontSize="11" Margin="0,2,0,4"/>

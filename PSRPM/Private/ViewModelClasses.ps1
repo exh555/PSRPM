@@ -190,6 +190,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] UpdateDynamic([double]$cpu, [long]$wsBytes, [long]$privBytes, [int]$threads, [int]$handles, [int]$flags) {
+        $prevHighCpu = ($this.CPU -ge 50.0)
         $newStatus = if ($flags -band 1) { "Suspended" } else { "Running" }
         $statusChanged = ($this.Status -ne $newStatus)
         if ($statusChanged) {
@@ -253,7 +254,9 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             }
         }
 
-        $this.RefreshRowColors()
+        if ($statusChanged -or ($prevHighCpu -ne ($cpu -ge 50.0))) {
+            $this.RefreshRowColors()
+        }
     }
 
     [void] UpdateTreeCpu([double]$treeCpu) {
@@ -786,6 +789,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     # System Information Modal State & Per-Core Toggle
     [bool]$IsSysInfoOpen
+    [bool]$IsWindowMinimized
     [bool]$ShowOneGraphPerCpu
     [string]$SingleCpuGraphVisibility
     [string]$PerCpuGridVisibility
@@ -939,6 +943,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CoreGraphs             = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
 
         $this.IsSysInfoOpen            = $false
+        $this.IsWindowMinimized        = $false
         $this.ShowOneGraphPerCpu       = $false
         $this.SingleCpuGraphVisibility = "Visible"
         $this.PerCpuGridVisibility     = "Collapsed"
@@ -1242,6 +1247,23 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CommitHistory.Enqueue($this.CommitPct)
         $this.RamHistory.Enqueue($this.RamPct)
 
+        $this.OnPropertyChanged('CpuUsage')
+        $this.OnPropertyChanged('CpuSummaryFormatted')
+        $this.OnPropertyChanged('RamUsedMB')
+        $this.OnPropertyChanged('RamTotalMB')
+        $this.OnPropertyChanged('RamPctFormatted')
+        $this.OnPropertyChanged('RamSummaryFormatted')
+        $this.OnPropertyChanged('CommitSummaryFormatted')
+        $this.OnPropertyChanged('ProcessCount')
+        $this.OnPropertyChanged('ThreadCount')
+        $this.OnPropertyChanged('HandleCount')
+
+        if (-not $this.IsWindowMinimized) {
+            $this.RefreshSparklines()
+        }
+    }
+
+    [void] RefreshSparklines() {
         $cpuSpark = $this.BuildSparkline($this.CpuHistory.ToArray(), 86.0, 26.0)
         $this.CpuPoints     = $cpuSpark[0]
         $this.CpuFillPoints = $cpuSpark[1]
@@ -1254,16 +1276,6 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.RamPoints     = $ramSpark[0]
         $this.RamFillPoints = $ramSpark[1]
 
-        $this.OnPropertyChanged('CpuUsage')
-        $this.OnPropertyChanged('CpuSummaryFormatted')
-        $this.OnPropertyChanged('RamUsedMB')
-        $this.OnPropertyChanged('RamTotalMB')
-        $this.OnPropertyChanged('RamPctFormatted')
-        $this.OnPropertyChanged('RamSummaryFormatted')
-        $this.OnPropertyChanged('CommitSummaryFormatted')
-        $this.OnPropertyChanged('ProcessCount')
-        $this.OnPropertyChanged('ThreadCount')
-        $this.OnPropertyChanged('HandleCount')
         $this.OnPropertyChanged('CpuPoints')
         $this.OnPropertyChanged('CpuFillPoints')
         $this.OnPropertyChanged('CommitPoints')

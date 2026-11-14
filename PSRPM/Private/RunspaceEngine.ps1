@@ -61,6 +61,7 @@ function Start-PSRPMEngine {
         IntervalMs          = $IntervalMs
         IsPaused            = $false
         IsTreeMode          = $true
+        TreeSortNewestFirst = $false
         IsDarkTheme         = $false
         EnableCategoryHighlights = $true
         SortProperty        = "PID"
@@ -80,6 +81,8 @@ function Start-PSRPMEngine {
         TransportBadge      = if ($IsLocal) { "LOCAL" } else { "WINRM" }
         LastErr             = $null
         VerboseTelemetryLog = $true
+        LogAutoScroll       = $true
+        IsAppendingLog      = $false
         IsStopping          = $false
         EnableNetEtw        = $false
         NetEtwCap           = 0
@@ -1166,23 +1169,32 @@ function Start-PSRPMEngine {
         [void]$stateContainer.WakeEvent.Set()
     }.GetNewClosure()
 
+    $logPaneCtrl = if ($Window) { $Window.FindName("LogPane") } else { $null }
+
     $appendLogSafe = {
         param([string]$text)
         if ($LogConsole -and -not [string]::IsNullOrEmpty($text)) {
-            $isPinned = ($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0))
-            if ($isPinned) {
-                if ($LogConsole.Text.Length -gt 72000) {
-                    $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
+            $isPinned = [bool]$stateContainer.LogAutoScroll -and (($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0)) -or [bool]$stateContainer.LogAutoScroll)
+            try {
+                $stateContainer.IsAppendingLog = $true
+                if ($isPinned) {
+                    if ($LogConsole.Text.Length -gt 72000) {
+                        $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
+                    }
+                    $LogConsole.AppendText($text)
+                    if (($null -eq $Window -or $Window.WindowState -ne [System.Windows.WindowState]::Minimized) -and ($null -eq $logPaneCtrl -or $logPaneCtrl.Visibility -eq [System.Windows.Visibility]::Visible)) {
+                        $LogConsole.ScrollToEnd()
+                    }
+                } else {
+                    if ($LogConsole.Text.Length -gt 192000) {
+                        $savedOffset = $LogConsole.VerticalOffset
+                        $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
+                        $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
+                    }
+                    $LogConsole.AppendText($text)
                 }
-                $LogConsole.AppendText($text)
-                $LogConsole.ScrollToEnd()
-            } else {
-                if ($LogConsole.Text.Length -gt 192000) {
-                    $savedOffset = $LogConsole.VerticalOffset
-                    $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
-                    $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
-                }
-                $LogConsole.AppendText($text)
+            } finally {
+                $stateContainer.IsAppendingLog = $false
             }
         }
     }.GetNewClosure()
@@ -1221,6 +1233,18 @@ function Start-PSRPMEngine {
             [System.Collections.Generic.List[Object]]$desiredList,
             [System.Windows.Controls.DataGrid]$grid
         )
+
+        # Fast-path: if count and reference order are identical, exit with zero allocations or collection mutations
+        if ($collection.Count -eq $desiredList.Count) {
+            $allSame = $true
+            for ($i = 0; $i -lt $desiredList.Count; $i++) {
+                if (-not [Object]::ReferenceEquals($collection[$i], $desiredList[$i])) {
+                    $allSame = $false
+                    break
+                }
+            }
+            if ($allSame) { return }
+        }
 
         $savedPrimary = $null
         $savedMulti = $null
@@ -1350,9 +1374,14 @@ function Start-PSRPMEngine {
 
         foreach ($kvp in $processMap.GetEnumerator()) {
             $vm = $kvp.Value
-            $vm.UpdateTreeCpu($vm.PendingTreeCPU)
+            $clampedCpu = [Math]::Max(0.0, [Math]::Min(100.0, [Math]::Round($vm.PendingTreeCPU, 2)))
+            if ($vm.TreeCPU -ne $clampedCpu) {
+                $vm.UpdateTreeCpu($clampedCpu)
+            }
             if ($netTreeActive) {
-                $vm.UpdateTreeNetwork($vm.PendingTreeNetRx, $vm.PendingTreeNetTx)
+                if ($vm.TreeNetRxBps -ne $vm.PendingTreeNetRx -or $vm.TreeNetTxBps -ne $vm.PendingTreeNetTx) {
+                    $vm.UpdateTreeNetwork($vm.PendingTreeNetRx, $vm.PendingTreeNetTx)
+                }
             }
         }
     }.GetNewClosure()
@@ -1371,132 +1400,74 @@ function Start-PSRPMEngine {
         $directMatches = [System.Collections.Generic.HashSet[int]]::new()
         $ancestorSet   = [System.Collections.Generic.HashSet[int]]::new()
 
-        $wcPattern = $null
-        if ($filterTxt.Length -gt 0) {
-            # Escape bracket and backtick metacharacters to guard against WildcardPatternException on unclosed brackets while preserving * and ? wildcards
-            $safePattern = "*" + $filterTxt.Replace('`', '``').Replace('[', '`[').Replace(']', '`]') + "*"
-            try {
-                $wc = [System.Management.Automation.WildcardPattern]::new($safePattern, [System.Management.Automation.WildcardOptions]::IgnoreCase)
-                [void]$wc.IsMatch("")
-                $wcPattern = $wc
-            } catch {
-                $wcPattern = $null
-            }
-        }
-
-        foreach ($kvp in $processMap.GetEnumerator()) {
-            $vm = $kvp.Value
-
-            $isMatch = $true
-            if ($catFilter.Length -gt 0 -and $vm.Category -ne $catFilter) {
-                $isMatch = $false
-            }
-            if ($isMatch -and $filterTxt.Length -gt 0) {
-                if ($wcPattern) {
-                    $isMatch = $wcPattern.IsMatch([string]$vm.Name) -or
-                               $wcPattern.IsMatch([string]$vm.PIDDisplay) -or
-                               $wcPattern.IsMatch([string]$vm.Description) -or
-                               $wcPattern.IsMatch([string]$vm.CompanyName) -or
-                               $wcPattern.IsMatch([string]$vm.User) -or
-                               $wcPattern.IsMatch([string]$vm.CommandLine) -or
-                               $wcPattern.IsMatch([string]$vm.HostedServices)
-                } else {
-                    $isMatch = ([string]$vm.Name).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                               ([string]$vm.PIDDisplay).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                               ([string]$vm.Description).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                               ([string]$vm.CompanyName).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                               ([string]$vm.User).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                               ([string]$vm.CommandLine).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                               ([string]$vm.HostedServices).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+        if ($hasFilter) {
+            $wcPattern = $null
+            if ($filterTxt.Length -gt 0) {
+                # Escape bracket and backtick metacharacters to guard against WildcardPatternException on unclosed brackets while preserving * and ? wildcards
+                $safePattern = "*" + $filterTxt.Replace('`', '``').Replace('[', '`[').Replace(']', '`]') + "*"
+                try {
+                    $wc = [System.Management.Automation.WildcardPattern]::new($safePattern, [System.Management.Automation.WildcardOptions]::IgnoreCase)
+                    [void]$wc.IsMatch("")
+                    $wcPattern = $wc
+                } catch {
+                    $wcPattern = $null
                 }
             }
-            if ($isMatch) {
-                [void]$directMatches.Add($vm.PID)
-            }
-        }
 
-        if ($hasFilter -and $isTreeMode) {
-            foreach ($matchPid in $directMatches) {
-                $curr = $processMap[$matchPid]
-                $guard = 0
-                while ($curr -and $curr.ParentPID -gt 0 -and $processMap.ContainsKey($curr.ParentPID) -and $curr.ParentPID -ne $curr.PID -and $guard -lt 64) {
-                    $parentVm = $processMap[$curr.ParentPID]
-                    if ($parentVm.CreateTime -gt 0 -and $curr.CreateTime -gt 0 -and $parentVm.CreateTime -gt $curr.CreateTime) {
-                        break
+            foreach ($kvp in $processMap.GetEnumerator()) {
+                $vm = $kvp.Value
+
+                $isMatch = $true
+                if ($catFilter.Length -gt 0 -and $vm.Category -ne $catFilter) {
+                    $isMatch = $false
+                }
+                if ($isMatch -and $filterTxt.Length -gt 0) {
+                    if ($wcPattern) {
+                        $isMatch = $wcPattern.IsMatch([string]$vm.Name) -or
+                                   $wcPattern.IsMatch([string]$vm.PIDDisplay) -or
+                                   $wcPattern.IsMatch([string]$vm.Description) -or
+                                   $wcPattern.IsMatch([string]$vm.CompanyName) -or
+                                   $wcPattern.IsMatch([string]$vm.User) -or
+                                   $wcPattern.IsMatch([string]$vm.CommandLine) -or
+                                   $wcPattern.IsMatch([string]$vm.HostedServices)
+                    } else {
+                        $isMatch = ([string]$vm.Name).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.PIDDisplay).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.Description).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.CompanyName).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.User).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.CommandLine).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.HostedServices).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                     }
-                    if (-not $directMatches.Contains($parentVm.PID)) {
-                        [void]$ancestorSet.Add($parentVm.PID)
+                }
+                if ($isMatch) {
+                    [void]$directMatches.Add($vm.PID)
+                }
+            }
+
+            if ($isTreeMode) {
+                foreach ($matchPid in $directMatches) {
+                    $curr = $processMap[$matchPid]
+                    $guard = 0
+                    while ($curr -and $curr.ParentPID -gt 0 -and $processMap.ContainsKey($curr.ParentPID) -and $curr.ParentPID -ne $curr.PID -and $guard -lt 64) {
+                        $parentVm = $processMap[$curr.ParentPID]
+                        if ($parentVm.CreateTime -gt 0 -and $curr.CreateTime -gt 0 -and $parentVm.CreateTime -gt $curr.CreateTime) {
+                            break
+                        }
+                        if (-not $directMatches.Contains($parentVm.PID)) {
+                            [void]$ancestorSet.Add($parentVm.PID)
+                        }
+                        $curr = $parentVm
+                        $guard++
                     }
-                    $curr = $parentVm
-                    $guard++
                 }
             }
         }
 
         if ($txtMatchCount) {
-            $txtMatchCount.Text = if ($hasFilter) { "$($directMatches.Count)/$($processMap.Count)" } else { "$($processMap.Count)" }
-        }
-
-        # 2. Build Validated Parent-Child Hierarchy (CreationTime Checked)
-        $roots = [System.Collections.Generic.List[Object]]::new()
-        $childrenMap = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[Object]]]::new()
-
-        foreach ($kvp in $processMap.GetEnumerator()) {
-            $vm = $kvp.Value
-            $pidVal = $vm.PID
-            if ($hasFilter) {
-                if (-not $directMatches.Contains($pidVal) -and -not $ancestorSet.Contains($pidVal)) {
-                    continue
-                }
-            }
-
-            $pPid = $vm.ParentPID
-            $validParent = $false
-            if ($pPid -gt 0 -and $pPid -ne $pidVal -and $processMap.ContainsKey($pPid)) {
-                $pVm = $processMap[$pPid]
-                if (-not $hasFilter -or $directMatches.Contains($pPid) -or $ancestorSet.Contains($pPid)) {
-                    if ($pVm.CreateTime -le 0 -or $vm.CreateTime -le 0 -or $pVm.CreateTime -le $vm.CreateTime) {
-                        $validParent = $true
-                    }
-                }
-            }
-
-            if ($validParent) {
-                if (-not $childrenMap.ContainsKey($pPid)) {
-                    $childrenMap[$pPid] = [System.Collections.Generic.List[Object]]::new()
-                }
-                $childrenMap[$pPid].Add($vm)
-            } else {
-                $roots.Add($vm)
-            }
-        }
-
-        # Reconcile vm.Children in-place only when membership changes (zero .Clear() calls)
-        foreach ($kvp in $processMap.GetEnumerator()) {
-            $pVm = $kvp.Value
-            if (-not $childrenMap.ContainsKey($kvp.Key)) {
-                for ($ci = $pVm.Children.Count - 1; $ci -ge 0; $ci--) {
-                    $pVm.Children.RemoveAt($ci)
-                }
-            } else {
-                $newKids = $childrenMap[$kvp.Key]
-                $same = ($pVm.Children.Count -eq $newKids.Count)
-                if ($same) {
-                    for ($ci = 0; $ci -lt $newKids.Count; $ci++) {
-                        if (-not [Object]::ReferenceEquals($pVm.Children[$ci], $newKids[$ci])) {
-                            $same = $false
-                            break
-                        }
-                    }
-                }
-                if (-not $same) {
-                    for ($ci = $pVm.Children.Count - 1; $ci -ge 0; $ci--) {
-                        $pVm.Children.RemoveAt($ci)
-                    }
-                    foreach ($nk in $newKids) {
-                        [void]$pVm.Children.Add($nk)
-                    }
-                }
+            $newMatchTxt = if ($hasFilter) { "$($directMatches.Count)/$($processMap.Count)" } else { "$($processMap.Count)" }
+            if ($txtMatchCount.Text -ne $newMatchTxt) {
+                $txtMatchCount.Text = $newMatchTxt
             }
         }
 
@@ -1509,27 +1480,25 @@ function Start-PSRPMEngine {
             $arr = $list.ToArray()
             if ($isNumericSort) {
                 $keys = [double[]]::new($cnt)
+                $sign = if ($sortDesc) { -1.0 } else { 1.0 }
                 switch ($sortProp) {
-                    "CPU"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].CPU } }
-                    "TreeCPU"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeCPU } }
-                    "NetTotalBps"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].NetTotalBps } }
-                    "TreeNetTotalBps" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeNetTotalBps } }
-                    "NetRxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].NetRxBps } }
-                    "NetTxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].NetTxBps } }
-                    "TreeNetRxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeNetRxBps } }
-                    "TreeNetTxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].TreeNetTxBps } }
-                    "MemoryBytes"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].MemoryBytes } }
-                    "PrivateBytes"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PrivateBytes } }
-                    "Threads"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Threads } }
-                    "Handles"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].Handles } }
-                    default           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = [double]$arr[$idx].PID } }
+                    "PID"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
+                    "CPU"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].CPU) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "TreeCPU"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].TreeCPU) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "Threads"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Threads) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "Handles"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Handles) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "NetTotalBps"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTotalBps } }
+                    "TreeNetTotalBps" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetTotalBps } }
+                    "NetRxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetRxBps } }
+                    "NetTxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTxBps } }
+                    "TreeNetRxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetRxBps } }
+                    "TreeNetTxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetTxBps } }
+                    "MemoryBytes"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].MemoryBytes } }
+                    "PrivateBytes"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PrivateBytes } }
+                    default           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
                 }
                 [Array]::Sort([Array]$keys, [Array]$arr)
-                if ($sortDesc) {
-                    [Array]::Reverse([Array]$keys)
-                    [Array]::Reverse([Array]$arr)
-                }
-                if ($sortProp -ne "PID") {
+                if ($sortProp -notin @("PID", "CPU", "TreeCPU", "Threads", "Handles")) {
                     $idx = 0
                     while ($idx -lt ($cnt - 1)) {
                         $j = $idx + 1
@@ -1587,10 +1556,109 @@ function Start-PSRPMEngine {
             return $arr
         }
 
-        $desiredList = [System.Collections.Generic.List[Object]]::new()
+        $desiredList = [System.Collections.Generic.List[Object]]::new($processMap.Count)
 
         if ($isTreeMode) {
-            $sortedRoots = @(&$sortNodes $roots)
+            # 2. Build Validated Parent-Child Hierarchy (CreationTime Checked - Tree Mode Only)
+            $roots = [System.Collections.Generic.List[Object]]::new()
+            $childrenMap = [System.Collections.Generic.Dictionary[int, System.Collections.Generic.List[Object]]]::new()
+
+            foreach ($kvp in $processMap.GetEnumerator()) {
+                $vm = $kvp.Value
+                $pidVal = $vm.PID
+                if ($hasFilter) {
+                    if (-not $directMatches.Contains($pidVal) -and -not $ancestorSet.Contains($pidVal)) {
+                        continue
+                    }
+                }
+
+                $pPid = $vm.ParentPID
+                $validParent = $false
+                if ($pPid -gt 0 -and $pPid -ne $pidVal -and $processMap.ContainsKey($pPid)) {
+                    $pVm = $processMap[$pPid]
+                    if (-not $hasFilter -or $directMatches.Contains($pPid) -or $ancestorSet.Contains($pPid)) {
+                        if ($pVm.CreateTime -le 0 -or $vm.CreateTime -le 0 -or $pVm.CreateTime -le $vm.CreateTime) {
+                            $validParent = $true
+                        }
+                    }
+                }
+
+                if ($validParent) {
+                    if (-not $childrenMap.ContainsKey($pPid)) {
+                        $childrenMap[$pPid] = [System.Collections.Generic.List[Object]]::new()
+                    }
+                    $childrenMap[$pPid].Add($vm)
+                } else {
+                    $roots.Add($vm)
+                }
+            }
+
+            # Reconcile vm.Children in-place only when membership changes (zero .Clear() calls)
+            foreach ($kvp in $processMap.GetEnumerator()) {
+                $pVm = $kvp.Value
+                if (-not $childrenMap.ContainsKey($kvp.Key)) {
+                    for ($ci = $pVm.Children.Count - 1; $ci -ge 0; $ci--) {
+                        $pVm.Children.RemoveAt($ci)
+                    }
+                } else {
+                    $newKids = $childrenMap[$kvp.Key]
+                    $same = ($pVm.Children.Count -eq $newKids.Count)
+                    if ($same) {
+                        for ($ci = 0; $ci -lt $newKids.Count; $ci++) {
+                            if (-not [Object]::ReferenceEquals($pVm.Children[$ci], $newKids[$ci])) {
+                                $same = $false
+                                break
+                            }
+                        }
+                    }
+                    if (-not $same) {
+                        for ($ci = $pVm.Children.Count - 1; $ci -ge 0; $ci--) {
+                            $pVm.Children.RemoveAt($ci)
+                        }
+                        foreach ($nk in $newKids) {
+                            [void]$pVm.Children.Add($nk)
+                        }
+                    }
+                }
+            }
+
+            $treeNewestFirst = [bool]$stateContainer.TreeSortNewestFirst
+            $sortTreeLevel = {
+                param($list)
+                if (-not $treeNewestFirst) {
+                    return (&$sortNodes $list)
+                }
+                $cnt = $list.Count
+                if ($cnt -le 1) { return $list }
+                $arr = $list.ToArray()
+                $ctKeys = [long[]]::new($cnt)
+                for ($idx = 0; $idx -lt $cnt; $idx++) {
+                    $ctKeys[$idx] = -[long]$arr[$idx].CreateTime
+                }
+                [Array]::Sort([Array]$ctKeys, [Array]$arr)
+                $idx = 0
+                while ($idx -lt ($cnt - 1)) {
+                    $j = $idx + 1
+                    while ($j -lt $cnt -and $ctKeys[$j] -eq $ctKeys[$idx]) { $j++ }
+                    $runLen = $j - $idx
+                    if ($runLen -gt 1) {
+                        $subItems = [Object[]]::new($runLen)
+                        $subPids  = [int[]]::new($runLen)
+                        for ($s = 0; $s -lt $runLen; $s++) {
+                            $subItems[$s] = $arr[$idx + $s]
+                            $subPids[$s]  = -[int]$subItems[$s].PID
+                        }
+                        [Array]::Sort([Array]$subPids, [Array]$subItems)
+                        for ($s = 0; $s -lt $runLen; $s++) {
+                            $arr[$idx + $s] = $subItems[$s]
+                        }
+                    }
+                    $idx = $j
+                }
+                return $arr
+            }
+
+            $sortedRoots = @(&$sortTreeLevel $roots)
             $visited = [System.Collections.Generic.HashSet[int]]::new()
 
             $dfsTraverse = {
@@ -1626,7 +1694,7 @@ function Start-PSRPMEngine {
 
                 $shouldExpand = $node.IsExpanded -or ($hasFilter -and $ancestorSet.Contains($node.PID))
                 if ($shouldExpand -and $hasChildren -and $depth -lt 20) {
-                    $kids = @(&$sortNodes $childrenMap[$node.PID])
+                    $kids = @(&$sortTreeLevel $childrenMap[$node.PID])
                     for ($k = 0; $k -lt $kids.Count; $k++) {
                         $hasNext = ($k -lt ($kids.Count - 1))
                         $nextAnc = [bool[]]::new($depth + 1)
@@ -1641,12 +1709,15 @@ function Start-PSRPMEngine {
                 & $dfsTraverse $sortedRoots[$r] 0 ([bool[]]@())
             }
         } else {
-            # Flat Mode: Global Sort
-            $flatCandidates = [System.Collections.Generic.List[Object]]::new()
+            # Flat Mode: Global Sort (skip tree hierarchy building & Children reconciliation)
+            $flatCandidates = [System.Collections.Generic.List[Object]]::new($processMap.Count)
             foreach ($kvp in $processMap.GetEnumerator()) {
                 if (-not $hasFilter -or $directMatches.Contains($kvp.Key)) {
-                    $kvp.Value.UpdateTreeState(0, $false, $false, "", 1.0)
-                    $flatCandidates.Add($kvp.Value)
+                    $vm = $kvp.Value
+                    if ($vm.IsTreeMode -or $vm.Level -ne 0 -or $vm.RowOpacity -ne 1.0) {
+                        $vm.UpdateTreeState(0, $false, $false, "", 1.0)
+                    }
+                    $flatCandidates.Add($vm)
                 }
             }
             $sortedFlat = @(&$sortNodes $flatCandidates)
@@ -1686,7 +1757,80 @@ function Start-PSRPMEngine {
     $createProcessVm = { [ProcessItemViewModel]::new() }
     $createServiceVm = { [ServiceItemViewModel]::new() }
 
+    $brushConv = [System.Windows.Media.BrushConverter]::new()
+    $dotBrushes = @{
+        "#F59E0B" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#F59E0B")
+        "#EA580C" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#EA580C")
+        "#EAB308" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#EAB308")
+        "#16A34A" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#16A34A")
+        "#DC2626" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#DC2626")
+    }
+    foreach ($b in $dotBrushes.Values) { if ($b.CanFreeze) { $b.Freeze() } }
+
+    $uiStatusCache = @{
+        DotHex           = ""
+        Target           = ""
+        Transport        = ""
+        Latency          = ""
+        ToolTip          = ""
+        PausedVis        = $null
+        WasMinimized     = $false
+        NeedsRestoreSync = $false
+    }
+
+    $restoreFromMinimized = {
+        if ($uiStatusCache.WasMinimized) {
+            $uiStatusCache.WasMinimized = $false
+            $uiStatusCache.DotHex       = ""
+            $uiStatusCache.Target       = ""
+            $uiStatusCache.Transport    = ""
+            $uiStatusCache.Latency      = ""
+            $uiStatusCache.ToolTip      = ""
+            $uiStatusCache.PausedVis    = $null
+
+            $curSumRestore = $summaryVmHolder.Value
+            if ($curSumRestore) {
+                $curSumRestore.IsWindowMinimized = $false
+                $curSumRestore.RefreshSparklines()
+            }
+            if ($uiStatusCache.NeedsRestoreSync -or $ProcessCollection.Count -eq 0) {
+                $uiStatusCache.NeedsRestoreSync = $false
+                & $updateViewCollections
+            }
+            if ($statusText -and $stateContainer.LastStatusText) {
+                $statusText.Text = if ($stateContainer.IsPaused) { "[PAUSED] $($stateContainer.LastStatusText)" } else { [string]$stateContainer.LastStatusText }
+            }
+            if ($LogConsole -and [bool]$stateContainer.LogAutoScroll -and ($null -eq $logPaneCtrl -or $logPaneCtrl.Visibility -eq [System.Windows.Visibility]::Visible)) {
+                try {
+                    $stateContainer.IsAppendingLog = $true
+                    $LogConsole.ScrollToEnd()
+                } finally {
+                    $stateContainer.IsAppendingLog = $false
+                }
+            }
+        }
+    }.GetNewClosure()
+
+    if ($Window) {
+        $Window.add_StateChanged({
+            if ($Window.WindowState -ne [System.Windows.WindowState]::Minimized) {
+                & $restoreFromMinimized
+            }
+        }.GetNewClosure())
+    }
+
     $tickHandler = {
+        $isMinimized = ($null -ne $Window) -and ($Window.WindowState -eq [System.Windows.WindowState]::Minimized)
+        if ($isMinimized) {
+            $uiStatusCache.WasMinimized = $true
+            $curSumMin = $summaryVmHolder.Value
+            if ($curSumMin -and -not $curSumMin.IsWindowMinimized) {
+                $curSumMin.IsWindowMinimized = $true
+            }
+        } elseif ($uiStatusCache.WasMinimized) {
+            & $restoreFromMinimized
+        }
+
         # 0. Telemetry Freshness & Age Tracking
         if ($stateContainer.LastSampleUtcTicks -gt 0L) {
             $ageMs = [int](([DateTime]::UtcNow.Ticks - [long]$stateContainer.LastSampleUtcTicks) / 10000L)
@@ -1746,46 +1890,78 @@ function Start-PSRPMEngine {
             $telemStats.TotalRttMs     = 0L
         }
 
-        # 3. Update Connection Status Indicators
-        $cState = $stateContainer.ConnectionState
-        $fState = $stateContainer.FreshnessState
-        if ($connDot) {
-            if ($stateContainer.IsPaused) {
-                $connDot.Fill = "#F59E0B"
-            } elseif ($cState -in @("Connected", "LocalMode")) {
-                if ($fState -eq "Frozen") {
-                    $connDot.Fill = "#EA580C"
-                } elseif ($fState -eq "Stale") {
-                    $connDot.Fill = "#EAB308"
+        # 3. Update Connection Status Indicators (dirty-checked & skipped while minimized)
+        if (-not $isMinimized) {
+            $cState = $stateContainer.ConnectionState
+            $fState = $stateContainer.FreshnessState
+            if ($connDot) {
+                $wantHex = if ($stateContainer.IsPaused) {
+                    "#F59E0B"
+                } elseif ($cState -in @("Connected", "LocalMode")) {
+                    if ($fState -eq "Frozen") {
+                        "#EA580C"
+                    } elseif ($fState -eq "Stale") {
+                        "#EAB308"
+                    } else {
+                        "#16A34A"
+                    }
+                } elseif ($cState -eq "Degraded") {
+                    "#EAB308"
+                } elseif ($cState -eq "Reconnecting") {
+                    "#EA580C"
                 } else {
-                    $connDot.Fill = "#16A34A"
+                    "#DC2626"
                 }
-            } elseif ($cState -eq "Degraded") {
-                $connDot.Fill = "#EAB308"
-            } elseif ($cState -eq "Reconnecting") {
-                $connDot.Fill = "#EA580C"
-            } else {
-                $connDot.Fill = "#DC2626"
+                if ($uiStatusCache.DotHex -ne $wantHex) {
+                    $uiStatusCache.DotHex = $wantHex
+                    $connDot.Fill = $dotBrushes[$wantHex]
+                }
+            }
+            if ($txtTarget) {
+                $wantTarget = [string]$stateContainer.TargetDisplayName
+                if ($uiStatusCache.Target -ne $wantTarget) {
+                    $uiStatusCache.Target = $wantTarget
+                    $txtTarget.Text = $wantTarget
+                }
+            }
+            if ($txtTransport) {
+                $wantTrans = [string]$stateContainer.TransportBadge
+                if ($uiStatusCache.Transport -ne $wantTrans) {
+                    $uiStatusCache.Transport = $wantTrans
+                    $txtTransport.Text = $wantTrans
+                }
+            }
+            if ($txtLatency) {
+                $wantLat = if ($stateContainer.IsPaused) {
+                    "Paused"
+                } elseif ($cState -eq "Reconnecting") {
+                    "Reconnecting"
+                } elseif ($cState -eq "Degraded") {
+                    "$($stateContainer.PollLatencyMs) ms (Degraded)"
+                } elseif ($cState -eq "Disconnected") {
+                    "Offline"
+                } else {
+                    $ageTag = if ($fState -ne "Fresh" -and $stateContainer.TelemetryAgeMs -gt 0) { " ($fState)" } else { "" }
+                    "$($stateContainer.PollLatencyMs) ms$ageTag"
+                }
+                if ($uiStatusCache.Latency -ne $wantLat) {
+                    $uiStatusCache.Latency = $wantLat
+                    $txtLatency.Text = $wantLat
+                }
+                $wantTip = "Poll Latency: $($stateContainer.PollLatencyMs) ms | Age: $($stateContainer.TelemetryAgeMs) ms | State: $cState ($fState)"
+                if ($uiStatusCache.ToolTip -ne $wantTip) {
+                    $uiStatusCache.ToolTip = $wantTip
+                    $txtLatency.ToolTip = $wantTip
+                }
+            }
+            if ($badgePaused) {
+                $wantVis = if ($stateContainer.IsPaused) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+                if ($uiStatusCache.PausedVis -ne $wantVis) {
+                    $uiStatusCache.PausedVis = $wantVis
+                    $badgePaused.Visibility = $wantVis
+                }
             }
         }
-        if ($txtTarget)    { $txtTarget.Text    = [string]$stateContainer.TargetDisplayName }
-        if ($txtTransport) { $txtTransport.Text = [string]$stateContainer.TransportBadge }
-        if ($txtLatency) {
-            if ($stateContainer.IsPaused) {
-                $txtLatency.Text = "Paused"
-            } elseif ($cState -eq "Reconnecting") {
-                $txtLatency.Text = "Reconnecting"
-            } elseif ($cState -eq "Degraded") {
-                $txtLatency.Text = "$($stateContainer.PollLatencyMs) ms (Degraded)"
-            } elseif ($cState -eq "Disconnected") {
-                $txtLatency.Text = "Offline"
-            } else {
-                $ageTag = if ($fState -ne "Fresh" -and $stateContainer.TelemetryAgeMs -gt 0) { " ($fState)" } else { "" }
-                $txtLatency.Text = "$($stateContainer.PollLatencyMs) ms$ageTag"
-            }
-            $txtLatency.ToolTip = "Poll Latency: $($stateContainer.PollLatencyMs) ms | Age: $($stateContainer.TelemetryAgeMs) ms | State: $cState ($fState)"
-        }
-        if ($badgePaused)  { $badgePaused.Visibility = if ($stateContainer.IsPaused) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed } }
 
         # 4. Consume Differential Telemetry Payload (Synchronized Hand-Off)
         $payloadStr   = $null
@@ -2160,6 +2336,9 @@ function Start-PSRPMEngine {
             }
 
             $curSummaryVm = $summaryVmHolder.Value
+            if ($curSummaryVm) {
+                $curSummaryVm.IsWindowMinimized = $isMinimized
+            }
             if ($curSummaryVm -and $data['hw']) {
                 $curSummaryVm.UpdateHardwareInfo($data['hw'])
             }
@@ -2181,16 +2360,16 @@ function Start-PSRPMEngine {
                     $curSummaryVm.UpdateExtendedTelemetry($sysArr, $data['cores'])
                 }
 
-                if ($statusText) {
-                    $netTag = if ($curSummaryVm.NetThroughputFormatted -and $curSummaryVm.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($curSummaryVm.NetThroughputFormatted)" } else { "" }
-                    $etwTag = switch ($newNetCap) {
-                        1 { " | Net ETW: $newNetEv/s" }
-                        2 { " | Net ETW: AUTO-PAUSED" }
-                        3 { " | Net ETW: NON-ADMIN" }
-                        default { "" }
-                    }
-                    $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag$etwTag | Wire: $($wireKB.ToString('F2')) KB (${pollRttMs} ms)"
-                    $stateContainer.LastStatusText = $telemMsg
+                $netTag = if ($curSummaryVm.NetThroughputFormatted -and $curSummaryVm.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($curSummaryVm.NetThroughputFormatted)" } else { "" }
+                $etwTag = switch ($newNetCap) {
+                    1 { " | Net ETW: $newNetEv/s" }
+                    2 { " | Net ETW: AUTO-PAUSED" }
+                    3 { " | Net ETW: NON-ADMIN" }
+                    default { "" }
+                }
+                $telemMsg = "CPU: $($curSummaryVm.CpuSummaryFormatted) | Commit: $($curSummaryVm.CommitSummaryFormatted) | Procs: $($curSummaryVm.ProcessCount) | RAM: $($curSummaryVm.RamPctFormatted)$netTag$etwTag | Wire: $($wireKB.ToString('F2')) KB (${pollRttMs} ms)"
+                $stateContainer.LastStatusText = $telemMsg
+                if ($statusText -and -not $isMinimized) {
                     if ($stateContainer.IsPaused) {
                         $statusText.Text = "[PAUSED] $telemMsg"
                     } else {
@@ -2229,31 +2408,44 @@ function Start-PSRPMEngine {
                 }
 
                 if ($sbLog.Length -gt 0) {
-                    $isPinned = ($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0))
-                    if ($isPinned) {
-                        if ($LogConsole.Text.Length -gt 72000) {
-                            $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
+                    $isPinned = [bool]$stateContainer.LogAutoScroll -and (($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0)) -or [bool]$stateContainer.LogAutoScroll)
+                    try {
+                        $stateContainer.IsAppendingLog = $true
+                        if ($isPinned) {
+                            if ($LogConsole.Text.Length -gt 72000) {
+                                $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
+                            }
+                            $LogConsole.AppendText($sbLog.ToString())
+                            if ((-not $isMinimized) -and ($null -eq $logPaneCtrl -or $logPaneCtrl.Visibility -eq [System.Windows.Visibility]::Visible)) {
+                                $LogConsole.ScrollToEnd()
+                            }
+                        } else {
+                            if ($LogConsole.Text.Length -gt 192000) {
+                                $savedOffset = $LogConsole.VerticalOffset
+                                $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
+                                $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
+                            }
+                            $LogConsole.AppendText($sbLog.ToString())
                         }
-                        $LogConsole.AppendText($sbLog.ToString())
-                        $LogConsole.ScrollToEnd()
-                    } else {
-                        if ($LogConsole.Text.Length -gt 192000) {
-                            $savedOffset = $LogConsole.VerticalOffset
-                            $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
-                            $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
-                        }
-                        $LogConsole.AppendText($sbLog.ToString())
+                    } finally {
+                        $stateContainer.IsAppendingLog = $false
                     }
                 }
             }
 
-            # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting)
+            # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting; deferred while minimized)
             $dynSortProps = @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
             $needsOrderPass = $structureChanged -or ($stateContainer.SortProperty -in $dynSortProps)
-            if ($needsOrderPass -or $ProcessCollection.Count -eq 0) {
-                & $updateViewCollections
-            } elseif (($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
-                & $recalculateTreeCpu
+            if ($isMinimized) {
+                if ($needsOrderPass -or $ProcessCollection.Count -eq 0 -or ($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
+                    $uiStatusCache.NeedsRestoreSync = $true
+                }
+            } else {
+                if ($needsOrderPass -or $ProcessCollection.Count -eq 0) {
+                    & $updateViewCollections
+                } elseif (($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
+                    & $recalculateTreeCpu
+                }
             }
         } catch {
             $stateContainer.LastErr = "UI Sync Error: $($_.Exception.Message)"

@@ -292,7 +292,7 @@ Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard 
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "BtnCopyLog", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
@@ -312,6 +312,14 @@ foreach ($xf in $xamlFiles) {
         $ctrl = $winObj.FindName($ctrlName)
         if ($null -eq $ctrl) {
             throw "XAML Verification Failed: Control '$ctrlName' not found in $($xf.File)."
+        }
+    }
+
+    if ($xf.File -eq "PropertiesWindow.xaml") {
+        foreach ($reqBrush in @("BrushWindowBg", "BrushToolbarBg", "BrushSurfaceBg", "BrushHeaderBg", "BrushBorderSubtle", "BrushTextPrimary", "BrushTextSecondary", "BrushTextMuted", "BrushRowHover")) {
+            if (-not $winObj.Resources.Contains($reqBrush)) {
+                throw "PropertiesWindow.xaml missing default fallback SolidColorBrush '$reqBrush' in Window.Resources."
+            }
         }
     }
 
@@ -350,6 +358,15 @@ foreach ($xf in $xamlFiles) {
         if ($winObj.FindName("NetEtwAlertBanner").Visibility -ne [System.Windows.Visibility]::Collapsed -or
             $winObj.FindName("BtnToolbarNetRxTx").Visibility -ne [System.Windows.Visibility]::Collapsed) {
             throw "MainWindow.xaml Net ETW banner and Rx/Tx button must start Collapsed when Net ETW is off."
+        }
+        $logPaneTest = $winObj.FindName("LogPane")
+        $logResizerTest = $winObj.FindName("LogPaneResizer")
+        if ($logPaneTest.MinHeight -ne 85.0 -or $logResizerTest -isnot [System.Windows.Controls.Primitives.Thumb]) {
+            throw "MainWindow.xaml expected LogPane.MinHeight=85 and LogPaneResizer as Thumb."
+        }
+        $menuAotTest = $winObj.FindName("MenuAlwaysOnTop")
+        if (-not $menuAotTest.IsCheckable -or $menuAotTest.IsChecked -ne $false -or -not (Get-Command Start-PSRPM).Parameters.ContainsKey("AlwaysOnTop")) {
+            throw "MainWindow.xaml MenuAlwaysOnTop or Start-PSRPM -AlwaysOnTop parameter verification failed."
         }
         Write-Host "  Verified MainWindow.xaml: GridProcesses SelectionMode='Extended' and 'Tree CPU Usage' at index $treeCpuIdx." -ForegroundColor Gray
     }
@@ -435,6 +452,17 @@ $sumTest = [SystemSummaryViewModel]::new()
 $sumTest.IsSysInfoOpen = $true
 $sumTest.UpdateHardwareInfo($dataTick1['hw'])
 $sumTest.UpdateSummary(12.4, 8589934592, 17179869184, 185, 2400, 75000, 10737418240, 21474836480)
+$savedCpuPts = $sumTest.CpuPoints
+$sumTest.IsWindowMinimized = $true
+$sumTest.UpdateSummary(48.9, 8589934592, 17179869184, 185, 2400, 75000, 10737418240, 21474836480)
+if ($sumTest.CpuPoints -ne $savedCpuPts) {
+    throw "SystemSummaryViewModel should defer sparkline point string generation while IsWindowMinimized is true."
+}
+$sumTest.IsWindowMinimized = $false
+$sumTest.RefreshSparklines()
+if ($sumTest.CpuPoints -eq $savedCpuPts -or [string]::IsNullOrWhiteSpace($sumTest.CpuPoints)) {
+    throw "SystemSummaryViewModel.RefreshSparklines() failed to rebuild CpuPoints from ring buffer after restore."
+}
 $sumTest.UpdateExtendedTelemetry($dataTick2['sys'], $dataTick2['cores'])
 $sumTest.SetPerCpuMode($true)
 $sumTest.SetPerCpuMode($false)
@@ -587,19 +615,65 @@ try {
         throw "Flat mode sorting by TreeCPU descending expected Root (0.47) before Child (0.37), got RootIdx=$rootSortIdx, ChildIdx=$childSortIdx."
     }
 
-    # Test Process Explorer 3-Way Column Header Sort Cycle (Tree -> Flat Asc -> Flat Desc -> Tree)
+    # Test Flat Mode CPU Descending Composite Key Tie-Breaking (< 0.01 vs 0.0 and PID Ascending) & Tree Restoration
+    $pRoot.UpdateDynamic(0.001, 1024000, 512000, 2, 20, 0)
+    $pChild1.UpdateDynamic(0.001, 1024000, 512000, 2, 20, 0)
+    $pGrandChild.UpdateDynamic(0.0, 1024000, 512000, 2, 20, 0)
+    $eng.StateContainer.SortProperty = "CPU"
+    $eng.StateContainer.SortDescending = $true
+    & $eng.RefreshTree
+    $idx90001 = $procCol.IndexOf($pRoot)
+    $idx90002 = $procCol.IndexOf($pChild1)
+    $idx90003 = $procCol.IndexOf($pGrandChild)
+    if ($idx90001 -ge $idx90002 -or $idx90002 -ge $idx90003) {
+        throw "Flat mode CPU descending composite sort failed: expected 90001 (0.001) < 90002 (0.001) < 90003 (0.0), got $idx90001, $idx90002, $idx90003."
+    }
+    $eng.StateContainer.IsTreeMode = $true
+    $eng.StateContainer.SortProperty = "PID"
+    $eng.StateContainer.SortDescending = $false
+    & $eng.RefreshTree
+    if (-not $pGrandChild.IsTreeMode -or $pGrandChild.Level -ne 2 -or [string]::IsNullOrWhiteSpace($pGrandChild.TreeGuideGeometry)) {
+        throw "Switching from Flat mode back to Tree mode failed to restore GrandChild Level=2 and TreeGuideGeometry."
+    }
+
+    # Test Tree View Newest-First (CreateTime Descending) vs Classic Process Explorer Ordering
+    $pChild2 = [ProcessItemViewModel]::new()
+    $pChild2.SetStaticMetadata(@{ id = 90004; ct = 500; n = "newer_child.exe"; p = 90001; u = "SYSTEM"; arch = "x64"; path = "C:\Windows\System32\newer_child.exe"; cmd = "newer_child.exe"; desc = "Newer Child"; comp = "Microsoft"; start = "2026-11-07"; sid = 0; prio = 8; cat = "Service" }, $false)
+    $eng.ProcessMap[90004] = $pChild2
+    $eng.StateContainer.TreeSortNewestFirst = $true
+    & $eng.RefreshTree
+    $idxOlder = $procCol.IndexOf($pChild1)
+    $idxNewer = $procCol.IndexOf($pChild2)
+    if ($idxNewer -lt 0 -or $idxOlder -lt 0 -or $idxNewer -ge $idxOlder) {
+        throw "TreeSortNewestFirst=true expected newer child 90004 (ct=500) before older child 90002 (ct=200), got NewerIdx=$idxNewer, OlderIdx=$idxOlder."
+    }
+    $eng.StateContainer.TreeSortNewestFirst = $false
+    & $eng.RefreshTree
+    $idxOlderClassic = $procCol.IndexOf($pChild1)
+    $idxNewerClassic = $procCol.IndexOf($pChild2)
+    if ($idxOlderClassic -lt 0 -or $idxNewerClassic -lt 0 -or $idxOlderClassic -ge $idxNewerClassic) {
+        throw "TreeSortNewestFirst=false expected classic child 90002 before 90004, got OlderIdx=$idxOlderClassic, NewerIdx=$idxNewerClassic."
+    }
+    [void]$eng.ProcessMap.Remove(90004)
+    & $eng.RefreshTree
+
+    # Test Process Explorer 4-Way Column Header Sort Cycle (Tree Newest -> Tree Classic -> Flat Asc -> Flat Desc -> Tree Newest)
     $psrpmMod = Get-Module PSRPM
-    $s1 = & $psrpmMod { Get-PSRPMNextColumnSortState -IsTreeMode $true -CurrentSortProperty "PID" -CurrentSortDescending $false -ClickedSortProperty "Name" }
+    $s0 = & $psrpmMod { Get-PSRPMNextColumnSortState -IsTreeMode $true -CurrentTreeNewestFirst $true -CurrentSortProperty "PID" -CurrentSortDescending $false -ClickedSortProperty "Name" }
+    if (-not $s0.IsTreeMode -or $s0.TreeSortNewestFirst -or $s0.SortProperty -ne "PID" -or $s0.SortDescending) {
+        throw "Process header click 1 (from Tree Newest) expected Tree Classic (TreeSortNewestFirst=false), got IsTree=$($s0.IsTreeMode), Newest=$($s0.TreeSortNewestFirst), Prop=$($s0.SortProperty), Desc=$($s0.SortDescending)."
+    }
+    $s1 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentTreeNewestFirst $st.TreeSortNewestFirst -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s0
     if ($s1.IsTreeMode -or $s1.SortProperty -ne "Name" -or $s1.SortDescending) {
-        throw "Process header click 1 (from Tree) expected Flat Name Asc, got IsTree=$($s1.IsTreeMode), Prop=$($s1.SortProperty), Desc=$($s1.SortDescending)."
+        throw "Process header click 2 (from Tree Classic) expected Flat Name Asc, got IsTree=$($s1.IsTreeMode), Prop=$($s1.SortProperty), Desc=$($s1.SortDescending)."
     }
-    $s2 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s1
+    $s2 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentTreeNewestFirst $st.TreeSortNewestFirst -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s1
     if ($s2.IsTreeMode -or $s2.SortProperty -ne "Name" -or -not $s2.SortDescending) {
-        throw "Process header click 2 (from Flat Name Asc) expected Flat Name Desc, got IsTree=$($s2.IsTreeMode), Prop=$($s2.SortProperty), Desc=$($s2.SortDescending)."
+        throw "Process header click 3 (from Flat Name Asc) expected Flat Name Desc, got IsTree=$($s2.IsTreeMode), Prop=$($s2.SortProperty), Desc=$($s2.SortDescending)."
     }
-    $s3 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s2
-    if (-not $s3.IsTreeMode -or $s3.SortProperty -ne "PID" -or $s3.SortDescending) {
-        throw "Process header click 3 (from Flat Name Desc) expected Tree View reset, got IsTree=$($s3.IsTreeMode), Prop=$($s3.SortProperty), Desc=$($s3.SortDescending)."
+    $s3 = & $psrpmMod { param($st) Get-PSRPMNextColumnSortState -IsTreeMode $st.IsTreeMode -CurrentTreeNewestFirst $st.TreeSortNewestFirst -CurrentSortProperty $st.SortProperty -CurrentSortDescending $st.SortDescending -ClickedSortProperty "Name" } $s2
+    if (-not $s3.IsTreeMode -or -not $s3.TreeSortNewestFirst -or $s3.SortProperty -ne "PID" -or $s3.SortDescending) {
+        throw "Process header click 4 (from Flat Name Desc) expected Tree View (Newest First) reset, got IsTree=$($s3.IsTreeMode), Newest=$($s3.TreeSortNewestFirst), Prop=$($s3.SortProperty), Desc=$($s3.SortDescending)."
     }
     $sFromCpu = & $psrpmMod { Get-PSRPMNextColumnSortState -IsTreeMode $false -CurrentSortProperty "CPU" -CurrentSortDescending $true -ClickedSortProperty "Name" }
     if ($sFromCpu.IsTreeMode -or $sFromCpu.SortProperty -ne "Name" -or $sFromCpu.SortDescending) {
@@ -612,32 +686,35 @@ try {
         throw "CPU header clicks should toggle Flat Desc <-> Asc without returning to Tree."
     }
 
-    # Verify RunspaceEngine ordering across Process column 3-way cycle
-    $eng.StateContainer.IsTreeMode     = $s1.IsTreeMode
-    $eng.StateContainer.SortProperty   = $s1.SortProperty
-    $eng.StateContainer.SortDescending = $s1.SortDescending
+    # Verify RunspaceEngine ordering across Process column 4-way cycle
+    $eng.StateContainer.IsTreeMode          = $s1.IsTreeMode
+    $eng.StateContainer.TreeSortNewestFirst = $s1.TreeSortNewestFirst
+    $eng.StateContainer.SortProperty        = $s1.SortProperty
+    $eng.StateContainer.SortDescending      = $s1.SortDescending
     & $eng.RefreshTree
     if ($procCol.IndexOf($pGrandChild) -gt $procCol.IndexOf($pRoot) -or $procCol.IndexOf($pRoot) -gt $procCol.IndexOf($pChild1)) {
         throw "Flat Name Asc ordering mismatch for psrpm_test_proc.exe < services.exe < svchost.exe."
     }
 
-    $eng.StateContainer.IsTreeMode     = $s2.IsTreeMode
-    $eng.StateContainer.SortProperty   = $s2.SortProperty
-    $eng.StateContainer.SortDescending = $s2.SortDescending
+    $eng.StateContainer.IsTreeMode          = $s2.IsTreeMode
+    $eng.StateContainer.TreeSortNewestFirst = $s2.TreeSortNewestFirst
+    $eng.StateContainer.SortProperty        = $s2.SortProperty
+    $eng.StateContainer.SortDescending      = $s2.SortDescending
     & $eng.RefreshTree
     if ($procCol.IndexOf($pChild1) -gt $procCol.IndexOf($pRoot) -or $procCol.IndexOf($pRoot) -gt $procCol.IndexOf($pGrandChild)) {
         throw "Flat Name Desc ordering mismatch for svchost.exe > services.exe > psrpm_test_proc.exe."
     }
 
-    $eng.StateContainer.IsTreeMode     = $s3.IsTreeMode
-    $eng.StateContainer.SortProperty   = $s3.SortProperty
-    $eng.StateContainer.SortDescending = $s3.SortDescending
+    $eng.StateContainer.IsTreeMode          = $s3.IsTreeMode
+    $eng.StateContainer.TreeSortNewestFirst = $s3.TreeSortNewestFirst
+    $eng.StateContainer.SortProperty        = $s3.SortProperty
+    $eng.StateContainer.SortDescending      = $s3.SortDescending
     $eng.StateContainer.FilterText = ""
     & $eng.RefreshTree
     if ($pGrandChild.Level -ne 2 -or $procCol.IndexOf($pRoot) -gt $procCol.IndexOf($pChild1) -or $procCol.IndexOf($pChild1) -gt $procCol.IndexOf($pGrandChild)) {
-        throw "Tree View restoration after 3rd Process header click failed."
+        throw "Tree View restoration after 4th Process header click failed."
     }
-    Write-Host "  Verified Process Header 3-Way Sort Cycle: Tree -> Flat Name Asc -> Flat Name Desc -> Tree." -ForegroundColor Gray
+    Write-Host "  Verified Process Header 4-Way Sort Cycle: Tree Newest -> Tree Classic -> Flat Name Asc -> Flat Name Desc -> Tree Newest." -ForegroundColor Gray
 
     # Test Bracket & Wildcard Metacharacter Resilience (spe[, [, *spe[*, [host], regex+, etc.)
     $testFilterInputs = @("spe[", "[", "*spe[*", "[[", "][", "[]", "[host]", "regex+", "c:\windows")
@@ -1504,8 +1581,9 @@ $svcEnumType = 'PSRPM.NativeServiceEnumV1' -as [type]
 if ($null -eq $svcEnumType) {
     throw "Expected PSRPM.NativeServiceEnumV1 Reflection.Emit type to be compiled in memory."
 }
-if (-not $dataTick1.ContainsKey('colVer') -or [string]$dataTick1['colVer'] -ne "1.8.2" -or -not $dataTick1.ContainsKey('colMs') -or -not $dataTick1.ContainsKey('svcMs') -or -not $dataTick1.ContainsKey('svcFull') -or -not $dataTick1.ContainsKey('metaPend')) {
-    throw "Expected colVer='1.8.2', colMs, svcMs, svcFull, and metaPend in DataCollector payload."
+$manifestVer12j = (Import-PowerShellDataFile -Path (Join-Path $repoRoot "PSRPM\PSRPM.psd1")).ModuleVersion
+if (-not $dataTick1.ContainsKey('colVer') -or [string]$dataTick1['colVer'] -ne [string]$manifestVer12j -or -not $dataTick1.ContainsKey('colMs') -or -not $dataTick1.ContainsKey('svcMs') -or -not $dataTick1.ContainsKey('svcFull') -or -not $dataTick1.ContainsKey('metaPend')) {
+    throw "Expected colVer='$manifestVer12j', colMs, svcMs, svcFull, and metaPend in DataCollector payload."
 }
 $appDomainSvcs = [AppDomain]::CurrentDomain.GetData("PSRPM_CachedServices")
 if ($null -eq $appDomainSvcs -or $appDomainSvcs.Count -lt 5) {

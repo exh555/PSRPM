@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-14
+
+### Added
+- **Always On Top Window Pinning (`PSRPM.psm1`, `HelpWindow.xaml`)**:
+  - Added `-AlwaysOnTop` (`-Topmost`) switch parameter to `Start-PSRPM` and `Start-RemoteProcessManager`, plus `Ctrl+Shift+T` keyboard shortcut to toggle window pinning.
+- **4-Way Process Column Sort Cycling (`PSRPM.psm1`, `RunspaceEngine.ps1`, `Test-PSRPMEngine.ps1`)**:
+  - Extended `Get-PSRPMNextColumnSortState` so clicking the `Process` column header cycles `Tree View (Newest First) -> Tree View (Classic Oldest First) -> Flat Ascending -> Flat Descending -> Tree View (Newest First)`.
+- **Resizable Audit & Telemetry Console with Auto-Scroll Toggle (`MainWindow.xaml`, `PSRPM.psm1`)**:
+  - Added a draggable resize grip thumb above the bottom Audit & Network Telemetry Console pane and an `Auto-Scroll` checkbox (`ChkLogAutoScroll`) that pauses on manual scroll-up and resumes when scrolled to the bottom.
+
+### Changed
+- **Minimized Window & Row Color Refresh Optimization (`ViewModelClasses.ps1`, `PSRPM.psm1`, `PropertiesWindow.xaml`)**:
+  - Skipped sparkline geometry rebuilds while the main window is minimized (`IsWindowMinimized`) and gated `RefreshRowColors()` in `UpdateDynamic()` to status or high-CPU threshold transitions.
+  - Added default Clean Light fallback brushes to `PropertiesWindow.xaml`.
+
 ## [1.8.2] - 2026-11-14
 
 ## [1.8.0] - 2026-11-12

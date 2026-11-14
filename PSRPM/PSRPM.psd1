@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.8.2'
+    ModuleVersion     = '1.9.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -77,10 +77,11 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Replaced WMI/CIM service polling with zero-WMI native service enumeration (NativeServiceEnumV1 / EnumServicesStatusExW), 10-minute static metadata caching, and shared AppDomain service cache (PSRPM_CachedServices).
-- Added dynamic EnumProcessModulesEx buffer resizing, direct .NET Registry autostart enumeration, and ServiceController 30s timeouts with wildcard service-name refusal.
-- Hardened UI and session resilience with per-tab NewBoundScriptBlock routing, Parent/Grandparent lineage, sticky-to-bottom Audit Console scrolling, in-memory icon loading, and 30s WinRM OperationTimeout.
-- Updated README.md with agentless RMM/CLI/Process Explorer comparison and added Test 12J to Test-PSRPMEngine.ps1.
+- Added Always On Top window pinning (-AlwaysOnTop / -Topmost and Ctrl+Shift+T shortcut)
+- Added 4-way Process column sort cycling with Tree View (Newest First) and Tree View (Classic Oldest First) modes
+- Added resizable Audit & Network Telemetry Console pane with Auto-Scroll toggle
+- Optimized minimized window sparkline updates and conditional row color refreshes
+- Added default light fallback brushes to PropertiesWindow.xaml
 '@
         }
     }

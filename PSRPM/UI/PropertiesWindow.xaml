@@ -11,6 +11,29 @@
         UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Window.Resources>
+        <!-- Default Clean Light Fallback Brushes -->
+        <SolidColorBrush x:Key="BrushWindowBg" Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="BrushToolbarBg" Color="#F1F5F9"/>
+        <SolidColorBrush x:Key="BrushSurfaceBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushHeaderBg" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BrushTreeLine" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushRowHover" Color="#220284C7"/>
+        <SolidColorBrush x:Key="BrushRowSelectedBg" Color="#006CBE"/>
+        <SolidColorBrush x:Key="BrushRowSelectedFg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushSparkBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushSparkBorder" Color="#94A3B8"/>
+        <SolidColorBrush x:Key="BrushMenuBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushMenuBorder" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BrushMenuHover" Color="#F1F5F9"/>
+        <SolidColorBrush x:Key="ColTint_CPU" Color="#2222C55E"/>
+        <SolidColorBrush x:Key="ColTint_Net" Color="#1A0284C7"/>
+        <SolidColorBrush x:Key="ColTint_PrivateBytes" Color="#28EAB308"/>
+        <SolidColorBrush x:Key="ColTint_WorkingSet" Color="#22F97316"/>
+
         <!-- Standard Tabular Text Style -->
         <Style x:Key="RightTabularText" TargetType="TextBlock">
             <Setter Property="TextAlignment" Value="Right"/>
