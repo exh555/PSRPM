@@ -1212,13 +1212,16 @@ function Start-PSRPMEngine {
             if ([System.IO.File]::Exists($exePath)) {
                 $ico = [System.Drawing.Icon]::ExtractAssociatedIcon($exePath)
                 if ($ico) {
-                    $bmpSrc = [System.Windows.Interop.Imaging]::CreateBitmapSourceFromHIcon(
-                        $ico.Handle,
-                        [System.Windows.Int32Rect]::Empty,
-                        [System.Windows.Media.Imaging.BitmapSizeOptions]::FromWidthAndHeight(16, 16)
-                    )
-                    $bmpSrc.Freeze()
-                    $ico.Dispose()
+                    try {
+                        $bmpSrc = [System.Windows.Interop.Imaging]::CreateBitmapSourceFromHIcon(
+                            $ico.Handle,
+                            [System.Windows.Int32Rect]::Empty,
+                            [System.Windows.Media.Imaging.BitmapSizeOptions]::FromWidthAndHeight(16, 16)
+                        )
+                        $bmpSrc.Freeze()
+                    } finally {
+                        $ico.Dispose()
+                    }
                 }
             }
         } catch {}
@@ -1427,7 +1430,9 @@ function Start-PSRPMEngine {
                                    $wcPattern.IsMatch([string]$vm.PIDDisplay) -or
                                    $wcPattern.IsMatch([string]$vm.Description) -or
                                    $wcPattern.IsMatch([string]$vm.CompanyName) -or
+                                   $wcPattern.IsMatch([string]$vm.FileVersion) -or
                                    $wcPattern.IsMatch([string]$vm.User) -or
+                                   $wcPattern.IsMatch([string]$vm.Path) -or
                                    $wcPattern.IsMatch([string]$vm.CommandLine) -or
                                    $wcPattern.IsMatch([string]$vm.HostedServices)
                     } else {
@@ -1435,7 +1440,9 @@ function Start-PSRPMEngine {
                                    ([string]$vm.PIDDisplay).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                                    ([string]$vm.Description).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                                    ([string]$vm.CompanyName).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.FileVersion).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                                    ([string]$vm.User).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                                   ([string]$vm.Path).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                                    ([string]$vm.CommandLine).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
                                    ([string]$vm.HostedServices).IndexOf($filterTxt, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                     }
@@ -1472,7 +1479,7 @@ function Start-PSRPMEngine {
         }
 
         # Fast Array.Sort helper (avoids PowerShell pipeline Sort-Object overhead)
-        $isNumericSort = $sortProp -in @("PID", "CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+        $isNumericSort = $sortProp -in @("PID", "ParentPID", "SessionId", "BasePriority", "CreateTime", "CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
         $sortNodes = {
             param($list)
             $cnt = $list.Count
@@ -1483,6 +1490,10 @@ function Start-PSRPMEngine {
                 $sign = if ($sortDesc) { -1.0 } else { 1.0 }
                 switch ($sortProp) {
                     "PID"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
+                    "ParentPID"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].ParentPID } }
+                    "SessionId"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].SessionId } }
+                    "BasePriority"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].BasePriority } }
+                    "CreateTime"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].CreateTime } }
                     "CPU"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].CPU) + ([double]$arr[$idx].PID * 1e-9) } }
                     "TreeCPU"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].TreeCPU) + ([double]$arr[$idx].PID * 1e-9) } }
                     "Threads"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Threads) + ([double]$arr[$idx].PID * 1e-9) } }
@@ -2434,7 +2445,7 @@ function Start-PSRPMEngine {
             }
 
             # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting; deferred while minimized)
-            $dynSortProps = @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+            $dynSortProps = @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "Status", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
             $needsOrderPass = $structureChanged -or ($stateContainer.SortProperty -in $dynSortProps)
             if ($isMinimized) {
                 if ($needsOrderPass -or $ProcessCollection.Count -eq 0 -or ($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {

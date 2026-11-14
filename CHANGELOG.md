@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-14
+
+### Added
+- **Select Process Columns Dialog & Expanded Column Catalog (`SelectColumnsWindow.xaml`, `PSRPM.psm1`, `MainWindow.xaml`)**:
+  - Added the `Select Process Columns` dialog (`MenuViewSelectColumns` / header context menu) with live search filtering, column visibility toggles, display-order adjustment, and presets (`Default (10)`, `Process Explorer`, `Forensic / Security`).
+  - Added `FileVersion` (`ver` / `ColVersion`), `ColBasePriority`, and `ColCategory` columns along with numeric and dynamic sorting for `ParentPID`, `SessionId`, `BasePriority`, `CreateTime`, and `Status` in `RunspaceEngine.ps1`.
+- **Explicit User Preferences Persistence (`PSRPM.psm1`, `MainWindow.xaml`, `Test-PSRPMEngine.ps1`)**:
+  - Added `Save Preferences` (`MenuSavePreferences`) and `Reset Preferences` (`MenuResetPreferences`) persisted to `%LOCALAPPDATA%\PSRPM\preferences.json`, covering theme, window pinning, category highlights, tree/sort settings, refresh interval, log console visibility/height/auto-scroll, and visible/ordered/sized columns.
+  - Added field-level sanitization and malformed JSON fail-open resilience, verified by automated Test `12K`.
+- **`FileVersion` Static Process Metadata (`DataCollector.ps1`, `ViewModelClasses.ps1`)**:
+  - Collected and cached `FileVersionInfo.FileVersion` (`ver`) in `$script:FileMetaCache` and exposed `FileVersion` on `ProcessItemViewModel`.
+
+### Changed
+- **Modal Dialog Theme Synchronization & DataGrid Virtualization (`PSRPM.psm1`, `ConnectDialog.xaml`, `HelpWindow.xaml`, `MainWindow.xaml`, `FindHandleWindow.xaml`, `PropertiesWindow.xaml`, `ServiceDetailWindow.xaml`)**:
+  - Updated `ConnectDialog.xaml` and `HelpWindow.xaml` to use `DynamicResource` theme brushes synced via `$syncDialogThemeBrushes`, and added `MenuThemeCycle` to cycle themes from the menu bar.
+  - Enabled row virtualization (`VirtualizingPanel.IsVirtualizing`, `VirtualizationMode="Recycling"`, `EnableRowVirtualization`) on `GridServices`, `FindHandleWindow`, `GridPropDlls`, and `GridPropHandles`.
+  - Updated `SetPriority` menu bindings to use `Tag` dispatch and refined action tooltips/button labels across `MainWindow.xaml`, `PropertiesWindow.xaml`, and `FindHandleWindow.xaml`.
+
+### Fixed
+- **Native Memory & Handle Lifecycle Hardening (`DeepInspector.ps1`, `ProcessActions.ps1`)**:
+  - Initialized unmanaged pointers (`$hBufPtr`, `$objBuf`, `$modBuf`, `$sysBufPtr`) to `[IntPtr]::Zero` before `AllocHGlobal` and guarded `FreeHGlobal` in `try/finally` blocks.
+  - Wrapped `DuplicateHandle` probe handles in `try/finally` cleanup and disposed `WindowsIdentity` in `CreateDump`.
+
 ## [1.9.0] - 2026-11-14
 
 ### Added

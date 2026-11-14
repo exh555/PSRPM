@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.9.0'
+    ModuleVersion     = '1.10.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -54,6 +54,7 @@
         'UI\HelpWindow.xaml',
         'UI\ServiceDetailWindow.xaml',
         'UI\FindHandleWindow.xaml',
+        'UI\SelectColumnsWindow.xaml',
         'Assets\psrpm.ico',
         'Assets\psrpm.png',
         'Assets\psrpm.svg',
@@ -77,11 +78,11 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Added Always On Top window pinning (-AlwaysOnTop / -Topmost and Ctrl+Shift+T shortcut)
-- Added 4-way Process column sort cycling with Tree View (Newest First) and Tree View (Classic Oldest First) modes
-- Added resizable Audit & Network Telemetry Console pane with Auto-Scroll toggle
-- Optimized minimized window sparkline updates and conditional row color refreshes
-- Added default light fallback brushes to PropertiesWindow.xaml
+- Added Select Process Columns dialog with search filter, column reordering, and Default/Process Explorer/Forensic presets
+- Added explicit user preferences persistence (%LOCALAPPDATA%\PSRPM\preferences.json) with Save/Reset menu actions and schema sanitization
+- Added FileVersion (ver) telemetry collection and numeric/dynamic sorting for ParentPID, SessionId, BasePriority, CreateTime, and Status
+- Synced dynamic theme brushes across ConnectDialog, HelpWindow, and SelectColumnsWindow, and enabled DataGrid row virtualization
+- Hardened native memory pointer guards, DuplicateHandle probe cleanup, and WindowsIdentity disposal in DeepInspector and ProcessActions
 '@
         }
     }

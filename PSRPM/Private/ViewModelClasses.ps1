@@ -35,6 +35,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$User
     [string]$Description
     [string]$CompanyName
+    [string]$FileVersion
     [int]$Threads
     [int]$Handles
     [string]$HandlesFormatted
@@ -82,6 +83,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.User                   = "N/A"
         $this.Description            = ""
         $this.CompanyName            = ""
+        $this.FileVersion            = ""
         $this.Path                   = "N/A"
         $this.CommandLine            = "N/A"
         $this.CommandLineToolTip     = ""
@@ -152,6 +154,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CommandLine  = [string]$m['cmd']
         $this.Description  = [string]$m['desc']
         $this.CompanyName  = [string]$m['comp']
+        $this.FileVersion  = if ($null -ne $m['ver']) { [string]$m['ver'] } else { "" }
         $this.StartTime    = [string]$m['start']
         $this.SessionId    = [int]$m['sid']
         $this.BasePriority = [int]$m['prio']
@@ -172,7 +175,11 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.OnPropertyChanged('CommandLineToolTip')
         $this.OnPropertyChanged('Description')
         $this.OnPropertyChanged('CompanyName')
+        $this.OnPropertyChanged('FileVersion')
         $this.OnPropertyChanged('StartTime')
+        $this.OnPropertyChanged('SessionId')
+        $this.OnPropertyChanged('BasePriority')
+        $this.OnPropertyChanged('Category')
     }
 
     [void] UpdateCommandLineToolTip() {

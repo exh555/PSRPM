@@ -439,7 +439,7 @@
 
             <!-- TAB 3: DLLs -->
             <TabItem Header="DLLs">
-                <DataGrid x:Name="GridPropDlls" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
+                <DataGrid x:Name="GridPropDlls" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" EnableRowVirtualization="True">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="145"/>
                         <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="195"/>
@@ -454,7 +454,7 @@
 
             <!-- TAB 4: Handles -->
             <TabItem Header="Handles">
-                <DataGrid x:Name="GridPropHandles" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
+                <DataGrid x:Name="GridPropHandles" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" EnableRowVirtualization="True">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
                             <MenuItem x:Name="CtxPropCloseHandle" Header="Close Selected Handle..." InputGestureText="Del"/>
@@ -513,7 +513,7 @@
             <!-- Left: Process Control Actions (Always accessible from every tab) -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
                 <Button x:Name="BtnSuspendResume" Content="Suspend" Width="82" Height="26" Margin="0,0,6,0" ToolTip="Suspend or Resume Process"/>
-                <Button x:Name="BtnPropCreateDump" Content="Create Dump..." Width="105" Height="26" Margin="0,0,6,0" ToolTip="Generate Process Memory Dump in C:\temp on Target Host">
+                <Button x:Name="BtnPropCreateDump" Content="Create Dump..." Width="105" Height="26" Margin="0,0,6,0" ToolTip="Open Minidump / Full Memory Dump menu (%SystemRoot%\Temp\PSRPM_Dumps or %LOCALAPPDATA%\PSRPM\Dumps on Target Host)">
                     <Button.ContextMenu>
                         <ContextMenu>
                             <MenuItem x:Name="MenuPropMiniDump" Header="Create Minidump..."/>
@@ -521,15 +521,15 @@
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <Button x:Name="BtnPropEndProcess" Content="Kill Process" Width="92" Height="26" Margin="0,0,6,0" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" FontWeight="SemiBold"/>
-                <Button x:Name="BtnPropEndTree" Content="Kill Tree" Width="78" Height="26" Background="#FECACA" Foreground="#7F1D1D" BorderBrush="#EF4444" FontWeight="SemiBold"/>
+                <Button x:Name="BtnPropEndProcess" Content="Kill Process" Width="92" Height="26" Margin="0,0,6,0" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" FontWeight="SemiBold" ToolTip="Kill selected process (Del)"/>
+                <Button x:Name="BtnPropEndTree" Content="Kill Process Tree" Width="116" Height="26" Background="#FECACA" Foreground="#7F1D1D" BorderBrush="#EF4444" FontWeight="SemiBold" ToolTip="Kill selected process and all descendants (Shift+Del)"/>
             </StackPanel>
 
             <!-- Right: Dialog Management -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock x:Name="PropHeaderName" Text="" Visibility="Collapsed"/>
                 <Button x:Name="BtnRefreshInspector" Content="Refresh" Width="78" Height="26" Margin="0,0,6,0" ToolTip="Refresh Inspector Data"/>
-                <Button x:Name="BtnCloseProp" Content="Close" Width="72" Height="26" IsDefault="True"/>
+                <Button x:Name="BtnCloseProp" Content="Close" Width="72" Height="26" IsCancel="True"/>
             </StackPanel>
         </DockPanel>
     </Grid>

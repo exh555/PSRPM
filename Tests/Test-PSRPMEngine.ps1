@@ -97,7 +97,11 @@ Write-Host "  Tick 2 (Differential Sync): $($sw2.ElapsedMilliseconds) ms | Wire 
 if ($dataTick1['sys'].Count -lt 27 -or -not $dataTick1['hw'] -or $null -ne $dataTick2['hw']) {
     throw "Expected 27 sys metrics and one-time hw metadata on Tick 1 (got sys=$($dataTick1['sys'].Count), hw1=$($null -ne $dataTick1['hw']), hw2=$($null -ne $dataTick2['hw']))."
 }
-Write-Host "  Verified System Info Telemetry: $($dataTick1['sys'].Count) kernel/hardware counters, $($dataTick1['cores'].Count) CPU core series, OS='$($dataTick1['hw']['os'])', CPU='$($dataTick1['hw']['cpu'])'" -ForegroundColor Gray
+$selfMeta = $dataTick1['meta'] | Where-Object { $_['id'] -eq $PID } | Select-Object -First 1
+if (-not $selfMeta -or -not $selfMeta.ContainsKey('ver') -or [string]::IsNullOrWhiteSpace([string]$selfMeta['ver'])) {
+    throw "Expected static metadata 'ver' (FileVersion) to be populated for current PowerShell process PID=$PID."
+}
+Write-Host "  Verified System Info Telemetry: $($dataTick1['sys'].Count) kernel/hardware counters, $($dataTick1['cores'].Count) CPU core series, OS='$($dataTick1['hw']['os'])', CPU='$($dataTick1['hw']['cpu'])', SelfVer='$($selfMeta['ver'])'" -ForegroundColor Gray
 
 # 30-Tick Steady-State Statistical Benchmark (with warmup + GC isolation)
 $latencies = [System.Collections.Generic.List[double]]::new()
@@ -292,13 +296,14 @@ Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard 
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuFileHelp", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "MenuViewSelectColumns", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
     @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtHeaderBadge", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
     @{ File = "ServiceDetailWindow.xaml"; RequiredControls = @("TxtDlgDisplayName", "TxtDlgServiceName", "TxtDlgPid", "BadgeDlgStatus", "TxtDlgStatus", "SvcTabControl", "TxtDlgDescription", "TxtDlgPath", "TxtDlgStartup", "TxtDlgAccount", "TxtDlgDepSummary", "GridDlgPrereqs", "GridDlgDependents", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
     @{ File = "FindHandleWindow.xaml"; RequiredControls = @("TxtSearchHandle", "BtnSearchHandle", "TxtHandleStatus", "GridHandleResults", "CtxCloseHandle", "CtxGoToProcess", "CtxCopyPath", "BtnCloseHandle", "BtnGoToProcess", "BtnCopyPath", "BtnCloseDlg") }
+    @{ File = "SelectColumnsWindow.xaml"; RequiredControls = @("TxtSelectedCount", "BtnPresetDefault", "BtnPresetProcExp", "BtnPresetForensic", "TxtColFilter", "BtnColFilterClear", "LstAvailableColumns", "LstColumnOrder", "BtnColMoveUp", "BtnColMoveDown", "BtnColResetDefaults", "BtnColOk", "BtnColCancel") }
 )
 
 foreach ($xf in $xamlFiles) {
@@ -315,10 +320,10 @@ foreach ($xf in $xamlFiles) {
         }
     }
 
-    if ($xf.File -eq "PropertiesWindow.xaml") {
+    if ($xf.File -in @("PropertiesWindow.xaml", "SelectColumnsWindow.xaml")) {
         foreach ($reqBrush in @("BrushWindowBg", "BrushToolbarBg", "BrushSurfaceBg", "BrushHeaderBg", "BrushBorderSubtle", "BrushTextPrimary", "BrushTextSecondary", "BrushTextMuted", "BrushRowHover")) {
             if (-not $winObj.Resources.Contains($reqBrush)) {
-                throw "PropertiesWindow.xaml missing default fallback SolidColorBrush '$reqBrush' in Window.Resources."
+                throw "$($xf.File) missing default fallback SolidColorBrush '$reqBrush' in Window.Resources."
             }
         }
     }
@@ -1602,11 +1607,11 @@ $reSrc12j = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\Ru
 $diSrc12j = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\DeepInspector.ps1"))
 $paSrc12j = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\ProcessActions.ps1"))
 
-if ($diSrc12j -notmatch 'PSRPM_CachedServices' -or $diSrc12j -notmatch '\[Microsoft\.Win32\.Registry\]::Users') {
-    throw "DeepInspector.ps1 missing AppDomain PSRPM_CachedServices reader or HKU Registry::Users autostart enumeration."
+if ($diSrc12j -notmatch 'PSRPM_CachedServices' -or $diSrc12j -notmatch '\[Microsoft\.Win32\.Registry\]::Users' -or $diSrc12j -match 'while\s*\(\$true\)' -or $diSrc12j -notmatch '\$netProc\.Dispose\(\)') {
+    throw "DeepInspector.ps1 missing AppDomain PSRPM_CachedServices reader, HKU Registry::Users autostart enumeration, bounded SPI struct walk, or netProc.Dispose()."
 }
-if ($paSrc12j -notmatch 'PSRPM_ForceSvcRefresh' -or $paSrc12j -notmatch 'System\.ServiceProcess\.ServiceController') {
-    throw "ProcessActions.ps1 missing PSRPM_ForceSvcRefresh flag or ServiceController 30s timeout implementation."
+if ($paSrc12j -notmatch 'PSRPM_ForceSvcRefresh' -or $paSrc12j -notmatch 'System\.ServiceProcess\.ServiceController' -or $paSrc12j -notmatch '\$curIdent\.Dispose\(\)' -or $paSrc12j -notmatch '\$dupProbe\s*=\s*\[IntPtr\]::Zero') {
+    throw "ProcessActions.ps1 missing PSRPM_ForceSvcRefresh flag, ServiceController 30s timeout, curIdent.Dispose(), or dupProbe pointer hygiene."
 }
 if ($reSrc12j -notmatch 'NewBoundScriptBlock' -or $reSrc12j -notmatch 'Grandparent:' -or $reSrc12j -notmatch '72000' -or $reSrc12j -notmatch 'ViewportHeight') {
     throw "RunspaceEngine.ps1 missing per-tab NewBoundScriptBlock, Grandparent lineage, 72000 char buffer, or Sticky-to-Bottom ViewportHeight check."
@@ -1614,7 +1619,109 @@ if ($reSrc12j -notmatch 'NewBoundScriptBlock' -or $reSrc12j -notmatch 'Grandpare
 if ($psm1Src12 -notmatch '72000' -or $psm1Src12 -notmatch 'BitmapCacheOption\]::OnLoad' -or $psm1Src12 -notmatch 'PSRPM_Dumps') {
     throw "PSRPM.psm1 missing 72000 char buffer, in-memory BitmapCacheOption::OnLoad icon loader, or PSRPM_Dumps prompt path."
 }
-Write-Host "  Verified 12J: NativeServiceEnumV1 (colVer 1.8.2), AppDomain service cache, wildcard service refusal, async worker routing, sticky auto-scroll, and parent/grandparent lineage." -ForegroundColor Gray
+foreach ($srcEntry in @(
+    @{ Name = "DeepInspector.ps1";  Content = $diSrc12j },
+    @{ Name = "ProcessActions.ps1"; Content = $paSrc12j },
+    @{ Name = "PSRPM.psm1";         Content = $psm1Src12 }
+)) {
+    $freeMatches = [regex]::Matches($srcEntry.Content, 'FreeHGlobal\(\$(?<var>[A-Za-z0-9_]+)\)(?<tail>\s*\$[A-Za-z0-9_]+\s*=\s*\[IntPtr\]::Zero)?')
+    if ($freeMatches.Count -eq 0) {
+        throw "Expected at least one FreeHGlobal call in $($srcEntry.Name)."
+    }
+    foreach ($fm in $freeMatches) {
+        $vName = $fm.Groups['var'].Value
+        $tail  = $fm.Groups['tail'].Value
+        if ($tail -notmatch "^\s*\`$$vName\s*=\s*\[IntPtr\]::Zero$") {
+            throw "Double-free hazard in $($srcEntry.Name): FreeHGlobal(`$$vName) is not immediately followed by `$$vName = [IntPtr]::Zero."
+        }
+    }
+}
+Write-Host "  Verified 12J: NativeServiceEnumV1 (colVer $manifestVer12j), AppDomain service cache, wildcard service refusal, zero double-free pointer hygiene, async worker routing, sticky auto-scroll, and parent/grandparent lineage." -ForegroundColor Gray
+
+# 12K: User Preferences Persistence (LocalApplicationData, Validation & Malformed JSON Resilience)
+$psrpmModPrefs = Get-Module PSRPM
+$defaultPrefPath = & $psrpmModPrefs { Get-PSRPMPreferencesPath }
+$expectedLocalAppData = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
+if ([string]::IsNullOrWhiteSpace($defaultPrefPath) -or ($expectedLocalAppData -and -not $defaultPrefPath.StartsWith($expectedLocalAppData, [System.StringComparison]::OrdinalIgnoreCase)) -or -not $defaultPrefPath.EndsWith("PSRPM\preferences.json", [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Expected Get-PSRPMPreferencesPath to resolve under LocalApplicationData\PSRPM\preferences.json, got '$defaultPrefPath'."
+}
+$tempPrefFile = Join-Path ([System.IO.Path]::GetTempPath()) ("psrpm_prefs_test_{0}.json" -f [guid]::NewGuid().ToString("N"))
+try {
+    & $psrpmModPrefs { param($p) $script:PSRPMPreferencesPathOverride = $p } $tempPrefFile
+
+    $missingRes = & $psrpmModPrefs { Read-PSRPMPreferences }
+    if ($missingRes.LoadedFromDisk -or $missingRes.HadParseError -or $missingRes.Preferences.Theme -ne "Light") {
+        throw "Missing preferences file should return factory defaults without error."
+    }
+
+    $customPrefs = @{
+        Theme                    = "Dark"
+        AlwaysOnTop              = $true
+        EnableCategoryHighlights = $false
+        ConfirmKill              = $false
+        VerboseTelemetryLog      = $false
+        IsTreeMode               = $false
+        TreeSortNewestFirst      = $false
+        SortProperty             = "CPU"
+        SortDescending           = $true
+        RefreshIntervalMs        = 500
+        LogPaneVisible           = $true
+        LogPaneHeight            = 240.0
+        LogAutoScroll            = $false
+        VisibleColumns           = @("Process", "CPU", "PID", "Version", "CommandLine")
+        ColumnOrder              = @("Process", "PID", "Version", "CommandLine", "CPU")
+        ColumnWidths             = @{ Version = 125.0; CommandLine = 340.0 }
+    }
+    [void](& $psrpmModPrefs { param($pr) Save-PSRPMPreferences -Preferences $pr } $customPrefs)
+    if (-not [System.IO.File]::Exists($tempPrefFile)) {
+        throw "Save-PSRPMPreferences did not write file to '$tempPrefFile'."
+    }
+    $loadedRes = & $psrpmModPrefs { Read-PSRPMPreferences }
+    if (-not $loadedRes.LoadedFromDisk -or $loadedRes.HadParseError) {
+        throw "Failed to load saved preferences from '$tempPrefFile'."
+    }
+    if ($loadedRes.Preferences.Theme -ne "Dark" -or -not $loadedRes.Preferences.AlwaysOnTop -or $loadedRes.Preferences.EnableCategoryHighlights -or $loadedRes.Preferences.IsTreeMode -or $loadedRes.Preferences.SortProperty -ne "CPU" -or -not $loadedRes.Preferences.SortDescending -or $loadedRes.Preferences.RefreshIntervalMs -ne 500 -or -not $loadedRes.Preferences.LogPaneVisible -or $loadedRes.Preferences.LogPaneHeight -ne 240.0 -or $loadedRes.Preferences.LogAutoScroll) {
+        throw "Loaded preferences did not round-trip accurately."
+    }
+    if (($loadedRes.Preferences.VisibleColumns -join ',') -ne "Process,CPU,PID,Version,CommandLine") {
+        throw "VisibleColumns did not round-trip accurately: $($loadedRes.Preferences.VisibleColumns -join ',')"
+    }
+    if ($loadedRes.Preferences.ColumnOrder[0] -ne "Process" -or $loadedRes.Preferences.ColumnOrder[1] -ne "PID" -or $loadedRes.Preferences.ColumnOrder[2] -ne "Version" -or $loadedRes.Preferences.ColumnOrder.Count -lt 26) {
+        throw "ColumnOrder did not preserve saved order and backfill catalog columns."
+    }
+    if ($loadedRes.Preferences.ColumnWidths["Version"] -ne 125.0 -or $loadedRes.Preferences.ColumnWidths["CommandLine"] -ne 340.0) {
+        throw "ColumnWidths did not round-trip accurately."
+    }
+
+    # Malformed JSON resilience
+    [System.IO.File]::WriteAllText($tempPrefFile, "{`"Theme`": `"Dark`", broken", [System.Text.UTF8Encoding]::new($false))
+    $badJsonRes = & $psrpmModPrefs { Read-PSRPMPreferences }
+    if ($badJsonRes.LoadedFromDisk -or -not $badJsonRes.HadParseError -or $badJsonRes.Preferences.Theme -ne "Light") {
+        throw "Malformed JSON did not fail open cleanly to factory defaults."
+    }
+
+    # Partial + invalid-field sanitization resilience (also tests forced Process column & width bounds)
+    [System.IO.File]::WriteAllText($tempPrefFile, '{"Theme":"Bogus","AlwaysOnTop":true,"SortProperty":"InjectedField","RefreshIntervalMs":-50,"LogPaneHeight":99999,"VisibleColumns":["BogusCol","Version"],"ColumnWidths":{"Version":99999,"CommandLine":310,"FakeCol":120}}', [System.Text.UTF8Encoding]::new($false))
+    $sanitizedRes = & $psrpmModPrefs { Read-PSRPMPreferences }
+    if (-not $sanitizedRes.LoadedFromDisk -or $sanitizedRes.HadParseError -or $sanitizedRes.Preferences.Theme -ne "Light" -or -not $sanitizedRes.Preferences.AlwaysOnTop -or $sanitizedRes.Preferences.SortProperty -ne "PID" -or $sanitizedRes.Preferences.RefreshIntervalMs -ne 1000 -or $sanitizedRes.Preferences.LogPaneHeight -ne 175.0) {
+        throw "Invalid preference fields were not sanitized to safe defaults."
+    }
+    if (($sanitizedRes.Preferences.VisibleColumns -join ',') -ne "Process,Version") {
+        throw "VisibleColumns sanitization failed (expected 'Process,Version', got '$($sanitizedRes.Preferences.VisibleColumns -join ',')')."
+    }
+    if ($sanitizedRes.Preferences.ColumnWidths.ContainsKey("Version") -or $sanitizedRes.Preferences.ColumnWidths.ContainsKey("FakeCol") -or $sanitizedRes.Preferences.ColumnWidths["CommandLine"] -ne 310.0) {
+        throw "ColumnWidths sanitization failed."
+    }
+
+    $wasRemoved = & $psrpmModPrefs { Reset-PSRPMPreferences }
+    if (-not $wasRemoved -or [System.IO.File]::Exists($tempPrefFile)) {
+        throw "Reset-PSRPMPreferences did not remove '$tempPrefFile'."
+    }
+} finally {
+    & $psrpmModPrefs { $script:PSRPMPreferencesPathOverride = $null }
+    if ([System.IO.File]::Exists($tempPrefFile)) { try { [System.IO.File]::Delete($tempPrefFile) } catch {} }
+}
+Write-Host "  Verified 12K: Explicit preferences persistence (LocalApplicationData\PSRPM\preferences.json), field sanitization, reset, and malformed JSON resilience." -ForegroundColor Gray
 
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()

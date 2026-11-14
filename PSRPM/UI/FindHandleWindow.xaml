@@ -87,6 +87,9 @@
                   SelectionMode="Single" SelectionUnit="FullRow"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                   RowHeaderWidth="0" RowHeight="22"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  EnableRowVirtualization="True"
                   Background="{DynamicResource BrushSurfaceBg}"
                   Foreground="{DynamicResource BrushTextPrimary}"
                   BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1">
@@ -152,7 +155,7 @@
         <DockPanel Grid.Row="2" Margin="0,8,0,0">
             <Button x:Name="BtnCloseHandle" DockPanel.Dock="Left" Content="Close Selected Handle" Style="{StaticResource ActionButtonStyle}" ToolTip="Forcibly close the selected handle in the target process (Del)"/>
             <Button x:Name="BtnGoToProcess" DockPanel.Dock="Left" Content="Go to Process in Tree" Style="{StaticResource ActionButtonStyle}" ToolTip="Select this process in the main process tree (Enter)"/>
-            <Button x:Name="BtnCopyPath" DockPanel.Dock="Left" Content="Copy Path" Style="{StaticResource ActionButtonStyle}"/>
+            <Button x:Name="BtnCopyPath" DockPanel.Dock="Left" Content="Copy Object Path" Style="{StaticResource ActionButtonStyle}" ToolTip="Copy selected object path to clipboard (Ctrl+C)"/>
             <Button x:Name="BtnCloseDlg" DockPanel.Dock="Right" Content="Close" Width="75" Style="{StaticResource ActionButtonStyle}"/>
         </DockPanel>
     </Grid>

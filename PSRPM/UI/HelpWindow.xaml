@@ -4,35 +4,45 @@
         Height="640" Width="840" MinHeight="520" MinWidth="700"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
-        Background="#F8FAFC"
-        Foreground="#0F172A"
+        Background="{DynamicResource BrushWindowBg}"
+        Foreground="{DynamicResource BrushTextPrimary}"
         FontFamily="Segoe UI" FontSize="12"
         TextOptions.TextFormattingMode="Display"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Window.Resources>
+        <!-- Default Clean Light Fallback Brushes -->
+        <SolidColorBrush x:Key="BrushWindowBg" Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="BrushToolbarBg" Color="#F1F5F9"/>
+        <SolidColorBrush x:Key="BrushSurfaceBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushHeaderBg" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+
         <!-- Key Combo Badge Style -->
         <Style x:Key="KeyBadge" TargetType="Border">
-            <Setter Property="Background" Value="#E2E8F0"/>
-            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="Background" Value="{DynamicResource BrushHeaderBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="3"/>
             <Setter Property="Padding" Value="6,2"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Margin" Value="0,1,8,1"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="KeyBadgeText" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Consolas, Segoe UI"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
         <!-- Descriptive Shortcut Text Style -->
         <Style x:Key="ShortcutDescText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
 
@@ -46,15 +56,25 @@
 
         <!-- Info Label & Value Styles -->
         <Style x:Key="InfoLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,2,8,2"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style x:Key="InfoValue" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,2,0,2"/>
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource BrushToolbarBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
         </Style>
     </Window.Resources>
 
@@ -66,10 +86,10 @@
         </Grid.RowDefinitions>
 
         <!-- Top Header Bar with Icon, Title and Version Badge -->
-        <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
+        <Border Grid.Row="0" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="#0284C7" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.9.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.10.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -78,28 +98,29 @@
                               Fill="#0284C7" Stretch="Uniform"/>
                     </Grid>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="PSRPM - PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
-                        <TextBlock Text="Sysinternals Process Explorer Ergonomics over Fileless WinRM &amp; Local PowerShell" Foreground="#475569" FontSize="11" Margin="0,1,0,0"/>
+                        <TextBlock Text="PSRPM - PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
+                        <TextBlock Text="Sysinternals Process Explorer Ergonomics over Fileless WinRM &amp; Local PowerShell" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,1,0,0"/>
                     </StackPanel>
                 </StackPanel>
             </DockPanel>
         </Border>
 
         <!-- Main Tab Control -->
-        <TabControl x:Name="HelpTabControl" Grid.Row="1">
+        <TabControl x:Name="HelpTabControl" Grid.Row="1" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}">
             <!-- TAB 1: KEYBOARD SHORTCUTS -->
             <TabItem Header="_Shortcuts" Padding="12,4">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
                     <StackPanel>
                         <!-- Section: Navigation & Views -->
                         <TextBlock Text="Navigation &amp; View Controls" Style="{StaticResource SectionHeader}"/>
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,10">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="130"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -118,10 +139,10 @@
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="Toggle Always On Top window pinning" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+F" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Focus the instant search/filter box (preserves parent-child hierarchy in tree)" Style="{StaticResource ShortcutDescText}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Focus the instant search/filter box (Processes tree/flat view or active Services tab)" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Esc" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Clear search filter and restore full process hierarchy with focus on grid" Style="{StaticResource ShortcutDescText}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Clear active search filter and return focus to Processes or Services grid" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Left Arrow" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="4" Grid.Column="1" Text="Collapse branch in Tree View, or jump to parent process if leaf/collapsed" Style="{StaticResource ShortcutDescText}"/>
@@ -130,25 +151,29 @@
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="Expand branch in Tree View, or jump to first child process if expanded" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+I" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Open System Information graphs modal (Summary, CPU, Memory, I/O)" Style="{StaticResource ShortcutDescText}"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Open System Information graphs window (Summary, CPU, Memory, I/O)" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+L" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="7" Grid.Column="1" Text="Toggle bottom Audit Trail &amp; Network Telemetry Console pane" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="8" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+D" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="8" Grid.Column="1" Text="Toggle between Clean Light (Sysinternals) and Precision Dark themes" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="8" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+Shift+N" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="8" Grid.Column="1" Text="Toggle opt-in Per-Process Kernel Network Monitoring (ETW)" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="9" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+D" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="9" Grid.Column="1" Text="Cycle through themes: Clean Light, Precision Dark, Classic, and High-Contrast" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
                         <!-- Section: Process Control & Operations -->
                         <TextBlock Text="Process Operations &amp; Inspection" Style="{StaticResource SectionHeader}"/>
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,10">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="130"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -169,17 +194,20 @@
                                 <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Shift+Del" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="Terminate selected process tree(s) (KillTree) with two-phase atomic suspension" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Space" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Pause / resume real-time telemetry polling" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+Shift+F" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Open Find Handle or DLL Substring search window" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="F5" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Trigger immediate telemetry poll and differential UI sync" Style="{StaticResource ShortcutDescText}"/>
+                                <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Space" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Pause / resume real-time telemetry polling" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="F5" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Trigger immediate telemetry poll and differential UI sync" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
                         <!-- Section: Multi-Host Tabbed Sessions -->
                         <TextBlock Text="Multi-Host Session Management" Style="{StaticResource SectionHeader}"/>
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,10">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="130"/>
@@ -212,7 +240,7 @@
 
                         <!-- Section: Application & Exports -->
                         <TextBlock Text="File &amp; Application" Style="{StaticResource SectionHeader}"/>
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="3" Padding="8,4">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Padding="8,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="130"/>
@@ -245,47 +273,47 @@
                         <TextBlock Text="Core Architectural Pillars &amp; Performance Budget" Style="{StaticResource SectionHeader}"/>
 
                         <!-- Card 1: 100% Fileless Security -->
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
                                 <TextBlock Text="100% Fileless &amp; EDR-Safe Security Posture" FontWeight="Bold" FontSize="13" Foreground="#16A34A"/>
                                 <TextBlock Text="- Zero csc.exe compiler child processes and zero temporary .dll or .cs files written to %TEMP% on local or remote endpoints.&#x0a;- Win32 / NTAPI P/Invoke signatures emitted directly into memory via in-memory .NET Reflection.Emit (AssemblyBuilderAccess.Run).&#x0a;- ViewModels implemented as pure Windows PowerShell 5.1 AST classes (INotifyPropertyChanged)."
-                                           TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
+                                           Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Card 2: Ultra-Low Remote Target Overhead -->
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
                                 <TextBlock Text="Ultra-Low Target Impact (&lt; 0.25% CPU, 2-10 ms Collection)" FontWeight="Bold" FontSize="13" Foreground="#0284C7"/>
                                 <TextBlock Text="- Queries ntdll!NtQuerySystemInformation(5) and kernel32!GlobalMemoryStatusEx in a single kernel transition into persistent 512 KB unmanaged memory.&#x0a;- Zero WmiPrvSE.exe CPU spikes, zero N+1 CIM GetOwner() roundtrips, and zero 5-second UI hangs from $p.Responding.&#x0a;- Dead process tokens, CPU baselines, and state maps are synchronously evicted every tick to eliminate memory growth."
-                                           TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
+                                           Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Card 3: Differential Network Wire Protocol -->
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
                                 <TextBlock Text="Differential GZIP Wire Streaming (~1.1 - 1.8 KB/s)" FontWeight="Bold" FontSize="13" Foreground="#CA8A04"/>
                                 <TextBlock Text="- Static metadata (Path, CommandLine, User, Description, Company, Architecture) transmitted only once per process upon spawn (keyed by PID + CreateTime).&#x0a;- Subsequent ticks transmit only changed dynamic metrics ([PID, CPU, WorkingSet, PrivateBytes, Threads, Handles, Status]) compressed with in-memory GZIP.&#x0a;- 80%+ network bandwidth reduction compared to standard WinRM CLIXML object serialization."
-                                           TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
+                                           Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Card 4: Zero-Leak Local Workstation Memory -->
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
                                 <TextBlock Text="Zero-Leak Memory Architecture &amp; In-Place Reconciler" FontWeight="Bold" FontSize="13" Foreground="#7C3AED"/>
                                 <TextBlock Text="- Telemetry sparkline and system information histories stored in strictly bounded Queue[double] circular ring buffers (240 samples = &lt; 20 KB per session).&#x0a;- Live UI DataGrids reconcile in-place via dirty-checked INotifyPropertyChanged. The collection is never cleared, ensuring scroll position, selected rows, and expanders remain solid.&#x0a;- Inactive tabs in the Multi-Host session bar drop to 0 KB/s wire and 0% CPU in standby."
-                                           TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
+                                           Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Card 5: Safe Bulk Handle Enumeration -->
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10">
                             <StackPanel>
                                 <TextBlock Text="Kernel Named-Pipe Deadlock Prevention" FontWeight="Bold" FontSize="13" Foreground="#DC2626"/>
                                 <TextBlock Text="- When inspecting open kernel handles, synchronous File and Named-Pipe objects are bypassed during NtQueryObject(ObjectNameInformation) calls.&#x0a;- Completely prevents kernel deadlocks and frozen runspaces on Chromium / msedgewebview2.exe Mojo IPC pipes."
-                                           TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
+                                           Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -299,32 +327,32 @@
                         <TextBlock Text="Remoting &amp; Host Connectivity Guide" Style="{StaticResource SectionHeader}"/>
 
                         <!-- Remote WinRM Guide -->
-                        <GroupBox Header="1. Remote Computer via WinRM (-ComputerName)" BorderBrush="#CBD5E1" Padding="10" Margin="0,0,0,10">
+                        <GroupBox Header="1. Remote Computer via WinRM (-ComputerName)" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="10" Margin="0,0,0,10">
                             <StackPanel>
                                 <TextBlock Text="PSRPM establishes a single persistent PowerShell PSSession over WinRM (TCP 5985 for HTTP or 5986 for HTTPS/SSL). No secondary RPC, DCOM, or SMB ports are opened." TextWrapping="Wrap"/>
                                 <TextBlock Text="Target Host Configuration Requirements:" FontWeight="SemiBold" Margin="0,6,0,2"/>
-                                <Border Background="#F1F5F9" Padding="6" CornerRadius="3">
+                                <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Padding="6" CornerRadius="3">
                                     <TextBlock Text="# Enable PowerShell Remoting on the remote computer (run as Administrator):&#x0a;Enable-PSRemoting -Force" FontFamily="Consolas" FontSize="11"/>
                                 </Border>
                                 <TextBlock Text="Workgroup or Non-Domain Endpoints:" FontWeight="SemiBold" Margin="0,6,0,2"/>
-                                <Border Background="#F1F5F9" Padding="6" CornerRadius="3">
+                                <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Padding="6" CornerRadius="3">
                                     <TextBlock Text="# On your local workstation (elevated), add target IP to TrustedHosts:&#x0a;Set-Item WSMan:\localhost\Client\TrustedHosts -Value '10.20.30.40' -Concatenate -Force" FontFamily="Consolas" FontSize="11"/>
                                 </Border>
                             </StackPanel>
                         </GroupBox>
 
                         <!-- Local Only Guide -->
-                        <GroupBox Header="2. Local Host Execution (-LocalOnly / -Local)" BorderBrush="#CBD5E1" Padding="10" Margin="0,0,0,10">
+                        <GroupBox Header="2. Local Host Execution (-LocalOnly / -Local)" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="10" Margin="0,0,0,10">
                             <StackPanel>
                                 <TextBlock Text="You can run PSRPM locally without WinRM remoting, network listeners, or administrative privileges:" TextWrapping="Wrap"/>
-                                <Border Background="#F1F5F9" Padding="6" CornerRadius="3" Margin="0,6,0,0">
+                                <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Padding="6" CornerRadius="3" Margin="0,6,0,0">
                                     <TextBlock Text="Start-PSRPM -LocalOnly&#x0a;# Or using alias:&#x0a;psrpm -Local" FontFamily="Consolas" FontSize="11"/>
                                 </Border>
                             </StackPanel>
                         </GroupBox>
 
                         <!-- Process Color Legend -->
-                        <GroupBox Header="3. Semantic Row Color Legend" BorderBrush="#CBD5E1" Padding="10">
+                        <GroupBox Header="3. Semantic Row Color Legend" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="130"/>
@@ -369,7 +397,7 @@
                         <TextBlock Text="About PSRPM" Style="{StaticResource SectionHeader}"/>
 
                         <!-- App Identity Card -->
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,10">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="64"/>
@@ -384,13 +412,13 @@
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
-                                        <Border Background="#E0F2FE" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.9.0" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                        <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.10.0" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
-                                    <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="#475569" FontSize="11" Margin="0,2,0,4"/>
-                                    <TextBlock Text="Copyright (c) 2026 exh555. Licensed under the MIT License." Foreground="#64748B" FontSize="10.5"/>
+                                    <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,4"/>
+                                    <TextBlock Text="Copyright (c) 2026 exh555. Licensed under the MIT License." Foreground="{DynamicResource BrushTextMuted}" FontSize="10.5"/>
                                     <TextBlock Text="Project &amp; Documentation: https://github.com/exh555/psrpm" Foreground="#0284C7" FontSize="10.5" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </Grid>
@@ -398,7 +426,7 @@
 
                         <!-- Live Diagnostic Runtime Environment -->
                         <TextBlock Text="Active Diagnostic Environment" Style="{StaticResource SectionHeader}"/>
-                        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12">
+                        <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="140"/>

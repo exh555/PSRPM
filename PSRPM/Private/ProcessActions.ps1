@@ -139,23 +139,25 @@ $script:PSRPMActionScriptBlock = {
                 }
                 # Fast Sub-Millisecond Native Snapshot via NtQuerySystemInformation(5) (Zero WMI, < 3 ms)
                 $sysBufSize = 524288 # 512 KB
-                $sysBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysBufSize)
-                $retLen = 0
-                $status = [PSRPM.NativeActionsV3]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
-                $reallocAttempts = 0
-                while ($status -eq -1073741820 -and $reallocAttempts -lt 6 -and $sysBufSize -lt 67108864) { # STATUS_INFO_LENGTH_MISMATCH
-                    $reallocAttempts++
-                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysBufPtr)
-                    $sysBufSize = [Math]::Min(67108864, [Math]::Max($sysBufSize * 2, $retLen + 65536))
-                    $sysBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysBufSize)
-                    $status = [PSRPM.NativeActionsV3]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
-                }
-
+                $sysBufPtr  = [IntPtr]::Zero
                 $childrenByParent = @{}
                 $createTimeByPid  = @{}
                 $nameByPid        = @{}
 
                 try {
+                    $sysBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysBufSize)
+                    $retLen = 0
+                    $status = [PSRPM.NativeActionsV3]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
+                    $reallocAttempts = 0
+                    while ($status -eq -1073741820 -and $reallocAttempts -lt 6 -and $sysBufSize -lt 67108864) { # STATUS_INFO_LENGTH_MISMATCH
+                        $reallocAttempts++
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysBufPtr)
+                        $sysBufPtr = [IntPtr]::Zero
+                        $sysBufSize = [Math]::Min(67108864, [Math]::Max($sysBufSize * 2, $retLen + 65536))
+                        $sysBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysBufSize)
+                        $status = [PSRPM.NativeActionsV3]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
+                    }
+
                     if ($status -ne 0) {
                         throw "NtQuerySystemInformation failed while enumerating process tree (NTSTATUS 0x$($status.ToString('X8')))."
                     }
@@ -197,7 +199,10 @@ $script:PSRPMActionScriptBlock = {
                         $offset += $nextOffset
                     }
                 } finally {
-                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysBufPtr)
+                    if ($sysBufPtr -ne [IntPtr]::Zero) {
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysBufPtr)
+                        $sysBufPtr = [IntPtr]::Zero
+                    }
                 }
 
                 if (-not $createTimeByPid.ContainsKey($TargetPid)) {
@@ -235,52 +240,56 @@ $script:PSRPMActionScriptBlock = {
                 $openHandles = @{}
                 $failedPids  = [System.Collections.Generic.List[int]]::new()
 
-                foreach ($pIdVal in $orderedTree) {
-                    if ($pIdVal -le 4) { continue }
-                    # Open with PROCESS_SUSPEND_RESUME (0x0800) | PROCESS_QUERY_LIMITED_INFORMATION (0x1000) | PROCESS_TERMINATE (0x0001)
-                    $h = [PSRPM.NativeActionsV3]::OpenProcess(0x1801, 0, $pIdVal)
-                    if ($h -eq [IntPtr]::Zero) {
-                        # Fallback without suspend, keeping query + terminate rights
-                        $h = [PSRPM.NativeActionsV3]::OpenProcess(0x1001, 0, $pIdVal)
-                    }
-                    if ($h -ne [IntPtr]::Zero) {
-                        $expTimeForPid = if ($pIdVal -eq $TargetPid -and $ExpectedStartTime -gt 0L) {
-                            $ExpectedStartTime
-                        } elseif ($createTimeByPid.ContainsKey($pIdVal)) {
-                            [long]$createTimeByPid[$pIdVal]
-                        } else {
-                            0L
+                try {
+                    foreach ($pIdVal in $orderedTree) {
+                        if ($pIdVal -le 4) { continue }
+                        # Open with PROCESS_SUSPEND_RESUME (0x0800) | PROCESS_QUERY_LIMITED_INFORMATION (0x1000) | PROCESS_TERMINATE (0x0001)
+                        $h = [PSRPM.NativeActionsV3]::OpenProcess(0x1801, 0, $pIdVal)
+                        if ($h -eq [IntPtr]::Zero) {
+                            # Fallback without suspend, keeping query + terminate rights
+                            $h = [PSRPM.NativeActionsV3]::OpenProcess(0x1001, 0, $pIdVal)
                         }
-                        $expNameForPid = if ($pIdVal -eq $TargetPid -and $ExpectedName) {
-                            $ExpectedName
-                        } elseif ($nameByPid.ContainsKey($pIdVal)) {
-                            [string]$nameByPid[$pIdVal]
-                        } else {
-                            ""
-                        }
-                        $verified = $false
-                        try {
-                            &$verifyProcessIdentity $h $pIdVal $expTimeForPid $expNameForPid
-                            $verified = $true
-                        } catch {
-                            $verified = $false
-                            if ($pIdVal -eq $TargetPid) {
-                                [void][PSRPM.NativeActionsV3]::CloseHandle($h)
-                                throw
+                        if ($h -ne [IntPtr]::Zero) {
+                            $expTimeForPid = if ($pIdVal -eq $TargetPid -and $ExpectedStartTime -gt 0L) {
+                                $ExpectedStartTime
+                            } elseif ($createTimeByPid.ContainsKey($pIdVal)) {
+                                [long]$createTimeByPid[$pIdVal]
+                            } else {
+                                0L
                             }
-                        }
-                        if ($verified) {
-                            $openHandles[$pIdVal] = $h
+                            $expNameForPid = if ($pIdVal -eq $TargetPid -and $ExpectedName) {
+                                $ExpectedName
+                            } elseif ($nameByPid.ContainsKey($pIdVal)) {
+                                [string]$nameByPid[$pIdVal]
+                            } else {
+                                ""
+                            }
+                            $verified = $false
+                            try {
+                                &$verifyProcessIdentity $h $pIdVal $expTimeForPid $expNameForPid
+                                $verified = $true
+                            } catch {
+                                $verified = $false
+                                if ($pIdVal -eq $TargetPid) {
+                                    [void][PSRPM.NativeActionsV3]::CloseHandle($h)
+                                    $h = [IntPtr]::Zero
+                                    throw
+                                }
+                            }
+                            if ($verified) {
+                                $openHandles[$pIdVal] = $h
+                            } else {
+                                if ($h -ne [IntPtr]::Zero) {
+                                    [void][PSRPM.NativeActionsV3]::CloseHandle($h)
+                                    $h = [IntPtr]::Zero
+                                }
+                                $failedPids.Add($pIdVal)
+                            }
                         } else {
-                            [void][PSRPM.NativeActionsV3]::CloseHandle($h)
                             $failedPids.Add($pIdVal)
                         }
-                    } else {
-                        $failedPids.Add($pIdVal)
                     }
-                }
 
-                try {
                     # Phase 1: Top-Down Suspend (Freezes supervisors & watchdogs so they cannot respawn workers)
                     foreach ($pIdVal in $orderedTree) {
                         if ($openHandles.ContainsKey($pIdVal)) {
@@ -401,12 +410,18 @@ $script:PSRPMActionScriptBlock = {
                     # Dual-Phase Verification: Probe handle validity first with DUPLICATE_SAME_ACCESS (0x02)
                     $dupProbe = [IntPtr]::Zero
                     $hCurrentProc = [PSRPM.NativeActionsV3]::GetCurrentProcess()
-                    $probeRet = [PSRPM.NativeActionsV3]::DuplicateHandle($hProc, $targetHandle, $hCurrentProc, [ref]$dupProbe, 0, 0, 2)
-                    if ($probeRet -eq 0) {
-                        $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-                        throw "Handle verification failed: Handle $HandleId in process (PID: $TargetPid) is invalid or already closed (Win32 Error: $err)."
+                    try {
+                        $probeRet = [PSRPM.NativeActionsV3]::DuplicateHandle($hProc, $targetHandle, $hCurrentProc, [ref]$dupProbe, 0, 0, 2)
+                        if ($probeRet -eq 0) {
+                            $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                            throw "Handle verification failed: Handle $HandleId in process (PID: $TargetPid) is invalid or already closed (Win32 Error: $err)."
+                        }
+                    } finally {
+                        if ($dupProbe -ne [IntPtr]::Zero) {
+                            [void][PSRPM.NativeActionsV3]::CloseHandle($dupProbe)
+                            $dupProbe = [IntPtr]::Zero
+                        }
                     }
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($dupProbe)
 
                     # Execution Phase: Close source handle via DUPLICATE_CLOSE_SOURCE (0x01)
                     $dup = [IntPtr]::Zero
@@ -449,8 +464,12 @@ $script:PSRPMActionScriptBlock = {
                     $wsBytes = [long]$p.WorkingSet64
 
                     $curIdent = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-                    $curUserSid = $curIdent.User
-                    $isAdmin = [System.Security.Principal.WindowsPrincipal]::new($curIdent).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+                    try {
+                        $curUserSid = $curIdent.User
+                        $isAdmin = [System.Security.Principal.WindowsPrincipal]::new($curIdent).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+                    } finally {
+                        if ($curIdent) { $curIdent.Dispose() }
+                    }
 
                     # Stage dumps in a privilege-scoped private directory (never shared C:\temp)
                     $tempDir = if ($isAdmin) {

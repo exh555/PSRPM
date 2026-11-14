@@ -425,11 +425,8 @@
                 <MenuItem x:Name="MenuCloseHostTab" Header="Close Current Host _Tab" InputGestureText="Ctrl+W"/>
                 <MenuItem x:Name="MenuSwitchLocal" Header="Switch to _Local Mode (-LocalOnly)"/>
                 <Separator/>
-                <MenuItem x:Name="MenuRefresh" Header="_Refresh Now" InputGestureText="F5"/>
                 <MenuItem x:Name="MenuExportCsv" Header="_Export Process Snapshot (CSV)..." InputGestureText="Ctrl+S"/>
                 <MenuItem x:Name="MenuExportJson" Header="Export Forensic Snapshot (_JSON)..."/>
-                <Separator/>
-                <MenuItem x:Name="MenuFileHelp" Header="_Help &amp; Shortcuts..." InputGestureText="F1"/>
                 <Separator/>
                 <MenuItem x:Name="MenuExit" Header="E_xit" InputGestureText="Alt+F4"/>
             </MenuItem>
@@ -437,8 +434,10 @@
                 <MenuItem x:Name="MenuAlwaysOnTop" Header="Always _On Top" InputGestureText="Ctrl+Shift+T" IsCheckable="True" ToolTip="Keep PSRPM main window and dialogs above all other desktop windows (Ctrl+Shift+T)"/>
                 <Separator/>
                 <MenuItem Header="_Theme">
+                    <MenuItem x:Name="MenuThemeCycle" Header="Cycle _Next Theme" InputGestureText="Ctrl+D"/>
+                    <Separator/>
                     <MenuItem x:Name="MenuThemeLight" Header="_Clean Light Theme (Sysinternals)" IsCheckable="True" IsChecked="True"/>
-                    <MenuItem x:Name="MenuThemeDark" Header="_Precision Dark Theme" InputGestureText="Ctrl+D" IsCheckable="True"/>
+                    <MenuItem x:Name="MenuThemeDark" Header="_Precision Dark Theme" IsCheckable="True"/>
                     <MenuItem x:Name="MenuThemeClassic" Header="_Sysinternals Classic (Win32 Retro)" IsCheckable="True"/>
                     <MenuItem x:Name="MenuThemeHighContrast" Header="_High-Contrast Monochrome (WCAG AAA)" IsCheckable="True"/>
                 </MenuItem>
@@ -447,12 +446,16 @@
                 <Separator/>
                 <MenuItem x:Name="MenuConfirmKill" Header="Confirm _Kill Process Actions" IsCheckable="True" IsChecked="True"/>
                 <MenuItem x:Name="MenuVerboseTelemetry" Header="Log Verbose _Telemetry Ticks" IsCheckable="True" IsChecked="True"/>
+                <Separator/>
+                <MenuItem x:Name="MenuSavePreferences" Header="_Save Current Preferences as Default" ToolTip="Save current theme, sort/view mode, log console state, and options to %LOCALAPPDATA%\PSRPM\preferences.json"/>
+                <MenuItem x:Name="MenuResetPreferences" Header="_Reset Saved Preferences to Factory Defaults" ToolTip="Delete saved %LOCALAPPDATA%\PSRPM\preferences.json and restore built-in defaults"/>
             </MenuItem>
             <MenuItem Header="_View">
+                <MenuItem x:Name="MenuRefresh" Header="_Refresh Now" InputGestureText="F5"/>
                 <MenuItem x:Name="MenuSystemInfo" Header="_System Information..." InputGestureText="Ctrl+I" FontWeight="SemiBold"/>
                 <Separator/>
-                <MenuItem x:Name="MenuNextHostTab" Header="Next Host _Tab" InputGestureText="Ctrl+Tab"/>
-                <MenuItem x:Name="MenuPrevHostTab" Header="Previous Host Tab" InputGestureText="Ctrl+Shift+Tab"/>
+                <MenuItem x:Name="MenuNextHostTab" Header="Ne_xt Host Tab" InputGestureText="Ctrl+Tab"/>
+                <MenuItem x:Name="MenuPrevHostTab" Header="Pre_vious Host Tab" InputGestureText="Ctrl+Shift+Tab"/>
                 <Separator/>
                 <MenuItem x:Name="MenuViewTree" Header="Show Process _Tree" InputGestureText="Ctrl+T" IsCheckable="True" IsChecked="True"/>
                 <MenuItem x:Name="MenuViewFlat" Header="Show _Flat List" IsCheckable="True"/>
@@ -461,13 +464,16 @@
                 <MenuItem x:Name="MenuTreeOrderClassic" Header="Tree Order: _Classic Process Explorer (Oldest First)" IsCheckable="True" ToolTip="Order root processes and sibling children in classic Process Explorer order"/>
                 <Separator/>
                 <MenuItem x:Name="MenuExpandAll" Header="_Expand All Tree Nodes"/>
-                <MenuItem x:Name="MenuCollapseAll" Header="_Collapse All Tree Nodes"/>
+                <MenuItem x:Name="MenuCollapseAll" Header="C_ollapse All Tree Nodes"/>
                 <Separator/>
                 <MenuItem x:Name="MenuViewLog" Header="_Activity &amp; Audit Log Pane" InputGestureText="Ctrl+L" IsCheckable="True"/>
                 <Separator/>
-                <MenuItem x:Name="MenuViewNetEtw" Header="Per-Process _Network Monitoring (ETW)" InputGestureText="Ctrl+Shift+N" IsCheckable="True"/>
-                <MenuItem x:Name="MenuColTreeNet" Header="Show _Tree Net Column" IsCheckable="True" IsChecked="True"/>
-                <MenuItem x:Name="MenuColNetRxTx" Header="Show Net _Recv / Send Columns" IsCheckable="True"/>
+                <MenuItem x:Name="MenuViewSelectColumns" Header="Select _Columns..." FontWeight="SemiBold"/>
+                <Separator/>
+                <MenuItem x:Name="MenuViewNetEtw" Header="Per-Process Net_work Monitoring (ETW)" InputGestureText="Ctrl+Shift+N" IsCheckable="True"/>
+                <MenuItem x:Name="MenuColTreeNet" Header="Show Tree Net Colu_mn" IsCheckable="True" IsChecked="True"/>
+                <MenuItem x:Name="MenuColNetRxTx" Header="Show Net Recv / Sen_d Columns" IsCheckable="True"/>
+                <Separator/>
                 <MenuItem Header="_Update Speed">
                     <MenuItem x:Name="MenuRate500ms" Header="High (500 ms)" IsCheckable="True"/>
                     <MenuItem x:Name="MenuRate1s" Header="Normal (1 second)" IsCheckable="True" IsChecked="True"/>
@@ -495,9 +501,12 @@
                 </MenuItem>
                 <Separator/>
                 <MenuItem x:Name="MenuCreateDump" Header="Create _Dump">
-                    <MenuItem x:Name="MenuCreateMiniDump" Header="Create _Minidump..." ToolTip="Create lightweight minidump on remote target in C:\temp"/>
-                    <MenuItem x:Name="MenuCreateFullDump" Header="Create _Full Memory Dump..." ToolTip="Create complete memory dump on remote target in C:\temp"/>
+                    <MenuItem x:Name="MenuCreateMiniDump" Header="Create _Minidump..." ToolTip="Create lightweight minidump on target host in %SystemRoot%\Temp\PSRPM_Dumps (or %LOCALAPPDATA%\PSRPM\Dumps)"/>
+                    <MenuItem x:Name="MenuCreateFullDump" Header="Create _Full Memory Dump..." ToolTip="Create complete memory dump on target host in %SystemRoot%\Temp\PSRPM_Dumps (or %LOCALAPPDATA%\PSRPM\Dumps)"/>
                 </MenuItem>
+                <Separator/>
+                <MenuItem x:Name="MenuCopyCmdLine" Header="Copy _Command Line"/>
+                <MenuItem x:Name="MenuCopyPath" Header="Copy Executable _Path"/>
             </MenuItem>
             <MenuItem Header="_Find">
                 <MenuItem x:Name="MenuFindHandle" Header="_Find Handle or DLL..." InputGestureText="Ctrl+Shift+F" FontWeight="SemiBold"/>
@@ -544,7 +553,7 @@
                                             <TextBlock Text="{Binding Transport}" Foreground="White" FontSize="8.5" FontWeight="Bold"/>
                                         </Border>
                                         <TextBlock Grid.Column="3" Text="{Binding LatencyText}" Foreground="{DynamicResource BrushTextMuted}" FontSize="9.5" Margin="0,0,5,0" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
-                                        <Button Grid.Column="4" x:Name="BtnCloseHostTab" Content="x" Width="14" Height="14" FontSize="10" FontWeight="Bold" Padding="0,-3,0,0" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource BrushTextMuted}" Visibility="{Binding CloseVisibility}" ToolTip="Close Session Tab (Ctrl+W)" Cursor="Hand"/>
+                                        <Button Grid.Column="4" x:Name="BtnCloseHostTab" Content="X" Width="14" Height="14" FontSize="9.5" FontWeight="Bold" Padding="0,-2,0,0" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource BrushTextMuted}" Visibility="{Binding CloseVisibility}" ToolTip="Close Session Tab (Ctrl+W)" Cursor="Hand"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -629,7 +638,7 @@
                         <TextBlock Text="Rx/Tx" FontSize="10.5" FontWeight="SemiBold" Foreground="#0284C7"/>
                     </Button>
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
-                    <Button x:Name="BtnToolbarTheme" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Switch Light / Dark Theme (Ctrl+D)">
+                    <Button x:Name="BtnToolbarTheme" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Cycle Theme: Light / Dark / Classic / High-Contrast (Ctrl+D)">
                         <TextBlock x:Name="TxtThemeToggle" Text="Dark Mode" FontSize="11" FontWeight="SemiBold"/>
                     </Button>
                     <Button x:Name="BtnToolbarHelp" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Help, Keyboard Shortcuts &amp; About (F1)" Margin="2,0,0,0">
@@ -879,6 +888,13 @@
                           EnableRowVirtualization="True"
                           EnableColumnVirtualization="False">
 
+                    <DataGrid.Resources>
+                        <ContextMenu x:Key="ProcessHeaderContextMenu" Style="{StaticResource ContextMenuStyle}"/>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="ContextMenu" Value="{StaticResource ProcessHeaderContextMenu}"/>
+                        </Style>
+                    </DataGrid.Resources>
+
                     <!-- Contrast-Safe Row & Cell Styling -->
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
@@ -915,7 +931,7 @@
 
                     <DataGrid.Columns>
                         <!-- Column 1: True Tree-Grid Process Column (Tree Guide Lines + Vector Expander + 16x16 Icon + Name + Command Line ToolTip) -->
-                        <DataGridTemplateColumn Header="Process" SortMemberPath="Name" Width="270">
+                        <DataGridTemplateColumn x:Name="ColProcess" Header="Process" SortMemberPath="Name" Width="270">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <DockPanel VerticalAlignment="Center" Height="22" Background="Transparent"
@@ -965,7 +981,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Column 2: CPU % (Right-Aligned Tabular + Subtle Green Column Tint) -->
-                        <DataGridTemplateColumn Header="CPU" SortMemberPath="CPU" Width="70">
+                        <DataGridTemplateColumn x:Name="ColCpu" Header="CPU" SortMemberPath="CPU" Width="70">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Background="{DynamicResource ColTint_CPU}" Height="22">
@@ -976,7 +992,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Column 3: Tree CPU Usage % (Right-Aligned Tabular, Shown in Both Tree & Flat View) -->
-                        <DataGridTextColumn Header="Tree CPU Usage" Binding="{Binding TreeCPUFormatted}" SortMemberPath="TreeCPU" Width="104" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn x:Name="ColTreeCpu" Header="Tree CPU Usage" Binding="{Binding TreeCPUFormatted}" SortMemberPath="TreeCPU" Width="104" ElementStyle="{StaticResource RightTabularText}"/>
 
                         <!-- Opt-In Per-Process Kernel Network ETW Columns (Collapsed by Default, 0 Cost When Off) -->
                         <DataGridTemplateColumn x:Name="ColNetTotal" Header="Network" SortMemberPath="NetTotalBps" Width="94" Visibility="Collapsed">
@@ -1011,7 +1027,7 @@
                         </DataGridTextColumn>
 
                         <!-- Column 4: Private Bytes (Right-Aligned Tabular + Subtle Cream Column Tint) -->
-                        <DataGridTemplateColumn Header="Private Bytes" SortMemberPath="PrivateBytes" Width="98">
+                        <DataGridTemplateColumn x:Name="ColPrivateBytes" Header="Private Bytes" SortMemberPath="PrivateBytes" Width="98">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Background="{DynamicResource ColTint_PrivateBytes}" Height="22">
@@ -1021,8 +1037,8 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Column 4: Working Set (Right-Aligned Tabular + Subtle Peach Column Tint) -->
-                        <DataGridTemplateColumn Header="Working Set" SortMemberPath="MemoryBytes" Width="98">
+                        <!-- Column 5: Working Set (Right-Aligned Tabular + Subtle Peach Column Tint) -->
+                        <DataGridTemplateColumn x:Name="ColWorkingSet" Header="Working Set" SortMemberPath="MemoryBytes" Width="98">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Background="{DynamicResource ColTint_WorkingSet}" Height="22">
@@ -1032,20 +1048,52 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Column 5: PID (Right-Aligned Tabular) -->
-                        <DataGridTextColumn Header="PID" Binding="{Binding PIDDisplay}" SortMemberPath="PID" Width="62" ElementStyle="{StaticResource RightTabularText}"/>
+                        <!-- Column 6: PID (Right-Aligned Tabular) -->
+                        <DataGridTextColumn x:Name="ColPid" Header="PID" Binding="{Binding PIDDisplay}" SortMemberPath="PID" Width="62" ElementStyle="{StaticResource RightTabularText}"/>
 
-                        <!-- Column 6: Description (FileDescription / Hosted Services) -->
-                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" SortMemberPath="Description" Width="*" MinWidth="220" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <!-- Column 7: Description (FileDescription / Hosted Services) -->
+                        <DataGridTextColumn x:Name="ColDescription" Header="Description" Binding="{Binding Description}" SortMemberPath="Description" Width="240" MinWidth="100" ElementStyle="{StaticResource EllipsisCellText}"/>
 
-                        <!-- Column 7: Company Name -->
-                        <DataGridTextColumn Header="Company Name" Binding="{Binding CompanyName}" SortMemberPath="CompanyName" Width="165" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <!-- Column 8: Company Name -->
+                        <DataGridTextColumn x:Name="ColCompanyName" Header="Company Name" Binding="{Binding CompanyName}" SortMemberPath="CompanyName" Width="165" ElementStyle="{StaticResource EllipsisCellText}"/>
 
-                        <!-- Column 8: User Account -->
-                        <DataGridTextColumn Header="User" Binding="{Binding User}" SortMemberPath="User" Width="145" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <!-- Column 9: User Account -->
+                        <DataGridTextColumn x:Name="ColUser" Header="User" Binding="{Binding User}" SortMemberPath="User" Width="145" ElementStyle="{StaticResource EllipsisCellText}"/>
 
-                        <!-- Column 9: Handles (Right-Aligned Tabular) -->
-                        <DataGridTextColumn Header="Handles" Binding="{Binding HandlesFormatted}" SortMemberPath="Handles" Width="72" ElementStyle="{StaticResource RightTabularText}"/>
+                        <!-- Column 10: Handles (Right-Aligned Tabular) -->
+                        <DataGridTextColumn x:Name="ColHandles" Header="Handles" Binding="{Binding HandlesFormatted}" SortMemberPath="Handles" Width="72" ElementStyle="{StaticResource RightTabularText}"/>
+
+                        <!-- Opt-In Columns (Collapsed by Default, Zero Collector Overhead) -->
+                        <DataGridTextColumn x:Name="ColVersion" Header="Version" Binding="{Binding FileVersion}" SortMemberPath="FileVersion" Width="105" Visibility="Collapsed" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <DataGridTextColumn x:Name="ColCommandLine" Header="Command Line" Binding="{Binding CommandLine}" SortMemberPath="CommandLine" Width="280" Visibility="Collapsed">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource EllipsisCellText}">
+                                    <Setter Property="ToolTip" Value="{Binding CommandLine}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn x:Name="ColPath" Header="Image Path" Binding="{Binding Path}" SortMemberPath="Path" Width="240" Visibility="Collapsed">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource EllipsisCellText}">
+                                    <Setter Property="ToolTip" Value="{Binding Path}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn x:Name="ColThreads" Header="Threads" Binding="{Binding Threads}" SortMemberPath="Threads" Width="68" Visibility="Collapsed" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn x:Name="ColParentPid" Header="Parent PID" Binding="{Binding ParentPID}" SortMemberPath="ParentPID" Width="78" Visibility="Collapsed" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn x:Name="ColSessionId" Header="Session" Binding="{Binding SessionId}" SortMemberPath="SessionId" Width="64" Visibility="Collapsed" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn x:Name="ColBasePriority" Header="Base Priority" Binding="{Binding BasePriority}" SortMemberPath="BasePriority" Width="88" Visibility="Collapsed" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn x:Name="ColArchitecture" Header="Architecture" Binding="{Binding Architecture}" SortMemberPath="Architecture" Width="78" Visibility="Collapsed" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <DataGridTextColumn x:Name="ColStartTime" Header="Start Time" Binding="{Binding StartTime}" SortMemberPath="CreateTime" Width="135" Visibility="Collapsed" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <DataGridTextColumn x:Name="ColStatus" Header="Status" Binding="{Binding Status}" SortMemberPath="Status" Width="82" Visibility="Collapsed" ElementStyle="{StaticResource EllipsisCellText}"/>
+                        <DataGridTextColumn x:Name="ColServices" Header="Services" Binding="{Binding HostedServices}" SortMemberPath="HostedServices" Width="180" Visibility="Collapsed">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource EllipsisCellText}">
+                                    <Setter Property="ToolTip" Value="{Binding HostedServices}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn x:Name="ColCategory" Header="Category" Binding="{Binding Category}" SortMemberPath="Category" Width="82" Visibility="Collapsed" ElementStyle="{StaticResource EllipsisCellText}"/>
                     </DataGrid.Columns>
 
                     <DataGrid.ContextMenu>
@@ -1058,9 +1106,17 @@
                             <MenuItem x:Name="CtxEndProcess" Header="Kill Process" InputGestureText="Del"/>
                             <MenuItem x:Name="CtxEndTree" Header="Kill Process Tree" InputGestureText="Shift+Del"/>
                             <Separator/>
+                            <MenuItem x:Name="CtxSetPriority" Header="Set Priority">
+                                <MenuItem x:Name="CtxPrioIdle" Header="Idle (Low)"/>
+                                <MenuItem x:Name="CtxPrioBelow" Header="Below Normal"/>
+                                <MenuItem x:Name="CtxPrioNormal" Header="Normal"/>
+                                <MenuItem x:Name="CtxPrioAbove" Header="Above Normal"/>
+                                <MenuItem x:Name="CtxPrioHigh" Header="High"/>
+                            </MenuItem>
+                            <Separator/>
                             <MenuItem x:Name="CtxCreateDump" Header="Create Dump">
-                                <MenuItem x:Name="CtxCreateMiniDump" Header="Create Minidump..."/>
-                                <MenuItem x:Name="CtxCreateFullDump" Header="Create Full Memory Dump..."/>
+                                <MenuItem x:Name="CtxCreateMiniDump" Header="Create Minidump..." ToolTip="Create lightweight minidump on target host in %SystemRoot%\Temp\PSRPM_Dumps (or %LOCALAPPDATA%\PSRPM\Dumps)"/>
+                                <MenuItem x:Name="CtxCreateFullDump" Header="Create Full Memory Dump..." ToolTip="Create complete memory dump on target host in %SystemRoot%\Temp\PSRPM_Dumps (or %LOCALAPPDATA%\PSRPM\Dumps)"/>
                             </MenuItem>
                             <Separator/>
                             <MenuItem x:Name="CtxCopyCmdLine" Header="Copy Command Line"/>
@@ -1098,7 +1154,7 @@
                                     <Path DockPanel.Dock="Left" Data="M15.5,14h-0.79l-0.28-0.27C15.41,12.59,16,11.11,16,9.5C16,5.91,13.09,3,9.5,3S3,5.91,3,9.5S5.91,16,9.5,16c1.61,0,3.09-0.59,4.23-1.57l0.27,0.28v0.79l5,4.99L20.49,19L15.5,14z M9.5,14C7.01,14,5,11.99,5,9.5S7.01,5,9.5,5S14,7.01,14,9.5S11.99,14,9.5,14z"
                                           Fill="{DynamicResource BrushTextMuted}" Width="11" Height="11" Stretch="Uniform" Margin="6,0,2,0" VerticalAlignment="Center"/>
                                     <Button x:Name="BtnClearSearchServices" DockPanel.Dock="Right" Content="X" Width="18" Background="Transparent" BorderThickness="0" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Cursor="Hand" ToolTip="Clear Filter (Esc)"/>
-                                    <TextBox x:Name="TxtSearchServices" Width="180" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}" VerticalContentAlignment="Center" Padding="4,0" ToolTip="Filter services by Name, Display Name, PID, Status, or Account"/>
+                                    <TextBox x:Name="TxtSearchServices" Width="180" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}" VerticalContentAlignment="Center" Padding="4,0" ToolTip="Filter services by Name, Display Name, PID, Status, or Account (Ctrl+F)"/>
                                 </DockPanel>
                             </Border>
                         </Grid>
@@ -1111,7 +1167,10 @@
                               HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
                               Background="{DynamicResource BrushSurfaceBg}"
                               Foreground="{DynamicResource BrushTextPrimary}"
-                              RowHeaderWidth="0" RowHeight="22" BorderThickness="0">
+                              RowHeaderWidth="0" RowHeight="22" BorderThickness="0"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              EnableRowVirtualization="True">
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background" Value="{DynamicResource BrushHeaderBg}"/>

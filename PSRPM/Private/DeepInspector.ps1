@@ -89,12 +89,14 @@ $script:PSRPMDeepInspectorScriptBlock = {
             $allProcs = [System.Diagnostics.Process]::GetProcesses()
             $currProc = [PSRPM.NativeInspectorV2]::GetCurrentProcess()
             $hBufLen  = 262144
-            $hBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
-            $objBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
+            $hBufPtr  = [IntPtr]::Zero
+            $objBuf   = [IntPtr]::Zero
             $sbPath   = [System.Text.StringBuilder]::new(1024)
             $skipTypes = @("WaitCompletionPacket", "IRTimer", "TpWorkerFactory", "IoCompletion", "EtwRegistration", "DxgkCompositionObject")
 
             try {
+                $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
+                $objBuf  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
                 foreach ($p in $allProcs) {
                     $pidVal = $p.Id
                     if ($pidVal -le 4) { continue }
@@ -105,12 +107,14 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     if ($hProc -ne [IntPtr]::Zero) {
                         try {
                             $modBufSz = 8192
-                            $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
+                            $modBuf   = [IntPtr]::Zero
                             try {
+                                $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
                                 $cbNeeded = 0
                                 $enumOk   = [PSRPM.NativeInspectorV2]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
                                 if ($enumOk -ne 0 -and $cbNeeded -gt $modBufSz -and $cbNeeded -le 262144) {
                                     [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                                    $modBuf   = [IntPtr]::Zero
                                     $modBufSz = $cbNeeded
                                     $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
                                     $enumOk   = [PSRPM.NativeInspectorV2]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
@@ -137,7 +141,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
                                     }
                                 }
                             } finally {
-                                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                                if ($modBuf -ne [IntPtr]::Zero) {
+                                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                                    $modBuf = [IntPtr]::Zero
+                                }
                             }
                         } finally {
                             [void][PSRPM.NativeInspectorV2]::CloseHandle($hProc)
@@ -157,6 +164,7 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             while ($hSt -eq -1073741820 -and $hAttempts -lt 6 -and $hBufLen -lt 67108864) {
                                 $hAttempts++
                                 [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                                $hBufPtr = [IntPtr]::Zero
                                 $hBufLen = [Math]::Min(67108864, [Math]::Max($hBufLen * 2, $hRetLen + 65536))
                                 $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
                                 $hSt = [PSRPM.NativeInspectorV2]::NtQueryInformationProcess($hDupProc, 51, $hBufPtr, $hBufLen, [ref]$hRetLen)
@@ -246,8 +254,14 @@ $script:PSRPMDeepInspectorScriptBlock = {
                 if ($allProcs) {
                     foreach ($pr in $allProcs) { try { $pr.Dispose() } catch {} }
                 }
-                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
-                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($objBuf)
+                if ($hBufPtr -ne [IntPtr]::Zero) {
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                    $hBufPtr = [IntPtr]::Zero
+                }
+                if ($objBuf -ne [IntPtr]::Zero) {
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($objBuf)
+                    $objBuf = [IntPtr]::Zero
+                }
             }
         }
 
@@ -327,9 +341,11 @@ $script:PSRPMDeepInspectorScriptBlock = {
         }
     }
 
-    $buf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(262144)
-    $objBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
+    $buf = [IntPtr]::Zero
+    $objBuf = [IntPtr]::Zero
     try {
+        $buf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(262144)
+        $objBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
         $sbPath = [System.Text.StringBuilder]::new(1024)
 
         if ($runCore) {
@@ -567,26 +583,31 @@ $script:PSRPMDeepInspectorScriptBlock = {
 
             # 5. Extract Detailed Performance & I/O Counters from SystemProcessInformation
             $sysLen = 524288
-            $sysPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysLen)
+            $sysPtr = [IntPtr]::Zero
             try {
+                $sysPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysLen)
                 $ret = 0
                 $st = [PSRPM.NativeInspectorV2]::NtQuerySystemInformation(5, $sysPtr, $sysLen, [ref]$ret)
                 $sysAttempts = 0
                 while ($st -eq -1073741820 -and $sysAttempts -lt 6 -and $sysLen -lt 67108864) {
                     $sysAttempts++
                     [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysPtr)
+                    $sysPtr = [IntPtr]::Zero
                     $sysLen = [Math]::Min(67108864, [Math]::Max($sysLen * 2, $ret + 65536))
                     $sysPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysLen)
                     $st = [PSRPM.NativeInspectorV2]::NtQuerySystemInformation(5, $sysPtr, $sysLen, [ref]$ret)
                 }
                 if ($st -eq 0) {
-                    $is64 = ([IntPtr]::Size -eq 8)
-                    $offPid = if ($is64) { 80 } else { 68 }
+                    $is64     = ([IntPtr]::Size -eq 8)
+                    $offPid   = if ($is64) { 80 } else { 68 }
+                    $spiSize  = if ($is64) { 256 } else { 184 }
+                    $validLen = if ($ret -gt 0 -and $ret -le $sysLen) { $ret } else { $sysLen }
 
                     $off = 0
-                    while ($true) {
+                    while (($off + $spiSize) -le $validLen) {
                         $cPtr   = [IntPtr]::Add($sysPtr, $off)
                         $nxt    = [System.Runtime.InteropServices.Marshal]::ReadInt32($cPtr, 0)
+                        if ($nxt -lt 0) { break }
                         $pIdCur = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($cPtr, $offPid).ToInt32()
                         if ($pIdCur -eq $TargetPid) {
                             $uTime = [TimeSpan]::FromTicks([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 40))
@@ -629,12 +650,15 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             }
                             break
                         }
-                        if ($nxt -eq 0) { break }
+                        if ($nxt -le 0 -or ($off + $nxt) -gt $validLen) { break }
                         $off += $nxt
                     }
                 }
             } finally {
-                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysPtr)
+                if ($sysPtr -ne [IntPtr]::Zero) {
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sysPtr)
+                    $sysPtr = [IntPtr]::Zero
+                }
             }
         } # end if ($runPerformance)
 
@@ -645,13 +669,15 @@ $script:PSRPMDeepInspectorScriptBlock = {
             # TCP IPv4 (AF_INET = 2) and IPv6 (AF_INET6 = 23)
             foreach ($af in @(2, 23)) {
                 $tSize = 262144
-                $tPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($tSize)
+                $tPtr  = [IntPtr]::Zero
                 try {
+                    $tPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($tSize)
                     $tRet = [PSRPM.NativeInspectorV2]::GetExtendedTcpTable($tPtr, [ref]$tSize, 1, [uint32]$af, 5, 0)
                     $tTry = 0
                     while ($tRet -eq 122 -and $tTry -lt 4 -and $tSize -le 16777216) {
                         $tTry++
                         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($tPtr)
+                        $tPtr = [IntPtr]::Zero
                         $tPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($tSize)
                         $tRet = [PSRPM.NativeInspectorV2]::GetExtendedTcpTable($tPtr, [ref]$tSize, 1, [uint32]$af, 5, 0)
                     }
@@ -710,20 +736,25 @@ $script:PSRPMDeepInspectorScriptBlock = {
                         }
                     }
                 } finally {
-                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($tPtr)
+                    if ($tPtr -ne [IntPtr]::Zero) {
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($tPtr)
+                        $tPtr = [IntPtr]::Zero
+                    }
                 }
             }
 
             # UDP IPv4 (AF_INET = 2) and IPv6 (AF_INET6 = 23) Endpoints
             foreach ($af in @(2, 23)) {
                 $uSize = 262144
-                $uPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($uSize)
+                $uPtr  = [IntPtr]::Zero
                 try {
+                    $uPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($uSize)
                     $uRet = [PSRPM.NativeInspectorV2]::GetExtendedUdpTable($uPtr, [ref]$uSize, 1, [uint32]$af, 1, 0)
                     $uTry = 0
                     while ($uRet -eq 122 -and $uTry -lt 4 -and $uSize -le 16777216) {
                         $uTry++
                         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($uPtr)
+                        $uPtr = [IntPtr]::Zero
                         $uPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($uSize)
                         $uRet = [PSRPM.NativeInspectorV2]::GetExtendedUdpTable($uPtr, [ref]$uSize, 1, [uint32]$af, 1, 0)
                     }
@@ -769,7 +800,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
                         }
                     }
                 } finally {
-                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($uPtr)
+                    if ($uPtr -ne [IntPtr]::Zero) {
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($uPtr)
+                        $uPtr = [IntPtr]::Zero
+                    }
                 }
             }
         }
@@ -842,6 +876,7 @@ $script:PSRPMDeepInspectorScriptBlock = {
 
             # Fallback to .NET Process.Modules if EnumProcessModulesEx returned 0 entries
             if ($result.Modules.Count -eq 0 -and $TargetPid -gt 4) {
+                $netProc = $null
                 try {
                     $netProc = [System.Diagnostics.Process]::GetProcessById($TargetPid)
                     foreach ($pm in $netProc.Modules) {
@@ -857,7 +892,9 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             Path        = $mPath
                         })
                     }
-                } catch {}
+                } catch {} finally {
+                    if ($netProc) { try { $netProc.Dispose() } catch {} }
+                }
             }
 
             if ($result.Modules.Count -eq 0) {
@@ -883,8 +920,9 @@ $script:PSRPMDeepInspectorScriptBlock = {
             if ($hDupProc -eq [IntPtr]::Zero) { $hDupProc = $hProc }
 
             $hBufLen = 262144
-            $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
+            $hBufPtr = [IntPtr]::Zero
             try {
+                $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
                 if ($hDupProc -ne [IntPtr]::Zero) {
                     $hRetLen = 0
                     $hSt = [PSRPM.NativeInspectorV2]::NtQueryInformationProcess($hDupProc, 51, $hBufPtr, $hBufLen, [ref]$hRetLen)
@@ -892,6 +930,7 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     while ($hSt -eq -1073741820 -and $hAttempts -lt 6 -and $hBufLen -lt 67108864) {
                         $hAttempts++
                         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                        $hBufPtr = [IntPtr]::Zero
                         $hBufLen = [Math]::Min(67108864, [Math]::Max($hBufLen * 2, $hRetLen + 65536))
                         $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
                         $hSt = [PSRPM.NativeInspectorV2]::NtQueryInformationProcess($hDupProc, 51, $hBufPtr, $hBufLen, [ref]$hRetLen)
@@ -975,7 +1014,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     }
                 }
             } finally {
-                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                if ($hBufPtr -ne [IntPtr]::Zero) {
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($hBufPtr)
+                    $hBufPtr = [IntPtr]::Zero
+                }
                 if ($closeDupProc) { [void][PSRPM.NativeInspectorV2]::CloseHandle($hDupProc) }
             }
 
@@ -989,8 +1031,14 @@ $script:PSRPMDeepInspectorScriptBlock = {
             }
         }
     } finally {
-        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($buf)
-        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($objBuf)
+        if ($buf -ne [IntPtr]::Zero) {
+            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($buf)
+            $buf = [IntPtr]::Zero
+        }
+        if ($objBuf -ne [IntPtr]::Zero) {
+            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($objBuf)
+            $objBuf = [IntPtr]::Zero
+        }
         if ($hProc -ne [IntPtr]::Zero) { [void][PSRPM.NativeInspectorV2]::CloseHandle($hProc) }
     }
 

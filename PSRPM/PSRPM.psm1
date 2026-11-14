@@ -115,7 +115,7 @@ function Get-PSRPMNextColumnSortState {
         }
     }
 
-    $defaultDescending = $ClickedSortProperty -in @("CPU", "TreeCPU", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "Handles")
+    $defaultDescending = $ClickedSortProperty -in @("CPU", "TreeCPU", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "Handles", "Threads", "CreateTime")
     if ($IsTreeMode -or $CurrentSortProperty -ne $ClickedSortProperty) {
         return @{
             IsTreeMode          = $false
@@ -131,6 +131,295 @@ function Get-PSRPMNextColumnSortState {
         SortProperty        = $ClickedSortProperty
         SortDescending      = (-not $CurrentSortDescending)
     }
+}
+
+$script:PSRPMPreferencesPathOverride = $null
+
+function Get-PSRPMPreferencesPath {
+    param([string]$CustomPath)
+    if (-not [string]::IsNullOrWhiteSpace($CustomPath)) {
+        return $CustomPath
+    }
+    if (-not [string]::IsNullOrWhiteSpace($script:PSRPMPreferencesPathOverride)) {
+        return $script:PSRPMPreferencesPathOverride
+    }
+    $localAppData = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        $localAppData = $env:LOCALAPPDATA
+    }
+    if ([string]::IsNullOrWhiteSpace($localAppData) -and -not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $localAppData = Join-Path $env:USERPROFILE "AppData\Local"
+    }
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        return $null
+    }
+    return (Join-Path (Join-Path $localAppData "PSRPM") "preferences.json")
+}
+
+function Get-PSRPMColumnCatalog {
+    return @(
+        @{ Key = "Process";        ControlName = "ColProcess";      Header = "Process";        Group = "Identity";    Hint = "Process tree hierarchy, icon, and image name";          SortProp = "Name";            DefaultVisible = $true;  DefaultWidth = 270.0; IsLocked = $true;  IsNetEtw = $false }
+        @{ Key = "CPU";            ControlName = "ColCpu";          Header = "CPU";            Group = "Performance"; Hint = "Own process CPU utilization percentage";               SortProp = "CPU";             DefaultVisible = $true;  DefaultWidth = 70.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "TreeCPU";        ControlName = "ColTreeCpu";      Header = "Tree CPU Usage"; Group = "Performance"; Hint = "Aggregate CPU usage across process and descendants";    SortProp = "TreeCPU";         DefaultVisible = $true;  DefaultWidth = 104.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "NetTotal";       ControlName = "ColNetTotal";     Header = "Network";        Group = "Network ETW"; Hint = "Combined live network throughput (requires Net ETW)";    SortProp = "NetTotalBps";     DefaultVisible = $false; DefaultWidth = 94.0;  IsLocked = $false; IsNetEtw = $true }
+        @{ Key = "TreeNet";        ControlName = "ColTreeNet";      Header = "Tree Net";       Group = "Network ETW"; Hint = "Aggregate network rate across subtree (requires ETW)";   SortProp = "TreeNetTotalBps"; DefaultVisible = $false; DefaultWidth = 94.0;  IsLocked = $false; IsNetEtw = $true }
+        @{ Key = "NetRx";          ControlName = "ColNetRx";        Header = "Net Recv";       Group = "Network ETW"; Hint = "Inbound network receive rate (requires Net ETW)";        SortProp = "NetRxBps";        DefaultVisible = $false; DefaultWidth = 94.0;  IsLocked = $false; IsNetEtw = $true }
+        @{ Key = "NetTx";          ControlName = "ColNetTx";        Header = "Net Send";       Group = "Network ETW"; Hint = "Outbound network send rate (requires Net ETW)";          SortProp = "NetTxBps";        DefaultVisible = $false; DefaultWidth = 94.0;  IsLocked = $false; IsNetEtw = $true }
+        @{ Key = "PrivateBytes";   ControlName = "ColPrivateBytes"; Header = "Private Bytes";  Group = "Performance"; Hint = "Committed private virtual memory bytes";                SortProp = "PrivateBytes";    DefaultVisible = $true;  DefaultWidth = 98.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "WorkingSet";     ControlName = "ColWorkingSet";   Header = "Working Set";    Group = "Performance"; Hint = "Physical RAM currently resident in process";             SortProp = "MemoryBytes";     DefaultVisible = $true;  DefaultWidth = 98.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "PID";            ControlName = "ColPid";          Header = "PID";            Group = "Identity";    Hint = "Windows numeric process identifier";                     SortProp = "PID";             DefaultVisible = $true;  DefaultWidth = 62.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "ParentPID";      ControlName = "ColParentPid";    Header = "Parent PID";     Group = "Identity";    Hint = "Creator parent process identifier";                      SortProp = "ParentPID";       DefaultVisible = $false; DefaultWidth = 78.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Description";    ControlName = "ColDescription";  Header = "Description";    Group = "Image";       Hint = "PE FileDescription or hosted Windows services";          SortProp = "Description";     DefaultVisible = $true;  DefaultWidth = 240.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "CompanyName";    ControlName = "ColCompanyName";  Header = "Company Name";   Group = "Image";       Hint = "Executable publisher / vendor from version resource";    SortProp = "CompanyName";     DefaultVisible = $true;  DefaultWidth = 165.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Version";        ControlName = "ColVersion";      Header = "Version";        Group = "Image";       Hint = "Executable FileVersion string";                          SortProp = "FileVersion";     DefaultVisible = $false; DefaultWidth = 105.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "CommandLine";    ControlName = "ColCommandLine";  Header = "Command Line";   Group = "Image";       Hint = "Full process launch command line arguments";             SortProp = "CommandLine";     DefaultVisible = $false; DefaultWidth = 280.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Path";           ControlName = "ColPath";         Header = "Image Path";     Group = "Image";       Hint = "Full on-disk executable image path";                     SortProp = "Path";            DefaultVisible = $false; DefaultWidth = 240.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "User";           ControlName = "ColUser";         Header = "User";           Group = "Identity";    Hint = "Security token owner (DOMAIN\Account)";                 SortProp = "User";            DefaultVisible = $true;  DefaultWidth = 145.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Handles";        ControlName = "ColHandles";      Header = "Handles";        Group = "Performance"; Hint = "Open kernel object handle count";                        SortProp = "Handles";         DefaultVisible = $true;  DefaultWidth = 72.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Threads";        ControlName = "ColThreads";      Header = "Threads";        Group = "Performance"; Hint = "Active OS thread count";                                 SortProp = "Threads";         DefaultVisible = $false; DefaultWidth = 68.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "SessionId";      ControlName = "ColSessionId";    Header = "Session";        Group = "Identity";    Hint = "Terminal Services / Windows logon session ID";           SortProp = "SessionId";       DefaultVisible = $false; DefaultWidth = 64.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "BasePriority";   ControlName = "ColBasePriority"; Header = "Base Priority";  Group = "Performance"; Hint = "Kernel base scheduling priority class";                  SortProp = "BasePriority";    DefaultVisible = $false; DefaultWidth = 88.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Architecture";   ControlName = "ColArchitecture"; Header = "Architecture";   Group = "Identity";    Hint = "Process binary bitness (x64 or x86)";                    SortProp = "Architecture";    DefaultVisible = $false; DefaultWidth = 78.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "StartTime";      ControlName = "ColStartTime";    Header = "Start Time";     Group = "Identity";    Hint = "Local timestamp when process started (sorts by age)";     SortProp = "CreateTime";      DefaultVisible = $false; DefaultWidth = 135.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Status";         ControlName = "ColStatus";       Header = "Status";         Group = "Identity";    Hint = "Execution state (Running or Suspended)";                 SortProp = "Status";          DefaultVisible = $false; DefaultWidth = 82.0;  IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "HostedServices"; ControlName = "ColServices";     Header = "Services";       Group = "Image";       Hint = "Windows services hosted inside this process";            SortProp = "HostedServices";  DefaultVisible = $false; DefaultWidth = 180.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "Category";       ControlName = "ColCategory";     Header = "Category";       Group = "Identity";    Hint = "Semantic group (Own, Service, Packaged, System)";        SortProp = "Category";        DefaultVisible = $false; DefaultWidth = 82.0;  IsLocked = $false; IsNetEtw = $false }
+    )
+}
+
+function Get-PSRPMDefaultPreferences {
+    $catalog = Get-PSRPMColumnCatalog
+    $defVis  = @($catalog | Where-Object { $_.DefaultVisible } | ForEach-Object { $_.Key })
+    $defOrd  = @($catalog | ForEach-Object { $_.Key })
+    return @{
+        Theme                    = "Light"
+        AlwaysOnTop              = $false
+        EnableCategoryHighlights = $true
+        ConfirmKill              = $true
+        VerboseTelemetryLog      = $true
+        IsTreeMode               = $true
+        TreeSortNewestFirst      = $true
+        SortProperty             = "PID"
+        SortDescending           = $false
+        RefreshIntervalMs        = 1000
+        LogPaneVisible           = $false
+        LogPaneHeight            = 175.0
+        LogAutoScroll            = $true
+        VisibleColumns           = $defVis
+        ColumnOrder              = $defOrd
+        ColumnWidths             = @{}
+    }
+}
+
+function Read-PSRPMPreferences {
+    param([string]$Path)
+    $defaults   = Get-PSRPMDefaultPreferences
+    $targetPath = Get-PSRPMPreferencesPath -CustomPath $Path
+    $result     = @{
+        Preferences    = $defaults
+        LoadedFromDisk = $false
+        HadParseError  = $false
+        Path           = $targetPath
+    }
+    if ([string]::IsNullOrWhiteSpace($targetPath) -or -not [System.IO.File]::Exists($targetPath)) {
+        return $result
+    }
+
+    try {
+        $rawJson = [System.IO.File]::ReadAllText($targetPath, [System.Text.Encoding]::UTF8)
+        if ([string]::IsNullOrWhiteSpace($rawJson)) {
+            $result.HadParseError = $true
+            return $result
+        }
+        $parsed = ConvertFrom-Json -InputObject $rawJson -ErrorAction Stop
+        if ($null -eq $parsed) {
+            $result.HadParseError = $true
+            return $result
+        }
+
+        $allowedThemes = @("Light", "Dark", "Classic", "HighContrast")
+        if ($null -ne $parsed.PSObject.Properties['Theme']) {
+            $tVal = [string]$parsed.Theme
+            if ($tVal -in $allowedThemes) {
+                $defaults.Theme = $tVal
+            }
+        }
+
+        foreach ($boolKey in @("AlwaysOnTop", "EnableCategoryHighlights", "ConfirmKill", "VerboseTelemetryLog", "IsTreeMode", "TreeSortNewestFirst", "SortDescending", "LogPaneVisible", "LogAutoScroll")) {
+            if ($null -ne $parsed.PSObject.Properties[$boolKey] -and $null -ne $parsed.$boolKey) {
+                if ($parsed.$boolKey -is [bool]) {
+                    $defaults[$boolKey] = [bool]$parsed.$boolKey
+                } elseif ([string]$parsed.$boolKey -match '^(true|1)$') {
+                    $defaults[$boolKey] = $true
+                } elseif ([string]$parsed.$boolKey -match '^(false|0)$') {
+                    $defaults[$boolKey] = $false
+                }
+            }
+        }
+
+        $allowedSortProps = @("Name", "PID", "ParentPID", "CPU", "TreeCPU", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "Status", "Handles", "Threads", "SessionId", "BasePriority", "Architecture", "CreateTime", "Category", "User", "HostedServices", "CompanyName", "Description", "FileVersion", "CommandLine", "Path")
+        if ($null -ne $parsed.PSObject.Properties['SortProperty']) {
+            $sProp = [string]$parsed.SortProperty
+            if ($sProp -in $allowedSortProps) {
+                $defaults.SortProperty = $sProp
+            }
+        }
+
+        $catalog = Get-PSRPMColumnCatalog
+        $validColKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        foreach ($cDef in $catalog) { [void]$validColKeys.Add([string]$cDef.Key) }
+
+        if ($null -ne $parsed.PSObject.Properties['VisibleColumns'] -and $null -ne $parsed.VisibleColumns) {
+            $visSeen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            $visList = [System.Collections.Generic.List[string]]::new()
+            [void]$visSeen.Add("Process")
+            $visList.Add("Process")
+            foreach ($vc in @($parsed.VisibleColumns)) {
+                $vcKey = [string]$vc
+                if ($validColKeys.Contains($vcKey) -and $visSeen.Add($vcKey)) {
+                    $visList.Add($vcKey)
+                }
+            }
+            $defaults.VisibleColumns = @($visList)
+        }
+
+        if ($null -ne $parsed.PSObject.Properties['ColumnOrder'] -and $null -ne $parsed.ColumnOrder) {
+            $ordSeen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            $ordList = [System.Collections.Generic.List[string]]::new()
+            [void]$ordSeen.Add("Process")
+            $ordList.Add("Process")
+            foreach ($oc in @($parsed.ColumnOrder)) {
+                $ocKey = [string]$oc
+                if ($validColKeys.Contains($ocKey) -and $ordSeen.Add($ocKey)) {
+                    $ordList.Add($ocKey)
+                }
+            }
+            foreach ($cDef in $catalog) {
+                if ($ordSeen.Add([string]$cDef.Key)) {
+                    $ordList.Add([string]$cDef.Key)
+                }
+            }
+            $defaults.ColumnOrder = @($ordList)
+        }
+
+        if ($null -ne $parsed.PSObject.Properties['ColumnWidths'] -and $null -ne $parsed.ColumnWidths) {
+            $cleanWidths = @{}
+            if ($parsed.ColumnWidths -is [System.Collections.IDictionary]) {
+                foreach ($wk in $parsed.ColumnWidths.Keys) {
+                    $wKey = [string]$wk
+                    if ($validColKeys.Contains($wKey)) {
+                        $wNum = 0.0
+                        if ([double]::TryParse([string]$parsed.ColumnWidths[$wk], [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$wNum)) {
+                            if ($wNum -ge 40.0 -and $wNum -le 1200.0) {
+                                $cleanWidths[$wKey] = [Math]::Round($wNum, 1)
+                            }
+                        }
+                    }
+                }
+            } else {
+                foreach ($wp in $parsed.ColumnWidths.PSObject.Properties) {
+                    $wKey = [string]$wp.Name
+                    if ($validColKeys.Contains($wKey)) {
+                        $wNum = 0.0
+                        if ([double]::TryParse([string]$wp.Value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$wNum)) {
+                            if ($wNum -ge 40.0 -and $wNum -le 1200.0) {
+                                $cleanWidths[$wKey] = [Math]::Round($wNum, 1)
+                            }
+                        }
+                    }
+                }
+            }
+            $defaults.ColumnWidths = $cleanWidths
+        }
+
+        if ($null -ne $parsed.PSObject.Properties['RefreshIntervalMs'] -and $null -ne $parsed.RefreshIntervalMs) {
+            $rMs = 0
+            if ([int]::TryParse([string]$parsed.RefreshIntervalMs, [ref]$rMs)) {
+                if ($rMs -ge 250 -and $rMs -le 60000) {
+                    $defaults.RefreshIntervalMs = $rMs
+                }
+            }
+        }
+
+        if ($null -ne $parsed.PSObject.Properties['LogPaneHeight'] -and $null -ne $parsed.LogPaneHeight) {
+            $lHeight = 0.0
+            if ([double]::TryParse([string]$parsed.LogPaneHeight, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$lHeight)) {
+                if ($lHeight -ge 85.0 -and $lHeight -le 1200.0) {
+                    $defaults.LogPaneHeight = [Math]::Round($lHeight, 1)
+                }
+            }
+        }
+
+        $result.LoadedFromDisk = $true
+        return $result
+    } catch {
+        $result.Preferences   = Get-PSRPMDefaultPreferences
+        $result.HadParseError = $true
+        return $result
+    }
+}
+
+function Save-PSRPMPreferences {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Preferences,
+        [string]$Path
+    )
+    $targetPath = Get-PSRPMPreferencesPath -CustomPath $Path
+    if ([string]::IsNullOrWhiteSpace($targetPath)) {
+        throw "Unable to resolve local application data path for PSRPM preferences."
+    }
+    $parentDir = [System.IO.Path]::GetDirectoryName($targetPath)
+    if (-not [string]::IsNullOrWhiteSpace($parentDir) -and -not [System.IO.Directory]::Exists($parentDir)) {
+        [void][System.IO.Directory]::CreateDirectory($parentDir)
+    }
+
+    $visColsSave = if ($Preferences.ContainsKey('VisibleColumns') -and $Preferences.VisibleColumns) { @($Preferences.VisibleColumns) } else { @((Get-PSRPMDefaultPreferences).VisibleColumns) }
+    $colOrdSave  = if ($Preferences.ContainsKey('ColumnOrder') -and $Preferences.ColumnOrder) { @($Preferences.ColumnOrder) } else { @((Get-PSRPMDefaultPreferences).ColumnOrder) }
+    $colWidSave  = if ($Preferences.ContainsKey('ColumnWidths') -and $Preferences.ColumnWidths -is [System.Collections.IDictionary]) { $Preferences.ColumnWidths } else { @{} }
+
+    $ordered = [ordered]@{
+        Theme                    = [string]$Preferences.Theme
+        AlwaysOnTop              = [bool]$Preferences.AlwaysOnTop
+        EnableCategoryHighlights = [bool]$Preferences.EnableCategoryHighlights
+        ConfirmKill              = [bool]$Preferences.ConfirmKill
+        VerboseTelemetryLog      = [bool]$Preferences.VerboseTelemetryLog
+        IsTreeMode               = [bool]$Preferences.IsTreeMode
+        TreeSortNewestFirst      = [bool]$Preferences.TreeSortNewestFirst
+        SortProperty             = [string]$Preferences.SortProperty
+        SortDescending           = [bool]$Preferences.SortDescending
+        RefreshIntervalMs        = [int]$Preferences.RefreshIntervalMs
+        LogPaneVisible           = [bool]$Preferences.LogPaneVisible
+        LogPaneHeight            = [Math]::Round([double]$Preferences.LogPaneHeight, 1)
+        LogAutoScroll            = [bool]$Preferences.LogAutoScroll
+        VisibleColumns           = $visColsSave
+        ColumnOrder              = $colOrdSave
+        ColumnWidths             = $colWidSave
+    }
+
+    $jsonText  = ConvertTo-Json -InputObject $ordered -Depth 4
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    $tmpPath   = "$targetPath.tmp"
+    [System.IO.File]::WriteAllText($tmpPath, $jsonText, $utf8NoBom)
+    [System.IO.File]::Copy($tmpPath, $targetPath, $true)
+    try { [System.IO.File]::Delete($tmpPath) } catch {}
+    return $targetPath
+}
+
+function Reset-PSRPMPreferences {
+    param([string]$Path)
+    $targetPath = Get-PSRPMPreferencesPath -CustomPath $Path
+    if (-not [string]::IsNullOrWhiteSpace($targetPath)) {
+        $tmpPath = "$targetPath.tmp"
+        if ([System.IO.File]::Exists($tmpPath)) {
+            try { [System.IO.File]::Delete($tmpPath) } catch {}
+        }
+        if ([System.IO.File]::Exists($targetPath)) {
+            [System.IO.File]::Delete($targetPath)
+            return $true
+        }
+    }
+    return $false
 }
 
 function Start-PSRPM {
@@ -307,6 +596,7 @@ function Start-PSRPM {
     $helpXamlPath       = Join-Path $uiDir "HelpWindow.xaml"
     $svcDetailXamlPath  = Join-Path $uiDir "ServiceDetailWindow.xaml"
     $findHandleXamlPath = Join-Path $uiDir "FindHandleWindow.xaml"
+    $selectColsXamlPath = Join-Path $uiDir "SelectColumnsWindow.xaml"
 
     $xamlBytes = [System.IO.File]::ReadAllBytes($mainXamlPath)
     $msXaml = [System.IO.MemoryStream]::new($xamlBytes)
@@ -395,7 +685,18 @@ function Start-PSRPM {
         }
     }
 
+    $prefLoadResult = Read-PSRPMPreferences
+    $savedPrefs     = $prefLoadResult.Preferences
+    if (-not $PSBoundParameters.ContainsKey('RefreshIntervalMs') -and $savedPrefs -and $savedPrefs.RefreshIntervalMs -ge 250) {
+        $RefreshIntervalMs = [int]$savedPrefs.RefreshIntervalMs
+    }
+
     &$writeAuditLog "INIT" "PSRPM initialized for target '$targetLabel' (Mode: $(if ($isLocalMode) { 'LocalOnly' } else { 'WinRM PSSession' }), Interval: ${RefreshIntervalMs}ms)."
+    if ($prefLoadResult.HadParseError) {
+        &$writeAuditLog "WARN" "Ignoring malformed preferences file '$($prefLoadResult.Path)'; using factory defaults."
+    } elseif ($prefLoadResult.LoadedFromDisk) {
+        &$writeAuditLog "PREFS" "Loaded saved user preferences from '$($prefLoadResult.Path)'."
+    }
 
     # 4. Start Background Runspace Engine
     $engineHandle = Start-PSRPMEngine `
@@ -419,6 +720,7 @@ function Start-PSRPM {
     $initialTabVm.PidServicesMap = $engineHandle.PidServicesMap
 
     # 5. Theme Engine (Clean Light, Precision Dark, Sysinternals Classic & High-Contrast WCAG AAA)
+    $menuThemeCycle        = $window.FindName("MenuThemeCycle")
     $menuThemeLight        = $window.FindName("MenuThemeLight")
     $menuThemeDark         = $window.FindName("MenuThemeDark")
     $menuThemeClassic      = $window.FindName("MenuThemeClassic")
@@ -431,6 +733,16 @@ function Start-PSRPM {
         $b = $brushConv.ConvertFromString($hex)
         if ($b.CanFreeze) { $b.Freeze() }
         $window.Resources[$key] = $b
+    }
+
+    $syncDialogThemeBrushes = {
+        param($targetWin)
+        if (-not $targetWin) { return }
+        foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_Net","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
+            if ($window.Resources.Contains($key)) {
+                $targetWin.Resources[$key] = $window.Resources[$key]
+            }
+        }
     }
 
     $stateContainer.CurrentTheme = "Light"
@@ -568,11 +880,7 @@ function Start-PSRPM {
 
         foreach ($activeModal in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
             if ($activeModal -and $activeModal.IsLoaded) {
-                foreach ($key in @("BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine","BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg","BrushSparkBg","BrushSparkBorder","ColTint_CPU","ColTint_Net","ColTint_PrivateBytes","ColTint_WorkingSet","BrushMenuBg","BrushMenuBorder","BrushMenuHover")) {
-                    if ($window.Resources.Contains($key)) {
-                        $activeModal.Resources[$key] = $window.Resources[$key]
-                    }
-                }
+                &$syncDialogThemeBrushes $activeModal
             }
         }
     }
@@ -594,12 +902,24 @@ function Start-PSRPM {
         &$applyTheme $next
     }
 
+    if ($menuThemeCycle) {
+        $menuThemeCycle.add_Click({ &$cycleTheme })
+    }
+
     $btnToolbarTheme = $window.FindName("BtnToolbarTheme")
     if ($btnToolbarTheme) {
         $btnToolbarTheme.add_Click({ &$cycleTheme })
     }
 
-    $initialTheme = if ($Dark.IsPresent) { "Dark" } elseif ($Theme) { $Theme } else { "Light" }
+    $initialTheme = if ($Dark.IsPresent) {
+        "Dark"
+    } elseif ($PSBoundParameters.ContainsKey('Theme') -and $Theme) {
+        $Theme
+    } elseif ($savedPrefs -and $savedPrefs.Theme) {
+        [string]$savedPrefs.Theme
+    } else {
+        "Light"
+    }
     &$applyTheme $initialTheme
 
     # 5B. Row Highlighting Engine (Standard Sysinternals Semantic Categories vs Minimal Flashes-Only)
@@ -635,6 +955,9 @@ function Start-PSRPM {
             &$setCategoryHighlighting (-not $cur)
         })
     }
+    if ($savedPrefs -and (-not [bool]$savedPrefs.EnableCategoryHighlights)) {
+        &$setCategoryHighlighting $false
+    }
 
     # 5C. Always On Top (Topmost) Window Controller
     $menuAlwaysOnTop = $window.FindName("MenuAlwaysOnTop")
@@ -655,7 +978,7 @@ function Start-PSRPM {
             &$setAlwaysOnTop ([bool]$menuAlwaysOnTop.IsChecked)
         })
     }
-    if ($AlwaysOnTop.IsPresent) {
+    if ($AlwaysOnTop.IsPresent -or ($savedPrefs -and [bool]$savedPrefs.AlwaysOnTop)) {
         &$setAlwaysOnTop $true
     }
 
@@ -1408,8 +1731,727 @@ function Start-PSRPM {
     if ($btnCopyLog)       { $btnCopyLog.add_Click({ if ($txtLogConsole -and $txtLogConsole.Text) { [System.Windows.Clipboard]::SetText($txtLogConsole.Text) } }) }
 
     # 12. Process & Service Operations Dispatcher
-    $menuConfirmKill = $window.FindName("MenuConfirmKill")
+    $menuConfirmKill      = $window.FindName("MenuConfirmKill")
+    $menuSavePreferences  = $window.FindName("MenuSavePreferences")
+    $menuResetPreferences = $window.FindName("MenuResetPreferences")
     $jssAction = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+
+    # 12A. Customizable Process Columns Engine (Visibility, Ordering, Widths, Header Menu & Picker Dialog)
+    $colCatalog = Get-PSRPMColumnCatalog
+    $colDefByKey = [ordered]@{}
+    $colObjByKey = [ordered]@{}
+    $colKeyByObj = [System.Collections.Generic.Dictionary[Object, string]]::new()
+    foreach ($cDef in $colCatalog) {
+        $k = [string]$cDef.Key
+        $colDefByKey[$k] = $cDef
+        $cObj = $window.FindName([string]$cDef.ControlName)
+        if ($cObj) {
+            $colObjByKey[$k] = $cObj
+            $colKeyByObj[$cObj] = $k
+        }
+    }
+
+    $script:ShowNetTotalCol = $true
+    $script:ShowTreeNetCol  = $true
+    $script:ShowRxTxCols    = $false
+    $script:NetBannerDismissedCap = 0
+
+    $script:UserVisibleCols = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $script:ColumnOrderList = [System.Collections.Generic.List[string]]::new()
+    $script:ColumnWidthsMap = @{}
+    foreach ($cDef in $colCatalog) {
+        $ck = [string]$cDef.Key
+        if ([bool]$cDef.DefaultVisible) { [void]$script:UserVisibleCols.Add($ck) }
+        $script:ColumnOrderList.Add($ck)
+    }
+
+    $applyColumnLayout = {
+        param([bool]$applyWidths = $false)
+        if (-not $gridProcesses) { return }
+
+        $isNetActive = ([int]$stateContainer.NetEtwCap -eq 1)
+
+        # 1. Apply Visibility (respecting Net ETW active state + locked Process column)
+        [void]$script:UserVisibleCols.Add("Process")
+        foreach ($cDef in $colCatalog) {
+            $ck = [string]$cDef.Key
+            $cObj = $colObjByKey[$ck]
+            if (-not $cObj) { continue }
+
+            $wantVis = $false
+            if ([bool]$cDef.IsLocked) {
+                $wantVis = $true
+            } elseif ([bool]$cDef.IsNetEtw) {
+                if ($isNetActive) {
+                    switch ($ck) {
+                        "NetTotal" { $wantVis = [bool]$script:ShowNetTotalCol }
+                        "TreeNet"  { $wantVis = [bool]$script:ShowTreeNetCol }
+                        "NetRx"    { $wantVis = [bool]$script:ShowRxTxCols }
+                        "NetTx"    { $wantVis = [bool]$script:ShowRxTxCols }
+                    }
+                }
+            } else {
+                $wantVis = $script:UserVisibleCols.Contains($ck)
+            }
+
+            $targetVis = if ($wantVis) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+            if ($cObj.Visibility -ne $targetVis) {
+                $cObj.Visibility = $targetVis
+            }
+
+            if ($applyWidths) {
+                $wVal = [double]$cDef.DefaultWidth
+                if ($script:ColumnWidthsMap.ContainsKey($ck)) {
+                    $customW = [double]$script:ColumnWidthsMap[$ck]
+                    if ($customW -ge 40.0 -and $customW -le 1200.0) {
+                        $wVal = $customW
+                    }
+                }
+                $cObj.Width = [System.Windows.Controls.DataGridLength]::new($wVal)
+            }
+        }
+
+        # 2. Apply DisplayIndex Ordering (Process pinned at 0)
+        $orderedKeys = [System.Collections.Generic.List[string]]::new()
+        $seenOrder = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        [void]$seenOrder.Add("Process")
+        $orderedKeys.Add("Process")
+        foreach ($ok in $script:ColumnOrderList) {
+            if ($colObjByKey.Contains($ok) -and $seenOrder.Add($ok)) {
+                $orderedKeys.Add($ok)
+            }
+        }
+        foreach ($cDef in $colCatalog) {
+            $dk = [string]$cDef.Key
+            if ($colObjByKey.Contains($dk) -and $seenOrder.Add($dk)) {
+                $orderedKeys.Add($dk)
+            }
+        }
+        $script:ColumnOrderList.Clear()
+        foreach ($ok in $orderedKeys) { $script:ColumnOrderList.Add($ok) }
+
+        $maxIdx = $gridProcesses.Columns.Count - 1
+        for ($di = 0; $di -lt $orderedKeys.Count; $di++) {
+            if ($di -gt $maxIdx) { break }
+            $cObj = $colObjByKey[$orderedKeys[$di]]
+            if ($cObj -and $cObj.DisplayIndex -ne $di) {
+                try { $cObj.DisplayIndex = $di } catch {}
+            }
+        }
+
+        # 3. Sort Guard: if current flat-sort column is now hidden, return cleanly to Tree Mode
+        if (-not [bool]$stateContainer.IsTreeMode) {
+            $curSort = [string]$stateContainer.SortProperty
+            $sortStillVisible = $false
+            foreach ($c in $gridProcesses.Columns) {
+                if ($c.SortMemberPath -eq $curSort -and $c.Visibility -eq [System.Windows.Visibility]::Visible) {
+                    $sortStillVisible = $true
+                    break
+                }
+            }
+            if (-not $sortStillVisible) {
+                &$setViewMode $true
+            }
+        }
+    }
+
+    $syncLiveOrderAndWidths = {
+        if (-not $gridProcesses) { return }
+        $pairs = [System.Collections.Generic.List[Object]]::new()
+        foreach ($cDef in $colCatalog) {
+            $ck = [string]$cDef.Key
+            $cObj = $colObjByKey[$ck]
+            if ($cObj) {
+                $pairs.Add([PSCustomObject]@{ Key = $ck; DisplayIndex = [int]$cObj.DisplayIndex })
+                if ($cObj.Visibility -eq [System.Windows.Visibility]::Visible) {
+                    $wPx = if ($cObj.ActualWidth -ge 40.0) { [double]$cObj.ActualWidth } elseif ($cObj.Width.DisplayValue -ge 40.0) { [double]$cObj.Width.DisplayValue } else { [double]$cDef.DefaultWidth }
+                    $script:ColumnWidthsMap[$ck] = [Math]::Round([Math]::Max(40.0, [Math]::Min(1200.0, $wPx)), 1)
+                }
+            }
+        }
+        $sortedPairs = $pairs | Sort-Object -Property DisplayIndex
+        $script:ColumnOrderList.Clear()
+        [void]$script:ColumnOrderList.Add("Process")
+        foreach ($sp in $sortedPairs) {
+            if ($sp.Key -ne "Process") { $script:ColumnOrderList.Add($sp.Key) }
+        }
+    }
+
+    $autoFitVisibleColumns = {
+        if (-not $gridProcesses) { return }
+        foreach ($cDef in $colCatalog) {
+            $cObj = $colObjByKey[[string]$cDef.Key]
+            if ($cObj -and $cObj.Visibility -eq [System.Windows.Visibility]::Visible) {
+                $cObj.Width = [System.Windows.Controls.DataGridLength]::Auto
+            }
+        }
+        $gridProcesses.UpdateLayout()
+        foreach ($cDef in $colCatalog) {
+            $ck = [string]$cDef.Key
+            $cObj = $colObjByKey[$ck]
+            if ($cObj -and $cObj.Visibility -eq [System.Windows.Visibility]::Visible) {
+                $fitW = [Math]::Max(52.0, [Math]::Min(480.0, [Math]::Ceiling($cObj.ActualWidth + 6.0)))
+                $cObj.Width = [System.Windows.Controls.DataGridLength]::new($fitW)
+                $script:ColumnWidthsMap[$ck] = $fitW
+            }
+        }
+    }
+
+    $resetColumnsToDefault = {
+        $script:UserVisibleCols.Clear()
+        $script:ColumnOrderList.Clear()
+        $script:ColumnWidthsMap = @{}
+        foreach ($cDef in $colCatalog) {
+            $ck = [string]$cDef.Key
+            if ([bool]$cDef.DefaultVisible) { [void]$script:UserVisibleCols.Add($ck) }
+            $script:ColumnOrderList.Add($ck)
+        }
+        $script:ShowNetTotalCol = $true
+        $script:ShowTreeNetCol  = $true
+        $script:ShowRxTxCols    = $false
+        if ($menuColTreeNet) { $menuColTreeNet.IsChecked = $true }
+        if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $false }
+        &$applyColumnLayout $true
+        &$writeAuditLog "VIEW" "Reset Process columns to default layout."
+    }
+
+    $openSelectColumnsDialog = {
+        if (-not [System.IO.File]::Exists($selectColsXamlPath)) { return }
+        &$syncLiveOrderAndWidths
+
+        $scBytes = [System.IO.File]::ReadAllBytes($selectColsXamlPath)
+        $msSc = [System.IO.MemoryStream]::new($scBytes)
+        $scWin = [System.Windows.Markup.XamlReader]::Load($msSc)
+        $msSc.Close()
+
+        $scWin.Owner = $window
+        if ($appIconFrame) { $scWin.Icon = $appIconFrame }
+        &$syncDialogThemeBrushes $scWin
+
+        $txtColFilter        = $scWin.FindName("TxtColFilter")
+        $btnColFilterClear   = $scWin.FindName("BtnColFilterClear")
+        $lstAvailCols        = $scWin.FindName("LstAvailableColumns")
+        $lstColOrder         = $scWin.FindName("LstColumnOrder")
+        $txtSelCount         = $scWin.FindName("TxtSelectedCount")
+        $btnMoveUp           = $scWin.FindName("BtnColMoveUp")
+        $btnMoveDown         = $scWin.FindName("BtnColMoveDown")
+        $btnPresetDefault    = $scWin.FindName("BtnPresetDefault")
+        $btnPresetProcExp    = $scWin.FindName("BtnPresetProcExp")
+        $btnPresetForensic   = $scWin.FindName("BtnPresetForensic")
+        $btnResetCols        = $scWin.FindName("BtnColResetDefaults")
+        $btnColOk            = $scWin.FindName("BtnColOk")
+
+        $availItems = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+        $orderItems = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+        $dlgState   = @{
+            SuppressRebuild = $false
+            OrderKeys       = [System.Collections.Generic.List[string]]::new()
+        }
+        foreach ($ok in $script:ColumnOrderList) { $dlgState.OrderKeys.Add($ok) }
+
+        $itemByKey = @{}
+        $isNetActiveNow = ([int]$stateContainer.NetEtwCap -eq 1)
+
+        $rebuildOrderList = {
+            param([string]$selectKey)
+            $orderItems.Clear()
+            $visNum = 1
+            foreach ($ok in $dlgState.OrderKeys) {
+                $it = $itemByKey[$ok]
+                if ($it -and [bool]$it.IsChecked) {
+                    $suffix = if ($it.IsLocked) { " (Locked)" } elseif ($it.IsNetEtw -and -not $isNetActiveNow) { " (ETW off)" } else { "" }
+                    $oObj = [PSCustomObject]@{
+                        Key        = $ok
+                        IsLocked   = [bool]$it.IsLocked
+                        OrderLabel = ("{0}. {1}{2}" -f $visNum, $it.Header, $suffix)
+                    }
+                    $orderItems.Add($oObj)
+                    $visNum++
+                }
+            }
+            if ($txtSelCount) {
+                $txtSelCount.Text = ("{0} of {1} visible" -f $orderItems.Count, $availItems.Count)
+            }
+            if ($selectKey) {
+                for ($oi = 0; $oi -lt $orderItems.Count; $oi++) {
+                    if ($orderItems[$oi].Key -eq $selectKey) {
+                        $lstColOrder.SelectedIndex = $oi
+                        break
+                    }
+                }
+            }
+        }
+
+        foreach ($cDef in $colCatalog) {
+            $ck = [string]$cDef.Key
+            $initChecked = if ([bool]$cDef.IsLocked) {
+                $true
+            } elseif ([bool]$cDef.IsNetEtw) {
+                switch ($ck) {
+                    "NetTotal" { [bool]$script:ShowNetTotalCol }
+                    "TreeNet"  { [bool]$script:ShowTreeNetCol }
+                    "NetRx"    { [bool]$script:ShowRxTxCols }
+                    "NetTx"    { [bool]$script:ShowRxTxCols }
+                    default    { $false }
+                }
+            } else {
+                $script:UserVisibleCols.Contains($ck)
+            }
+
+            $rowObj = [PSCustomObject]@{
+                Key            = $ck
+                Header         = [string]$cDef.Header
+                Group          = [string]$cDef.Group
+                Hint           = [string]$cDef.Hint
+                IsLocked       = [bool]$cDef.IsLocked
+                IsNetEtw       = [bool]$cDef.IsNetEtw
+                IsCheckEnabled = (-not [bool]$cDef.IsLocked)
+                IsChecked      = $initChecked
+                RowVisibility  = "Visible"
+            }
+            $rowObj.PSObject.Properties['IsChecked'] | Out-Null
+            $itemByKey[$ck] = $rowObj
+            $availItems.Add($rowObj)
+        }
+
+        $lstAvailCols.ItemsSource = $availItems
+        $lstColOrder.ItemsSource  = $orderItems
+        &$rebuildOrderList ""
+
+        # Sync Display Order when any checkbox in LstAvailableColumns toggles
+        $lstAvailCols.AddHandler(
+            [System.Windows.Controls.Primitives.ToggleButton]::CheckedEvent,
+            [System.Windows.RoutedEventHandler]({
+                param($s, $ev)
+                if ($ev.OriginalSource -is [System.Windows.Controls.CheckBox] -and $ev.OriginalSource.DataContext) {
+                    $ev.OriginalSource.DataContext.IsChecked = [bool]$ev.OriginalSource.IsChecked
+                }
+                if (-not $dlgState.SuppressRebuild) { &$rebuildOrderList "" }
+            })
+        )
+        $lstAvailCols.AddHandler(
+            [System.Windows.Controls.Primitives.ToggleButton]::UncheckedEvent,
+            [System.Windows.RoutedEventHandler]({
+                param($s, $ev)
+                if ($ev.OriginalSource -is [System.Windows.Controls.CheckBox] -and $ev.OriginalSource.DataContext) {
+                    $ev.OriginalSource.DataContext.IsChecked = [bool]$ev.OriginalSource.IsChecked
+                }
+                if (-not $dlgState.SuppressRebuild) { &$rebuildOrderList "" }
+            })
+        )
+
+        $applyFilter = {
+            $q = if ($txtColFilter) { $txtColFilter.Text.Trim() } else { "" }
+            foreach ($it in $availItems) {
+                $vis = if ([string]::IsNullOrWhiteSpace($q)) {
+                    "Visible"
+                } elseif (
+                    $it.Header.IndexOf($q, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                    $it.Group.IndexOf($q, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                    $it.Hint.IndexOf($q, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                ) {
+                    "Visible"
+                } else {
+                    "Collapsed"
+                }
+                $it.RowVisibility = $vis
+            }
+            $lstAvailCols.ItemsSource = $null
+            $lstAvailCols.ItemsSource = $availItems
+        }
+
+        if ($txtColFilter)      { $txtColFilter.add_TextChanged({ &$applyFilter }) }
+        if ($btnColFilterClear) { $btnColFilterClear.add_Click({ $txtColFilter.Text = ""; $txtColFilter.Focus() }) }
+
+        $applyPreset = {
+            param([string[]]$visibleOrder)
+            $dlgState.SuppressRebuild = $true
+            try {
+                $visSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+                [void]$visSet.Add("Process")
+                foreach ($vk in $visibleOrder) { [void]$visSet.Add($vk) }
+
+                $newOrder = [System.Collections.Generic.List[string]]::new()
+                $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+                [void]$seen.Add("Process")
+                $newOrder.Add("Process")
+                foreach ($vk in $visibleOrder) {
+                    if ($itemByKey.ContainsKey($vk) -and $seen.Add($vk)) { $newOrder.Add($vk) }
+                }
+                foreach ($cDef in $colCatalog) {
+                    $ck = [string]$cDef.Key
+                    if ($seen.Add($ck)) { $newOrder.Add($ck) }
+                }
+                $dlgState.OrderKeys = $newOrder
+
+                foreach ($it in $availItems) {
+                    $it.IsChecked = $visSet.Contains($it.Key)
+                }
+                $lstAvailCols.Items.Refresh()
+            } finally {
+                $dlgState.SuppressRebuild = $false
+            }
+            &$rebuildOrderList ""
+        }
+
+        if ($btnPresetDefault) {
+            $btnPresetDefault.add_Click({
+                $defKeys = @($colCatalog | Where-Object { $_.DefaultVisible } | ForEach-Object { [string]$_.Key })
+                &$applyPreset $defKeys
+            })
+        }
+        if ($btnPresetProcExp) {
+            $btnPresetProcExp.add_Click({
+                &$applyPreset @("Process", "CPU", "TreeCPU", "PrivateBytes", "WorkingSet", "PID", "Description", "CompanyName", "Version", "CommandLine", "User", "Handles")
+            })
+        }
+        if ($btnPresetForensic) {
+            $btnPresetForensic.add_Click({
+                &$applyPreset @("Process", "PID", "ParentPID", "User", "SessionId", "Architecture", "StartTime", "Version", "CompanyName", "Path", "CommandLine")
+            })
+        }
+        if ($btnResetCols) {
+            $btnResetCols.add_Click({
+                $defKeys = @($colCatalog | Where-Object { $_.DefaultVisible } | ForEach-Object { [string]$_.Key })
+                &$applyPreset $defKeys
+            })
+        }
+
+        $moveSelectedOrder = {
+            param([int]$delta)
+            $sel = $lstColOrder.SelectedItem
+            if (-not $sel -or $sel.IsLocked) { return }
+            $curVisIdx = $lstColOrder.SelectedIndex
+            $nxtVisIdx = $curVisIdx + $delta
+            if ($nxtVisIdx -lt 1 -or $nxtVisIdx -ge $orderItems.Count) { return }
+
+            $targetKey = $orderItems[$nxtVisIdx].Key
+            $idxA = $dlgState.OrderKeys.IndexOf($sel.Key)
+            $idxB = $dlgState.OrderKeys.IndexOf($targetKey)
+            if ($idxA -le 0 -or $idxB -le 0) { return }
+
+            $dlgState.OrderKeys.RemoveAt($idxA)
+            $insertAt = $dlgState.OrderKeys.IndexOf($targetKey)
+            if ($delta -gt 0) { $insertAt++ }
+            $dlgState.OrderKeys.Insert($insertAt, $sel.Key)
+            &$rebuildOrderList $sel.Key
+        }
+        if ($btnMoveUp)   { $btnMoveUp.add_Click({ &$moveSelectedOrder -1 }) }
+        if ($btnMoveDown) { $btnMoveDown.add_Click({ &$moveSelectedOrder 1 }) }
+
+        if ($btnColOk) {
+            $btnColOk.add_Click({ $scWin.DialogResult = $true })
+        }
+
+        if ($scWin.ShowDialog() -eq $true) {
+            $script:UserVisibleCols.Clear()
+            [void]$script:UserVisibleCols.Add("Process")
+            $etwPickCount = 0
+            foreach ($it in $availItems) {
+                if ([bool]$it.IsChecked) {
+                    if ([bool]$it.IsNetEtw) {
+                        $etwPickCount++
+                        switch ($it.Key) {
+                            "NetTotal" { $script:ShowNetTotalCol = $true }
+                            "TreeNet"  { $script:ShowTreeNetCol  = $true }
+                            "NetRx"    { $script:ShowRxTxCols    = $true }
+                            "NetTx"    { $script:ShowRxTxCols    = $true }
+                        }
+                    } else {
+                        [void]$script:UserVisibleCols.Add([string]$it.Key)
+                    }
+                } else {
+                    if ([bool]$it.IsNetEtw) {
+                        switch ($it.Key) {
+                            "NetTotal" { $script:ShowNetTotalCol = $false }
+                            "TreeNet"  { $script:ShowTreeNetCol  = $false }
+                            "NetRx"    { $script:ShowRxTxCols    = $false }
+                            "NetTx"    { $script:ShowRxTxCols    = $false }
+                        }
+                    }
+                }
+            }
+            if ($menuColTreeNet) { $menuColTreeNet.IsChecked = $script:ShowTreeNetCol }
+            if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $script:ShowRxTxCols }
+
+            $script:ColumnOrderList.Clear()
+            foreach ($ok in $dlgState.OrderKeys) { $script:ColumnOrderList.Add($ok) }
+            &$applyColumnLayout $false
+
+            if ($etwPickCount -gt 0 -and -not $isNetActiveNow -and $statusText) {
+                $statusText.Text = "Column layout updated. Enable Per-Process Network Monitoring (Ctrl+Shift+N) to show live Net ETW columns."
+            }
+            &$writeAuditLog "VIEW" ("Updated Process column layout ({0} active columns)." -f $script:UserVisibleCols.Count)
+        }
+    }
+
+    $menuViewSelectColumns = $window.FindName("MenuViewSelectColumns")
+    if ($menuViewSelectColumns) {
+        $menuViewSelectColumns.add_Click({ &$openSelectColumnsDialog })
+    }
+
+    $procHeaderCtxMenu = $gridProcesses.TryFindResource("ProcessHeaderContextMenu")
+    if ($procHeaderCtxMenu) {
+        $procHeaderCtxMenu.add_Opened({
+            param($sender, $e)
+            $sender.Items.Clear()
+
+            $clickedHeader = $sender.PlacementTarget
+            $clickedColKey = ""
+            if ($clickedHeader -is [System.Windows.Controls.Primitives.DataGridColumnHeader] -and $clickedHeader.Column) {
+                if ($colKeyByObj.ContainsKey($clickedHeader.Column)) {
+                    $clickedColKey = $colKeyByObj[$clickedHeader.Column]
+                }
+            }
+
+            if ($clickedColKey -and $colDefByKey.Contains($clickedColKey)) {
+                $cDefClicked = $colDefByKey[$clickedColKey]
+                if (-not [bool]$cDefClicked.IsLocked) {
+                    $miHide = [System.Windows.Controls.MenuItem]::new()
+                    $miHide.Header = ("Hide '{0}'" -f $cDefClicked.Header)
+                    $miHide.Tag = $clickedColKey
+                    $miHide.add_Click({
+                        param($s, $ev)
+                        $tk = [string]$s.Tag
+                        if ($colDefByKey[$tk].IsNetEtw) {
+                            switch ($tk) {
+                                "NetTotal" { $script:ShowNetTotalCol = $false }
+                                "TreeNet"  { $script:ShowTreeNetCol  = $false }
+                                "NetRx"    { $script:ShowRxTxCols    = $false }
+                                "NetTx"    { $script:ShowRxTxCols    = $false }
+                            }
+                            if ($menuColTreeNet) { $menuColTreeNet.IsChecked = $script:ShowTreeNetCol }
+                            if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $script:ShowRxTxCols }
+                        } else {
+                            [void]$script:UserVisibleCols.Remove($tk)
+                        }
+                        &$applyColumnLayout $false
+                    })
+                    [void]$sender.Items.Add($miHide)
+                    [void]$sender.Items.Add([System.Windows.Controls.Separator]::new())
+                }
+            }
+
+            $quickKeys = @("CPU", "TreeCPU", "PrivateBytes", "WorkingSet", "PID", "ParentPID", "Description", "CompanyName", "Version", "CommandLine", "Path", "User", "Handles", "Threads", "SessionId", "Architecture", "StartTime", "Status")
+            foreach ($qk in $quickKeys) {
+                $qDef = $colDefByKey[$qk]
+                if (-not $qDef) { continue }
+                $mi = [System.Windows.Controls.MenuItem]::new()
+                $mi.Header = [string]$qDef.Header
+                $mi.IsCheckable = $true
+                $mi.IsChecked = $script:UserVisibleCols.Contains($qk)
+                $mi.Tag = $qk
+                $mi.add_Click({
+                    param($s, $ev)
+                    $tk = [string]$s.Tag
+                    if ([bool]$s.IsChecked) {
+                        [void]$script:UserVisibleCols.Add($tk)
+                    } else {
+                        [void]$script:UserVisibleCols.Remove($tk)
+                    }
+                    &$applyColumnLayout $false
+                })
+                [void]$sender.Items.Add($mi)
+            }
+
+            [void]$sender.Items.Add([System.Windows.Controls.Separator]::new())
+
+            $miSelect = [System.Windows.Controls.MenuItem]::new()
+            $miSelect.Header = "Select Columns..."
+            $miSelect.FontWeight = [System.Windows.FontWeights]::SemiBold
+            $miSelect.add_Click({ &$openSelectColumnsDialog })
+            [void]$sender.Items.Add($miSelect)
+
+            $miFit = [System.Windows.Controls.MenuItem]::new()
+            $miFit.Header = "Auto-Fit Visible Columns"
+            $miFit.add_Click({ &$autoFitVisibleColumns })
+            [void]$sender.Items.Add($miFit)
+
+            $miReset = [System.Windows.Controls.MenuItem]::new()
+            $miReset.Header = "Reset Columns to Default"
+            $miReset.add_Click({ &$resetColumnsToDefault })
+            [void]$sender.Items.Add($miReset)
+        })
+    }
+
+    $applyPreferencesObject = {
+        param([hashtable]$prefs, [bool]$overrideCli = $false)
+        if (-not $prefs) { return }
+
+        $targetTheme = if (-not $overrideCli -and $Dark.IsPresent) {
+            "Dark"
+        } elseif (-not $overrideCli -and $PSBoundParameters.ContainsKey('Theme') -and $Theme) {
+            $Theme
+        } else {
+            [string]$prefs.Theme
+        }
+        &$applyTheme $targetTheme
+        &$setCategoryHighlighting ([bool]$prefs.EnableCategoryHighlights)
+
+        $targetTopmost = if (-not $overrideCli -and $AlwaysOnTop.IsPresent) { $true } else { [bool]$prefs.AlwaysOnTop }
+        &$setAlwaysOnTop $targetTopmost
+
+        if ($menuConfirmKill) {
+            $menuConfirmKill.IsChecked = [bool]$prefs.ConfirmKill
+        }
+
+        $verboseVal = [bool]$prefs.VerboseTelemetryLog
+        $stateContainer.VerboseTelemetryLog = $verboseVal
+        if ($menuVerbose)    { $menuVerbose.IsChecked    = $verboseVal }
+        if ($chkStreamTicks) { $chkStreamTicks.IsChecked = $verboseVal }
+
+        $autoScrollVal = [bool]$prefs.LogAutoScroll
+        $stateContainer.LogAutoScroll = $autoScrollVal
+        if ($chkLogAutoScroll) { $chkLogAutoScroll.IsChecked = $autoScrollVal }
+
+        $targetRate = if (-not $overrideCli -and $PSBoundParameters.ContainsKey('RefreshIntervalMs')) {
+            [int]$RefreshIntervalMs
+        } else {
+            [int]$prefs.RefreshIntervalMs
+        }
+        &$setPollingRate $targetRate $false
+
+        $newestVal = [bool]$prefs.TreeSortNewestFirst
+        $stateContainer.TreeSortNewestFirst = $newestVal
+        if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newestVal }
+        if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newestVal) }
+
+        if ($prefs.ContainsKey('VisibleColumns') -and $prefs.VisibleColumns) {
+            $script:UserVisibleCols.Clear()
+            [void]$script:UserVisibleCols.Add("Process")
+            foreach ($vc in @($prefs.VisibleColumns)) {
+                $vcKey = [string]$vc
+                if ($colDefByKey.Contains($vcKey) -and -not [bool]$colDefByKey[$vcKey].IsNetEtw) {
+                    [void]$script:UserVisibleCols.Add($vcKey)
+                }
+            }
+        }
+        if ($prefs.ContainsKey('ColumnOrder') -and $prefs.ColumnOrder) {
+            $script:ColumnOrderList.Clear()
+            foreach ($oc in @($prefs.ColumnOrder)) {
+                $script:ColumnOrderList.Add([string]$oc)
+            }
+        }
+        if ($prefs.ContainsKey('ColumnWidths') -and $prefs.ColumnWidths -is [System.Collections.IDictionary]) {
+            $script:ColumnWidthsMap = @{}
+            foreach ($wk in $prefs.ColumnWidths.Keys) {
+                $script:ColumnWidthsMap[[string]$wk] = [double]$prefs.ColumnWidths[$wk]
+            }
+        } else {
+            $script:ColumnWidthsMap = @{}
+        }
+        &$applyColumnLayout $true
+
+        if ([bool]$prefs.IsTreeMode) {
+            &$setViewMode $true
+        } else {
+            $stateContainer.SortProperty   = [string]$prefs.SortProperty
+            $stateContainer.SortDescending = [bool]$prefs.SortDescending
+            foreach ($c in $gridProcesses.Columns) { $c.SortDirection = $null }
+            $dir = if ($stateContainer.SortDescending) {
+                [System.ComponentModel.ListSortDirection]::Descending
+            } else {
+                [System.ComponentModel.ListSortDirection]::Ascending
+            }
+            foreach ($c in $gridProcesses.Columns) {
+                if ($c.SortMemberPath -eq $stateContainer.SortProperty) {
+                    $c.SortDirection = $dir
+                    break
+                }
+            }
+            &$setViewMode $false
+        }
+
+        if ($logPane) {
+            $reqLogH = if ($prefs.LogPaneHeight -ge $minLogPaneHeight) { [double]$prefs.LogPaneHeight } else { $defaultLogPaneHeight }
+            $logPane.Height = $reqLogH
+            if ([bool]$prefs.LogPaneVisible) {
+                $logPane.Visibility = "Visible"
+                & $clampLogPaneHeight $reqLogH
+                if ($menuViewLog) { $menuViewLog.IsChecked = $true }
+                if ($txtLogConsole -and $autoScrollVal) {
+                    try {
+                        $stateContainer.IsAppendingLog = $true
+                        $txtLogConsole.ScrollToEnd()
+                    } finally {
+                        $stateContainer.IsAppendingLog = $false
+                    }
+                }
+            } else {
+                $logPane.Visibility = "Collapsed"
+                if ($menuViewLog) { $menuViewLog.IsChecked = $false }
+            }
+        }
+    }
+
+    if ($prefLoadResult.LoadedFromDisk) {
+        &$applyPreferencesObject $savedPrefs $false
+    }
+
+    if ($menuSavePreferences) {
+        $menuSavePreferences.add_Click({
+            try {
+                $curLogH = if ($logPane -and -not [double]::IsNaN($logPane.Height) -and $logPane.Height -ge $minLogPaneHeight) {
+                    [double]$logPane.Height
+                } elseif ($logPane -and $logPane.ActualHeight -ge $minLogPaneHeight) {
+                    [double]$logPane.ActualHeight
+                } else {
+                    $defaultLogPaneHeight
+                }
+                &$syncLiveOrderAndWidths
+                $visColsSnap = [System.Collections.Generic.List[string]]::new()
+                foreach ($ok in $script:ColumnOrderList) {
+                    if ($script:UserVisibleCols.Contains($ok)) { $visColsSnap.Add($ok) }
+                }
+                $snapshot = @{
+                    Theme                    = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } else { "Light" }
+                    AlwaysOnTop              = [bool]$window.Topmost
+                    EnableCategoryHighlights = [bool]$stateContainer.EnableCategoryHighlights
+                    ConfirmKill              = if ($menuConfirmKill) { [bool]$menuConfirmKill.IsChecked } else { $true }
+                    VerboseTelemetryLog      = [bool]$stateContainer.VerboseTelemetryLog
+                    IsTreeMode               = [bool]$stateContainer.IsTreeMode
+                    TreeSortNewestFirst      = [bool]$stateContainer.TreeSortNewestFirst
+                    SortProperty             = if ($stateContainer.SortProperty) { [string]$stateContainer.SortProperty } else { "PID" }
+                    SortDescending           = [bool]$stateContainer.SortDescending
+                    RefreshIntervalMs        = [int]$stateContainer.IntervalMs
+                    LogPaneVisible           = ($logPane -and $logPane.Visibility -eq "Visible")
+                    LogPaneHeight            = $curLogH
+                    LogAutoScroll            = [bool]$stateContainer.LogAutoScroll
+                    VisibleColumns           = @($visColsSnap)
+                    ColumnOrder              = @($script:ColumnOrderList)
+                    ColumnWidths             = $script:ColumnWidthsMap
+                }
+                $savedPath = Save-PSRPMPreferences -Preferences $snapshot
+                &$writeAuditLog "PREFS" "Saved current preferences as default to '$savedPath'."
+                if ($statusText) {
+                    $statusText.Text = "Saved current preferences as default ($savedPath)."
+                }
+            } catch {
+                &$writeAuditLog "WARN" "Failed to save preferences: $($_.Exception.Message)"
+            }
+        })
+    }
+
+    if ($menuResetPreferences) {
+        $menuResetPreferences.add_Click({
+            try {
+                $removed = Reset-PSRPMPreferences
+                $factory = Get-PSRPMDefaultPreferences
+                &$applyPreferencesObject $factory $true
+                $msg = if ($removed) {
+                    "Deleted saved preferences file and restored factory defaults."
+                } else {
+                    "Restored factory default preferences."
+                }
+                &$writeAuditLog "PREFS" $msg
+                if ($statusText) {
+                    $statusText.Text = $msg
+                }
+            } catch {
+                &$writeAuditLog "WARN" "Failed to reset preferences: $($_.Exception.Message)"
+            }
+        })
+    }
 
     $getDialogOwnerWindow = {
         if ($script:ActivePropWin -and $script:ActivePropWin.IsLoaded -and $script:ActivePropWin.IsVisible) {
@@ -1751,30 +2793,57 @@ function Start-PSRPM {
     $ctxCreateFull  = $window.FindName("CtxCreateFullDump")
     if ($ctxCreateFull)  { $ctxCreateFull.add_Click({ &$actionCreateDump "Full" }) }
 
-    $window.FindName("MenuPrioIdle").add_Click({ &$invokeProcessAction "SetPriority" $null "Idle" })
-    $window.FindName("MenuPrioBelow").add_Click({ &$invokeProcessAction "SetPriority" $null "BelowNormal" })
-    $window.FindName("MenuPrioNormal").add_Click({ &$invokeProcessAction "SetPriority" $null "Normal" })
-    $window.FindName("MenuPrioAbove").add_Click({ &$invokeProcessAction "SetPriority" $null "AboveNormal" })
-    $window.FindName("MenuPrioHigh").add_Click({ &$invokeProcessAction "SetPriority" $null "High" })
+    $prioControlMap = @{
+        MenuPrioIdle   = "Idle"
+        MenuPrioBelow  = "BelowNormal"
+        MenuPrioNormal = "Normal"
+        MenuPrioAbove  = "AboveNormal"
+        MenuPrioHigh   = "High"
+        CtxPrioIdle    = "Idle"
+        CtxPrioBelow   = "BelowNormal"
+        CtxPrioNormal  = "Normal"
+        CtxPrioAbove   = "AboveNormal"
+        CtxPrioHigh    = "High"
+    }
+    $onPrioClick = {
+        param($sender, $e)
+        if ($sender -and $sender.Tag) {
+            &$invokeProcessAction "SetPriority" $null ([string]$sender.Tag)
+        }
+    }
+    foreach ($entry in $prioControlMap.GetEnumerator()) {
+        $prioCtrl = $window.FindName($entry.Key)
+        if ($prioCtrl) {
+            $prioCtrl.Tag = $entry.Value
+            $prioCtrl.add_Click($onPrioClick)
+        }
+    }
 
-    $window.FindName("CtxEndProcess").add_Click({ &$invokeProcessAction "KillProcess" $null })
-    $window.FindName("CtxEndTree").add_Click({ &$invokeProcessAction "KillTree" $null })
-    $window.FindName("CtxSuspend").add_Click({ &$invokeProcessAction "SuspendProcess" $null })
-    $window.FindName("CtxResume").add_Click({ &$invokeProcessAction "ResumeProcess" $null })
-    $window.FindName("CtxCopyCmdLine").add_Click({
+    $actionCopyCmdLine = {
         $sel = $gridProcesses.SelectedItem
         if ($sel -and $sel.CommandLine) {
             [System.Windows.Clipboard]::SetText($sel.CommandLine)
             &$writeAuditLog "CLIPBOARD" "Copied command line for $($sel.Name) (PID $($sel.PID))."
         }
-    })
-    $window.FindName("CtxCopyPath").add_Click({
+    }
+    $actionCopyPath = {
         $sel = $gridProcesses.SelectedItem
         if ($sel -and $sel.Path) {
             [System.Windows.Clipboard]::SetText($sel.Path)
             &$writeAuditLog "CLIPBOARD" "Copied executable path for $($sel.Name) (PID $($sel.PID))."
         }
-    })
+    }
+
+    $window.FindName("CtxEndProcess").add_Click({ &$invokeProcessAction "KillProcess" $null })
+    $window.FindName("CtxEndTree").add_Click({ &$invokeProcessAction "KillTree" $null })
+    $window.FindName("CtxSuspend").add_Click({ &$invokeProcessAction "SuspendProcess" $null })
+    $window.FindName("CtxResume").add_Click({ &$invokeProcessAction "ResumeProcess" $null })
+    $window.FindName("CtxCopyCmdLine").add_Click($actionCopyCmdLine)
+    $window.FindName("CtxCopyPath").add_Click($actionCopyPath)
+    $menuCopyCmdItem = $window.FindName("MenuCopyCmdLine")
+    if ($menuCopyCmdItem) { $menuCopyCmdItem.add_Click($actionCopyCmdLine) }
+    $menuCopyPathItem = $window.FindName("MenuCopyPath")
+    if ($menuCopyPathItem) { $menuCopyPathItem.add_Click($actionCopyPath) }
 
     $menuProcessItem     = $window.FindName("MenuProcess")
     $menuPropsItem       = $window.FindName("MenuProperties")
@@ -1799,6 +2868,8 @@ function Start-PSRPM {
 
         if ($menuPropsItem)      { $menuPropsItem.IsEnabled      = $singleEnabled }
         if ($menuCreateDumpItem) { $menuCreateDumpItem.IsEnabled = $singleEnabled }
+        if ($menuCopyCmdItem)    { $menuCopyCmdItem.IsEnabled    = $singleEnabled }
+        if ($menuCopyPathItem)   { $menuCopyPathItem.IsEnabled   = $singleEnabled }
         if ($ctxPropsItem)       { $ctxPropsItem.IsEnabled       = $singleEnabled }
         if ($ctxCreateDumpItem)  { $ctxCreateDumpItem.IsEnabled  = $singleEnabled }
         if ($ctxCopyCmdItem)     { $ctxCopyCmdItem.IsEnabled     = $singleEnabled }
@@ -2868,15 +3939,17 @@ function Start-PSRPM {
             &$invokeProcessAction "CloseHandle" $selectedVm "Normal" $closeCallback $hVal
         }
 
+        $copyPropHandleName = {
+            if ($gridPropHandles.SelectedItem -and $gridPropHandles.SelectedItem.Name) {
+                [System.Windows.Clipboard]::SetText([string]$gridPropHandles.SelectedItem.Name)
+            }
+        }
+
         if ($ctxPropClose) {
             $ctxPropClose.add_Click({ & $closePropSelectedHandle })
         }
         if ($ctxPropCopyName) {
-            $ctxPropCopyName.add_Click({
-                if ($gridPropHandles.SelectedItem -and $gridPropHandles.SelectedItem.Name) {
-                    [System.Windows.Clipboard]::SetText([string]$gridPropHandles.SelectedItem.Name)
-                }
-            })
+            $ctxPropCopyName.add_Click($copyPropHandleName)
         }
         if ($ctxPropCopyVal) {
             $ctxPropCopyVal.add_Click({
@@ -2888,8 +3961,14 @@ function Start-PSRPM {
         if ($gridPropHandles) {
             $gridPropHandles.add_KeyDown({
                 param($s, $e)
+                $mods = [System.Windows.Input.Keyboard]::Modifiers
+                $isCtrl = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
                 if ($e.Key -eq [System.Windows.Input.Key]::Delete) {
                     & $closePropSelectedHandle
+                    $e.Handled = $true
+                } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::C) {
+                    & $copyPropHandleName
+                    $e.Handled = $true
                 }
             })
         }
@@ -3164,6 +4243,7 @@ function Start-PSRPM {
 
         $connWin.Owner = $window
         if ($appIconFrame) { $connWin.Icon = $appIconFrame }
+        &$syncDialogThemeBrushes $connWin
 
         $rbRemote      = $connWin.FindName("RbRemoteHost")
         $rbLocal       = $connWin.FindName("RbLocalOnly")
@@ -3664,6 +4744,7 @@ function Start-PSRPM {
 
             $helpWin.Owner = $window
             if ($appIconFrame) { $helpWin.Icon = $appIconFrame }
+            &$syncDialogThemeBrushes $helpWin
 
             $tcHelp = $helpWin.FindName("HelpTabControl")
             if ($tcHelp -and $initialTabIndex -ge 0 -and $initialTabIndex -lt $tcHelp.Items.Count) {
@@ -3729,9 +4810,6 @@ function Start-PSRPM {
 
     $menuHelpAbout = $window.FindName("MenuHelpAbout")
     if ($menuHelpAbout) { $menuHelpAbout.add_Click({ &$actionShowHelp 3 }) }
-
-    $menuFileHelp = $window.FindName("MenuFileHelp")
-    if ($menuFileHelp) { $menuFileHelp.add_Click({ &$actionShowHelp 0 }) }
 
     $btnToolbarHelp = $window.FindName("BtnToolbarHelp")
     if ($btnToolbarHelp) { $btnToolbarHelp.add_Click({ &$actionShowHelp 0 }) }
@@ -4012,6 +5090,8 @@ function Start-PSRPM {
         $findWin.add_KeyDown({
             param($s, $e)
             $dg = $script:FindHandleControls['GridHandleResults']
+            $mods = [System.Windows.Input.Keyboard]::Modifiers
+            $isCtrl = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
             if ($e.Key -eq [System.Windows.Input.Key]::Escape) {
                 if ($script:ActiveFindHandleWin) {
                     $script:ActiveFindHandleWin.Close()
@@ -4022,6 +5102,9 @@ function Start-PSRPM {
                 $e.Handled = $true
             } elseif ($e.Key -eq [System.Windows.Input.Key]::Enter -and $dg -and $dg.IsKeyboardFocusWithin) {
                 &$goToProcessInTree
+                $e.Handled = $true
+            } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::C -and $dg -and $dg.IsKeyboardFocusWithin) {
+                &$copySelectedPath
                 $e.Handled = $true
             }
         })
@@ -4064,27 +5147,8 @@ function Start-PSRPM {
     $colNetRx             = $window.FindName("ColNetRx")
     $colNetTx             = $window.FindName("ColNetTx")
 
-    $script:ShowTreeNetCol = $true
-    $script:ShowRxTxCols   = $false
-    $script:NetBannerDismissedCap = 0
-
     $syncNetColumnVisibility = {
-        $isActive = ([int]$stateContainer.NetEtwCap -eq 1)
-        $visMain  = if ($isActive) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
-        $visTree  = if ($isActive -and $script:ShowTreeNetCol) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
-        $visSplit = if ($isActive -and $script:ShowRxTxCols) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
-
-        if ($colNetTotal) { $colNetTotal.Visibility = $visMain }
-        if ($colTreeNet)  { $colTreeNet.Visibility  = $visTree }
-        if ($colNetRx)    { $colNetRx.Visibility    = $visSplit }
-        if ($colNetTx)    { $colNetTx.Visibility    = $visSplit }
-
-        $curSort = [string]$stateContainer.SortProperty
-        if (($curSort -in @("NetTotalBps") -and -not $isActive) -or
-            ($curSort -in @("TreeNetTotalBps", "TreeNetRxBps", "TreeNetTxBps") -and -not ($isActive -and $script:ShowTreeNetCol)) -or
-            ($curSort -in @("NetRxBps", "NetTxBps") -and -not ($isActive -and $script:ShowRxTxCols))) {
-            &$setViewMode $true
-        }
+        &$applyColumnLayout $false
     }
 
     $updateNetEtwUi = {
@@ -4361,7 +5425,7 @@ function Start-PSRPM {
                     $e.Handled = $true
                 }
             }
-        } elseif ($e.Key -eq [System.Windows.Input.Key]::Delete -and -not $txtSearch.IsKeyboardFocusWithin -and -not ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin)) {
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Delete -and $gridProcesses.IsKeyboardFocusWithin) {
             if ($isShift) {
                 &$invokeProcessAction "KillTree" $null
             } else {
@@ -4399,13 +5463,20 @@ function Start-PSRPM {
                     }
                     $pb = 112 + [IntPtr]::Size
                     $pt = $pb + 512
-                    $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($pt)
-                    for ($zi = 0; $zi -lt $pt; $zi += 8) { [System.Runtime.InteropServices.Marshal]::WriteInt64($ptr, $zi, 0L) }
-                    [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 0, $pt)
-                    [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 44, 0x00020000)
-                    [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 108 + [IntPtr]::Size, $pb)
-                    [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, "PSRPM_NetMon_$PID", $ptr, [uint32]1)
-                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+                    $ptr = [IntPtr]::Zero
+                    try {
+                        $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($pt)
+                        for ($zi = 0; $zi -lt $pt; $zi += 8) { [System.Runtime.InteropServices.Marshal]::WriteInt64($ptr, $zi, 0L) }
+                        [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 0, $pt)
+                        [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 44, 0x00020000)
+                        [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 108 + [IntPtr]::Size, $pb)
+                        [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, "PSRPM_NetMon_$PID", $ptr, [uint32]1)
+                    } finally {
+                        if ($ptr -ne [IntPtr]::Zero) {
+                            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+                            $ptr = [IntPtr]::Zero
+                        }
+                    }
                 } catch {}
             }
             try { if ($engineHandle.PowerShell) { $engineHandle.PowerShell.Dispose() } } catch {}

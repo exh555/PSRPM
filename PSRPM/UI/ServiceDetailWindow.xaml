@@ -250,7 +250,7 @@
                 <Button x:Name="BtnDlgStop" Content="Stop Service" Style="{StaticResource DialogButtonStyle}"/>
                 <Button x:Name="BtnDlgRestart" Content="Restart Service" Style="{StaticResource DialogButtonStyle}"/>
             </StackPanel>
-            <Button x:Name="BtnDlgClose" DockPanel.Dock="Right" Content="Close" Width="80" Height="26" IsCancel="True" IsDefault="True" HorizontalAlignment="Right" Cursor="Hand"/>
+            <Button x:Name="BtnDlgClose" DockPanel.Dock="Right" Content="Close" Width="80" Height="26" IsCancel="True" HorizontalAlignment="Right" Cursor="Hand"/>
         </DockPanel>
     </Grid>
 </Window>

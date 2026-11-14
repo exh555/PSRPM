@@ -249,7 +249,7 @@ $script:PSRPMCollectorScriptBlock = {
         $script:LastSvcStaticRefresh = [DateTime]::MinValue
         $script:CachedServices = $null
         $script:FileMetaCache  = @{
-            "n/a" = @{ d = ""; c = "" }
+            "n/a" = @{ d = ""; c = ""; v = "" }
         }
         $script:SidCache       = @{
             "S-1-5-18" = "NT AUTHORITY\SYSTEM"
@@ -1271,7 +1271,7 @@ $script:PSRPMCollectorScriptBlock = {
 
     if ($script:FileMetaCache.Count -gt 4096) {
         $script:FileMetaCache.Clear()
-        $script:FileMetaCache["n/a"] = @{ d = ""; c = "" }
+        $script:FileMetaCache["n/a"] = @{ d = ""; c = ""; v = "" }
     }
     if ($script:SidCache.Count -gt 1024) {
         $script:SidCache.Clear()
@@ -1718,6 +1718,7 @@ $script:PSRPMCollectorScriptBlock = {
                 $archStr = if ($script:Is64BitOS) { "x64" } else { "x86" }
                 $descStr = ""
                 $compStr = ""
+                $verStr  = ""
                 $startStr = if ($createTime -gt 0) {
                     try { [DateTime]::FromFileTimeUtc($createTime).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") } catch { "N/A" }
                 } else { "N/A" }
@@ -1799,15 +1800,17 @@ $script:PSRPMCollectorScriptBlock = {
                         $fMeta   = $script:FileMetaCache[$pathKey]
                         $descStr = $fMeta.d
                         $compStr = $fMeta.c
+                        $verStr  = if ($fMeta.v) { $fMeta.v } else { "" }
                     } elseif ($withinBudgetFile) {
                         try {
                             if ([System.IO.File]::Exists($exePath)) {
                                 $fvi     = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
                                 $descStr = [string]$fvi.FileDescription
                                 $compStr = [string]$fvi.CompanyName
+                                $verStr  = [string]$fvi.FileVersion
                             }
                         } catch {}
-                        $script:FileMetaCache[$pathKey] = @{ d = $descStr; c = $compStr }
+                        $script:FileMetaCache[$pathKey] = @{ d = $descStr; c = $compStr; v = $verStr }
                     } else {
                         $fileDeferred = $true
                     }
@@ -1845,6 +1848,7 @@ $script:PSRPMCollectorScriptBlock = {
                     cmd   = $cmdLine
                     desc  = $descStr
                     comp  = $compStr
+                    ver   = $verStr
                     start = $startStr
                     sid   = $sessionId
                     prio  = $basePrio
@@ -1887,21 +1891,25 @@ $script:PSRPMCollectorScriptBlock = {
                         $fm = $script:FileMetaCache[$pKey]
                         if (-not [string]::IsNullOrWhiteSpace($fm.d)) { $mEntry.desc = $fm.d }
                         if (-not [string]::IsNullOrWhiteSpace($fm.c)) { $mEntry.comp = $fm.c }
+                        if (-not [string]::IsNullOrWhiteSpace($fm.v)) { $mEntry.ver  = $fm.v }
                         $pendItem.path = ""
                         $updated = $true
                     } elseif ($swMeta.ElapsedMilliseconds -lt $metaBudgetMs) {
                         $dRes = ""
                         $cRes = ""
+                        $vRes = ""
                         try {
                             if ([System.IO.File]::Exists($pVal)) {
                                 $fvi  = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($pVal)
                                 $dRes = [string]$fvi.FileDescription
                                 $cRes = [string]$fvi.CompanyName
+                                $vRes = [string]$fvi.FileVersion
                             }
                         } catch {}
-                        $script:FileMetaCache[$pKey] = @{ d = $dRes; c = $cRes }
+                        $script:FileMetaCache[$pKey] = @{ d = $dRes; c = $cRes; v = $vRes }
                         if (-not [string]::IsNullOrWhiteSpace($dRes)) { $mEntry.desc = $dRes }
                         if (-not [string]::IsNullOrWhiteSpace($cRes)) { $mEntry.comp = $cRes }
+                        if (-not [string]::IsNullOrWhiteSpace($vRes)) { $mEntry.ver  = $vRes }
                         $pendItem.path = ""
                         $updated = $true
                     }
@@ -2263,7 +2271,7 @@ $script:PSRPMCollectorScriptBlock = {
     $metaPendCnt  = $script:PendingMetaMap.Count
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.9.0","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.10.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"colMs":').Append($colMs)
     [void]$sb.Append(',"svcMs":').Append($svcMs)
