@@ -40,16 +40,22 @@ if ($changelogContent -notmatch "## \[$modVer\]") {
 }
 Write-Host "  [PASS] CHANGELOG.md contains documentation for version [$modVer]." -ForegroundColor Green
 
-# 4. Validate README.md Version Badge
-Write-Host "[CHECK 4] Validating README.md version badge..." -ForegroundColor Yellow
+# 4. Validate README.md Version References
+Write-Host "[CHECK 4] Validating README.md version references..." -ForegroundColor Yellow
 $readmeContent = Get-Content -Path $readmePath -Raw
 if ($readmeContent -notmatch "badge/version-$modVer") {
     throw "README.md badge does not match manifest version $modVer"
 }
-Write-Host "  [PASS] README.md version badge matches version $modVer." -ForegroundColor Green
+if ($readmeContent -notmatch ('\*\*PSRPM \(`v' + [regex]::Escape($modVer) + '`\)\*\*')) {
+    throw "README.md comparison table header does not match manifest version v$modVer"
+}
+if ($readmeContent -notmatch ('SemVer \(`' + [regex]::Escape($modVer) + '`\)')) {
+    throw "README.md changelog footer does not match manifest version $modVer"
+}
+Write-Host "  [PASS] README.md badge, table header, and footer match version $modVer." -ForegroundColor Green
 
-# 5. Validate HelpWindow.xaml and Help/About Version Synchronization
-Write-Host "[CHECK 5] Validating HelpWindow.xaml and dynamic version synchronization..." -ForegroundColor Yellow
+# 5. Validate HelpWindow.xaml, PSRPM.psm1, and docs/USER_GUIDE.md Version Synchronization
+Write-Host "[CHECK 5] Validating HelpWindow.xaml, PSRPM.psm1, and USER_GUIDE.md version synchronization..." -ForegroundColor Yellow
 $helpXamlPath = Join-Path $root "PSRPM\UI\HelpWindow.xaml"
 $helpXamlContent = Get-Content -Path $helpXamlPath -Raw
 if ($helpXamlContent -notmatch "x:Name=`"TxtHeaderBadge`"\s+Text=`"v$modVer`"") {
@@ -58,7 +64,19 @@ if ($helpXamlContent -notmatch "x:Name=`"TxtHeaderBadge`"\s+Text=`"v$modVer`"") 
 if ($helpXamlContent -notmatch "x:Name=`"TxtAboutVersion`"\s+Text=`"$modVer`"") {
     throw "HelpWindow.xaml TxtAboutVersion does not match manifest version $modVer"
 }
-Write-Host "  [PASS] HelpWindow.xaml version tags match manifest version $modVer." -ForegroundColor Green
+$psm1Path = Join-Path $root "PSRPM\PSRPM.psm1"
+$psm1Content = Get-Content -Path $psm1Path -Raw
+if ($psm1Content -notmatch '\$script:AppVersion\s*=\s*"' + [regex]::Escape($modVer) + '"') {
+    throw "PSRPM.psm1 AppVersion fallback does not match manifest version $modVer"
+}
+$userGuidePath = Join-Path $root "docs\USER_GUIDE.md"
+if (Test-Path $userGuidePath) {
+    $ugContent = Get-Content -Path $userGuidePath -Raw
+    if ($ugContent -notmatch "Version details \(v$([regex]::Escape($modVer))\)") {
+        throw "docs/USER_GUIDE.md About Tab version does not match manifest version v$modVer"
+    }
+}
+Write-Host "  [PASS] HelpWindow.xaml, PSRPM.psm1, and docs/USER_GUIDE.md match manifest version $modVer." -ForegroundColor Green
 
 # 6. Run Automated Engine Verification Suite
 Write-Host "[CHECK 6] Running Automated 12-Suite Verification..." -ForegroundColor Yellow

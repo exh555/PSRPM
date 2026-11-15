@@ -20,10 +20,13 @@ Start-PSRPM -ComputerName "10.10.50.12" -Credential (Get-Credential)
 Start-PSRPM -ComputerName "APP-SRV-01" -RefreshIntervalMs 500
 ```
 
-### Running Locally Without WinRM (`-LocalOnly` / `-Local`)
-If you are testing on a local workstation where WinRM is disabled or running under a non-administrative account:
+### Running Locally Without WinRM (Zero-Argument Default / `-LocalOnly`)
+If you are running on a local workstation without WinRM remoting or administrative privileges, calling `Start-PSRPM` (or `psrpm`) with no remote connection parameters launches directly in Local-Only Mode inside a non-blocking background STA runspace (pass `-Wait` to block the calling terminal, or `-Defaults` to ignore saved `%LOCALAPPDATA%\PSRPM\preferences.json` for the session):
 ```powershell
-Start-PSRPM -LocalOnly
+Start-PSRPM
+# Or explicitly force local / blocking / factory-default startup:
+Start-PSRPM -LocalOnly -Wait
+Start-PSRPM -Defaults
 ```
 
 ### Switching Targets Live Inside the App (`Ctrl+K`)
@@ -126,4 +129,4 @@ Press **`F1`**, select **Help -> Keyboard Shortcuts & Reference...**, use **File
 - **Shortcuts Tab**: Complete matrix of keyboard accelerators categorized by Navigation & View Controls, Process Operations, Multi-Host Session Management, and File/Application.
 - **Architecture & Safety Tab**: Architectural reference documenting 100% fileless security, ultra-low remote target overhead (< 0.25% CPU), differential wire streaming (~1.1-1.8 KB/s with raw JSON bypass below 256 bytes), zero-leak circular ring buffers, and `GetFileType`-gated named-pipe kernel deadlock prevention.
 - **Connectivity Tab**: In-app remoting guide explaining WinRM setup, non-domain `TrustedHosts` configuration, zero-privilege `-LocalOnly` local monitoring, and the semantic process row color legend.
-- **About Tab**: Version details (v1.12.0), licensing, and live runtime environment diagnostics (local workstation, operator identity, current target endpoint, transport protocol, PowerShell version, CLR/.NET runtime, and process architecture).
+- **About Tab**: Version details (v1.13.0), licensing, and live runtime environment diagnostics (local workstation, operator identity, current target endpoint, transport protocol, PowerShell version, CLR/.NET runtime, and process architecture).

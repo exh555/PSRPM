@@ -56,12 +56,15 @@ if ($clContent -notmatch "## \[$([regex]::Escape($NewVersion))\]") {
     Write-Host "  [SKIP] CHANGELOG.md already contains section for [$NewVersion]" -ForegroundColor Yellow
 }
 
-# 3. README.md Version Badge
+# 3. README.md Version Badge, Comparison Header & SemVer Footer
 $readmePath = Join-Path $repoRoot "README.md"
 $readmeContent = [System.IO.File]::ReadAllText($readmePath, $utf8NoBom)
-$readmeContent = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, "badge/version-[^-\s\)]+-0284c7\.svg", "badge/version-$NewVersion-0284c7.svg")
+$readmeContent = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, '\[!\[Version: [^\]]+\]', "[![Version: $NewVersion]")
+$readmeContent = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, 'badge/version-[^-\s\)]+-0284c7\.svg', "badge/version-$NewVersion-0284c7.svg")
+$readmeContent = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, '\*\*PSRPM \(`v[^`\)]+`\)\*\*', "**PSRPM (``v$NewVersion``)**")
+$readmeContent = [System.Text.RegularExpressions.Regex]::Replace($readmeContent, 'SemVer \(`[^`\)]+`\)', "SemVer (``$NewVersion``)")
 [System.IO.File]::WriteAllText($readmePath, $readmeContent, $utf8NoBom)
-Write-Host "  [OK] Synchronized README.md version badge -> $NewVersion" -ForegroundColor Green
+Write-Host "  [OK] Synchronized README.md version references -> v$NewVersion" -ForegroundColor Green
 
 # 4. PSRPM/UI/HelpWindow.xaml
 $helpXamlPath = Join-Path $repoRoot "PSRPM\UI\HelpWindow.xaml"
@@ -78,7 +81,23 @@ $colContent = [System.Text.RegularExpressions.Regex]::Replace($colContent, '"col
 [System.IO.File]::WriteAllText($collectorPath, $colContent, $utf8NoBom)
 Write-Host "  [OK] Synchronized PSRPM\Private\DataCollector.ps1 colVer -> $NewVersion" -ForegroundColor Green
 
-# 6. Verification Gate
+# 6. PSRPM/PSRPM.psm1 ($script:AppVersion fallback)
+$psm1Path = Join-Path $repoRoot "PSRPM\PSRPM.psm1"
+$psm1Content = [System.IO.File]::ReadAllText($psm1Path, $utf8NoBom)
+$psm1Content = [System.Text.RegularExpressions.Regex]::Replace($psm1Content, '\$script:AppVersion\s*=\s*"[^"]+"', "`$script:AppVersion = `"$NewVersion`"")
+[System.IO.File]::WriteAllText($psm1Path, $psm1Content, $utf8NoBom)
+Write-Host "  [OK] Synchronized PSRPM\PSRPM.psm1 AppVersion fallback -> $NewVersion" -ForegroundColor Green
+
+# 7. docs/USER_GUIDE.md (About Tab version reference)
+$userGuidePath = Join-Path $repoRoot "docs\USER_GUIDE.md"
+if ([System.IO.File]::Exists($userGuidePath)) {
+    $ugContent = [System.IO.File]::ReadAllText($userGuidePath, $utf8NoBom)
+    $ugContent = [System.Text.RegularExpressions.Regex]::Replace($ugContent, "Version details \(v[^)]+\)", "Version details (v$NewVersion)")
+    [System.IO.File]::WriteAllText($userGuidePath, $ugContent, $utf8NoBom)
+    Write-Host "  [OK] Synchronized docs\USER_GUIDE.md version -> v$NewVersion" -ForegroundColor Green
+}
+
+# 8. Verification Gate
 if (-not $SkipTest) {
     Write-Host ""
     Write-Host "Executing automated release readiness verification..." -ForegroundColor Yellow

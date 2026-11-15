@@ -1,7 +1,7 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Connect to Target System"
-        Height="355" Width="460"
+        Width="480" MinHeight="355" MaxHeight="560" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource BrushWindowBg}"
@@ -18,7 +18,11 @@
         <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
-        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#475569"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0369A1"/>
+        <SolidColorBrush x:Key="BrushKillBg" Color="#FEE2E2"/>
+        <SolidColorBrush x:Key="BrushKillFg" Color="#B91C1C"/>
+        <SolidColorBrush x:Key="BrushKillBorder" Color="#F87171"/>
         <Style TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
         </Style>
@@ -51,7 +55,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1">
-            <RadioButton x:Name="RbRemoteHost" Content="Remote Computer via WinRM (-ComputerName)" IsChecked="True" FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <RadioButton x:Name="RbRemoteHost" Content="Remote Computer via WinRM (-ComputerName)" AutomationProperties.Name="Remote Computer via WinRM" IsChecked="True" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
             <Grid Margin="20,0,0,10" x:Name="GridRemoteInputs">
                 <Grid.RowDefinitions>
@@ -65,32 +69,38 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Computer Name:" VerticalAlignment="Center" Margin="0,0,0,6"/>
-                <TextBox x:Name="TxtConnectComputer" Grid.Row="0" Grid.Column="1" Text="localhost" Padding="5,3" Margin="0,0,0,6"/>
+                <TextBox x:Name="TxtConnectComputer" Grid.Row="0" Grid.Column="1" Text="localhost" Padding="5,3" Margin="0,0,0,6" AutomationProperties.Name="Target Computer Name"/>
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Transport Options:" VerticalAlignment="Center" Margin="0,0,0,6"/>
                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
-                    <CheckBox x:Name="ChkUseSSL" Content="Use SSL (HTTPS)" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <CheckBox x:Name="ChkUseSSL" Content="Use SSL (HTTPS)" VerticalAlignment="Center" Margin="0,0,12,0" AutomationProperties.Name="Use HTTPS WinRM Transport"/>
                     <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBox x:Name="TxtConnectPort" Width="58" Text="" Padding="4,2" ToolTip="Leave blank for default WinRM port (5985 / 5986)"/>
+                    <TextBox x:Name="TxtConnectPort" Width="58" Text="" Padding="4,2" ToolTip="Leave blank for default WinRM port (5985 / 5986)" AutomationProperties.Name="Custom WinRM Port"/>
                 </StackPanel>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Authentication:" VerticalAlignment="Center"/>
                 <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
-                    <Button x:Name="BtnPickCredential" Content="Specify Credential..." Padding="8,2"/>
+                    <Button x:Name="BtnPickCredential" Content="Specify Credential..." Padding="8,2" AutomationProperties.Name="Specify Remote Authentication Credential"/>
                     <TextBlock x:Name="TxtCredStatus" Text="Current User" Foreground="{DynamicResource BrushTextMuted}" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
             </Grid>
 
-            <RadioButton x:Name="RbLocalOnly" Content="Local Host Only (-LocalOnly / No WinRM or Admin required)" FontWeight="SemiBold" Margin="0,6,0,10"/>
+            <RadioButton x:Name="RbLocalOnly" Content="Local Host Only (-LocalOnly / No WinRM or Admin required)" AutomationProperties.Name="Local Host Only Mode" FontWeight="SemiBold" Margin="0,6,0,10"/>
 
             <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Padding="8,6">
-                <CheckBox x:Name="ChkOpenInNewTab" Content="Open in a new Host Tab (keep current session warm in standby)" IsChecked="False" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
+                <CheckBox x:Name="ChkOpenInNewTab" Content="Open in a new Host Tab (keep current session warm in standby)" AutomationProperties.Name="Open Session in New Host Tab" IsChecked="False" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
+            </Border>
+
+            <!-- Inline Validation / Connection Error & Progress Banner -->
+            <TextBlock x:Name="TxtConnectProgress" Text="" Visibility="Collapsed" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"/>
+            <Border x:Name="BdConnectError" Visibility="Collapsed" Background="{DynamicResource BrushKillBg}" BorderBrush="{DynamicResource BrushKillBorder}" BorderThickness="1" CornerRadius="3" Padding="8,6" Margin="0,8,0,0">
+                <TextBlock x:Name="TxtConnectError" Text="" Foreground="{DynamicResource BrushKillFg}" FontSize="11" TextWrapping="Wrap"/>
             </Border>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button x:Name="BtnConnectSubmit" Content="Connect" Width="92" Height="28" Margin="0,0,8,0" IsDefault="True" FontWeight="SemiBold"/>
-            <Button x:Name="BtnConnectCancel" Content="Cancel" Width="82" Height="28" IsCancel="True"/>
+            <Button x:Name="BtnConnectSubmit" Content="Connect" AutomationProperties.Name="Connect to Selected Host" Width="92" Height="28" Margin="0,0,8,0" IsDefault="True" FontWeight="SemiBold"/>
+            <Button x:Name="BtnConnectCancel" Content="Cancel" AutomationProperties.Name="Cancel Connection" Width="82" Height="28" IsCancel="True"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.12.0'
+    ModuleVersion     = '1.13.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -78,10 +78,10 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Fixed async closure, shutdown teardown and unmanaged buffer leaks (coordinator worker disposal, local collector AllocHGlobal cleanup, PropertiesWindow/ServiceDetailWindow callbacks, ServiceDetailWindow badge crash)
-- Hardened same-tick PID reuse, CloseTcpConnection/KillTree validation, PEB/module bounds, clipboard handling and target-switch parity
-- Performance: Class 8 scaling above 170 cores, <256 B raw JSON bypass, cached theme palettes and brushes, keyed socket reconciliation, off-tab ETW buffering
-- 6-theme parity across all dialogs, refreshed Help copy, restructured README with Why PSRPM, and reliable 44-check extended QA
+- Zero-arg Local Mode and non-blocking STA background launch by default (-Wait to block, -Defaults to skip saved preferences)
+- Added CPUDelta baseline diff column (31-column catalog) with BaselineCPU tracking and numeric sorting
+- Full 6-theme WCAG 2.1 AA (>=4.5:1) contrast tokens and UIA AutomationProperties.Name accessibility across all 8 XAML windows
+- UX hardening: opt-in unsaved preferences cue, responsive toolbar wrap, empty-state filter overlays, Space focus isolation, Network row Enter/double-click navigation, inline ConnectDialog validation, cancellable Find Handle search, and actionable Win32/SCM Hint errors
 '@
         }
     }

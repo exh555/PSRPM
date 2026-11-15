@@ -296,13 +296,13 @@ Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard 
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeTokyoNight", "MenuThemeTokyoNightLight", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "BorderTelemNetRate", "MenuViewSelectColumns", "MenuViewBaseline", "MenuViewClearBaseline", "BadgeBaselineActive", "TxtBaselineLabel", "BtnClearBaseline", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPeakCpu", "ColPeakPrivate", "ColPrivateDelta", "ColWorkingSetDelta", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory", "TabNetworkActivity", "BtnNetModeSockets", "BtnNetModeTimeline", "BtnNetRefreshSockets", "ChkNetAutoRefresh", "BtnNetCloseConn", "ChipNetTcp4", "ChipNetTcp6", "ChipNetUdp4", "ChipNetUdp6", "ChipNetEstablished", "ChipNetListening", "ChipNetSynSent", "ChipNetTimeWait", "ChipNetRecv", "ChipNetSend", "BtnNetClear", "BtnNetExportCsv", "TxtNetActivitySummary", "TxtNetStatusCounts", "TxtSearchNetwork", "BtnClearSearchNetwork", "NetTabNoticeBanner", "BtnNetBannerEnableEtw", "BtnNetBannerSwitchSockets", "GridNetworkSockets", "GridNetworkTimeline", "CtxNetSockCloseConn", "CtxNetSockCopyDetails", "CtxNetTimeCopyDetails", "NetEmptyStateOverlay") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeTokyoNight", "MenuThemeTokyoNightLight", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "BorderTelemNetRate", "MenuViewSelectColumns", "MenuViewBaseline", "MenuViewClearBaseline", "BadgeBaselineActive", "TxtBaselineLabel", "BtnClearBaseline", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPeakCpu", "ColPeakPrivate", "ColCpuDelta", "ColPrivateDelta", "ColWorkingSetDelta", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory", "TabNetworkActivity", "BtnNetModeSockets", "BtnNetModeTimeline", "BtnNetRefreshSockets", "ChkNetAutoRefresh", "BtnNetCloseConn", "ChipNetTcp4", "ChipNetTcp6", "ChipNetUdp4", "ChipNetUdp6", "ChipNetEstablished", "ChipNetListening", "ChipNetSynSent", "ChipNetTimeWait", "ChipNetRecv", "ChipNetSend", "BtnNetClear", "BtnNetExportCsv", "TxtNetActivitySummary", "TxtNetStatusCounts", "TxtSearchNetwork", "BtnClearSearchNetwork", "NetTabNoticeBanner", "BtnNetBannerEnableEtw", "BtnNetBannerSwitchSockets", "GridNetworkSockets", "GridNetworkTimeline", "CtxNetSockCloseConn", "CtxNetSockCopyDetails", "CtxNetTimeCopyDetails", "ProcEmptyStateOverlay", "BtnProcEmptyClear", "SvcEmptyStateOverlay", "BtnSvcEmptyClear", "NetEmptyStateOverlay") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
-    @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
+    @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "BtnConnectCancel", "TxtConnectProgress", "BdConnectError", "TxtConnectError", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo", "QuadNet") }
     @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtHeaderBadge", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
     @{ File = "ServiceDetailWindow.xaml"; RequiredControls = @("TxtDlgDisplayName", "TxtDlgServiceName", "TxtDlgPid", "BadgeDlgStatus", "TxtDlgStatus", "SvcTabControl", "TxtDlgDescription", "TxtDlgPath", "TxtDlgStartup", "TxtDlgAccount", "TxtDlgDepSummary", "GridDlgPrereqs", "GridDlgDependents", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
-    @{ File = "FindHandleWindow.xaml"; RequiredControls = @("TxtSearchHandle", "BtnSearchHandle", "TxtHandleStatus", "GridHandleResults", "CtxCloseHandle", "CtxGoToProcess", "CtxCopyPath", "BtnCloseHandle", "BtnGoToProcess", "BtnCopyPath", "BtnCloseDlg") }
+    @{ File = "FindHandleWindow.xaml"; RequiredControls = @("TxtSearchHandle", "BtnSearchHandle", "BtnCancelSearchHandle", "TxtHandleStatus", "PbHandleSearch", "GridHandleResults", "CtxCloseHandle", "CtxGoToProcess", "CtxCopyPath", "BtnCloseHandle", "BtnGoToProcess", "BtnCopyPath", "BtnCloseDlg") }
     @{ File = "SelectColumnsWindow.xaml"; RequiredControls = @("TxtSelectedCount", "BtnPresetDefault", "BtnPresetProcExp", "BtnPresetForensic", "TxtColFilter", "BtnColFilterClear", "LstAvailableColumns", "LstColumnOrder", "BtnColMoveUp", "BtnColMoveDown", "BtnColResetDefaults", "BtnColOk", "BtnColCancel") }
 )
 
@@ -376,7 +376,7 @@ foreach ($xf in $xamlFiles) {
             $winObj.FindName("BadgeBaselineActive").Visibility -ne [System.Windows.Visibility]::Collapsed) {
             throw "MainWindow.xaml Net ETW banner, Rx/Tx button, and Baseline badge must start Collapsed."
         }
-        foreach ($optPeakColName in @("ColPeakCpu", "ColPeakPrivate", "ColPrivateDelta", "ColWorkingSetDelta")) {
+        foreach ($optPeakColName in @("ColPeakCpu", "ColPeakPrivate", "ColCpuDelta", "ColPrivateDelta", "ColWorkingSetDelta")) {
             $optCol = $winObj.FindName($optPeakColName)
             if ($null -eq $optCol -or $optCol.Visibility -ne [System.Windows.Visibility]::Collapsed) {
                 throw "MainWindow.xaml opt-in column '$optPeakColName' must start Collapsed."
@@ -1736,6 +1736,15 @@ try {
         throw "ColumnWidths sanitization failed."
     }
 
+    # Temporary -Defaults (-UseDefaults) must return factory defaults without reading or modifying saved config on disk
+    $skipDiskRes = & $psrpmModPrefs { Read-PSRPMPreferences -UseDefaults }
+    if (-not $skipDiskRes.SkippedDisk -or $skipDiskRes.LoadedFromDisk -or $skipDiskRes.HadParseError -or $skipDiskRes.Preferences.Theme -ne "Light" -or $skipDiskRes.Preferences.AlwaysOnTop -or $skipDiskRes.Preferences.SortProperty -ne "PID" -or $skipDiskRes.Preferences.RefreshIntervalMs -ne 1000) {
+        throw "Read-PSRPMPreferences -UseDefaults did not bypass saved config cleanly."
+    }
+    if (-not [System.IO.File]::Exists($tempPrefFile)) {
+        throw "Read-PSRPMPreferences -UseDefaults unexpectedly deleted saved preferences file '$tempPrefFile'."
+    }
+
     $wasRemoved = & $psrpmModPrefs { Reset-PSRPMPreferences }
     if (-not $wasRemoved -or [System.IO.File]::Exists($tempPrefFile)) {
         throw "Reset-PSRPMPreferences did not remove '$tempPrefFile'."
@@ -1953,32 +1962,36 @@ $peakBaseVm.UpdateDynamic(2.10, 25000000L, 15000000L, 12, 180, 0)
 if ($peakBaseVm.PeakCPU -ne 12.50 -or $peakBaseVm.PeakCPUFormatted -ne "12.50" -or $peakBaseVm.PeakPrivateBytes -ne 20000000L -or $peakBaseVm.PeakHandles -ne 200) {
     throw "ProcessItemViewModel failed to retain high-water session peaks (PeakCPU=$($peakBaseVm.PeakCPU), PeakPriv=$($peakBaseVm.PeakPrivateBytes))."
 }
-# Baseline set at 15MB Private, 25MB WS, 180 Handles -> grow by +2MB/+4MB (badge visible), then shrink below baseline
-$peakBaseVm.SetBaselineState($true, $false, 15000000L, 25000000L, 180)
+# Baseline set at 15MB Private, 25MB WS, 180 Handles, 2.10% CPU -> grow by +2MB/+4MB/+0.90% CPU (badge visible), then shrink below baseline
+$peakBaseVm.SetBaselineState($true, $false, 15000000L, 25000000L, 180, 2.10)
 $peakBaseVm.UpdateDynamic(3.00, 29000000L, 17000000L, 12, 195, 0)
 if ($peakBaseVm.PrivateBytesDelta -ne 2000000L -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible" -or -not $peakBaseVm.PrivateDeltaFormatted.StartsWith("+")) {
     throw "ProcessItemViewModel baseline growth diff mismatch: Delta=$($peakBaseVm.PrivateBytesDelta), Fmt='$($peakBaseVm.PrivateDeltaFormatted)', Vis=$($peakBaseVm.PrivateDeltaBadgeVisibility)."
 }
+if ([Math]::Abs($peakBaseVm.CPUDelta - 0.90) -gt 0.001 -or $peakBaseVm.CPUDeltaFormatted -ne "+0.90%") {
+    throw "ProcessItemViewModel CPUDelta growth mismatch: CPUDelta=$($peakBaseVm.CPUDelta), Fmt='$($peakBaseVm.CPUDeltaFormatted)'."
+}
 if ([string]::IsNullOrWhiteSpace($peakBaseVm.CommandLineToolTip) -or -not $peakBaseVm.CommandLineToolTip.Contains("Command line:")) {
     throw "ProcessItemViewModel CommandLineToolTip regression."
 }
-if ([string]::IsNullOrWhiteSpace($peakBaseVm.ProcessHoverToolTip) -or -not $peakBaseVm.ProcessHoverToolTip.Contains("Path:") -or -not $peakBaseVm.ProcessHoverToolTip.Contains("(Peak ") -or -not $peakBaseVm.ProcessHoverToolTip.Contains("Baseline:") -or -not $peakBaseVm.CpuCellToolTip.Contains("Session Peak:")) {
+if ([string]::IsNullOrWhiteSpace($peakBaseVm.ProcessHoverToolTip) -or -not $peakBaseVm.ProcessHoverToolTip.Contains("Path:") -or -not $peakBaseVm.ProcessHoverToolTip.Contains("(Peak ") -or -not $peakBaseVm.ProcessHoverToolTip.Contains("Baseline: CPU ") -or -not $peakBaseVm.CpuCellToolTip.Contains("Session Peak:") -or -not $peakBaseVm.CpuCellToolTip.Contains("Baseline Delta:")) {
     throw "ProcessItemViewModel ProcessHoverToolTip / CpuCellToolTip missing expected telemetry sections."
 }
 # Sub-threshold delta (< 64 KB) hides inline compact badge while preserving full column text
-$peakBaseVm.UpdateDynamic(1.00, 25004096L, 15004096L, 12, 180, 0)
-if ($peakBaseVm.PrivateDeltaBadgeVisibility -ne "Collapsed" -or [string]::IsNullOrWhiteSpace($peakBaseVm.PrivateDeltaFormatted)) {
-    throw "Sub-64KB delta should collapse inline badge while keeping formatted column string."
+$peakBaseVm.UpdateDynamic(2.10, 25004096L, 15004096L, 12, 180, 0)
+if ($peakBaseVm.PrivateDeltaBadgeVisibility -ne "Collapsed" -or [string]::IsNullOrWhiteSpace($peakBaseVm.PrivateDeltaFormatted) -or $peakBaseVm.CPUDeltaFormatted -ne "0.00%") {
+    throw "Sub-64KB delta should collapse inline badge while keeping formatted column string (CPUDeltaFormatted='$($peakBaseVm.CPUDeltaFormatted)')."
 }
 # Negative shrink delta (>= 64 KB) shows compact negative badge and shrink brush
 $peakBaseVm.UpdateDynamic(1.00, 23000000L, 13000000L, 12, 175, 0)
-if ($peakBaseVm.PrivateBytesDelta -ne -2000000L -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible" -or -not $peakBaseVm.PrivateDeltaFormatted.StartsWith("-") -or -not $peakBaseVm.PrivateDeltaBadgeText.StartsWith("-")) {
-    throw "Negative baseline shrink diff mismatch: Delta=$($peakBaseVm.PrivateBytesDelta), Fmt='$($peakBaseVm.PrivateDeltaFormatted)', Badge='$($peakBaseVm.PrivateDeltaBadgeText)'."
+if ($peakBaseVm.PrivateBytesDelta -ne -2000000L -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible" -or -not $peakBaseVm.PrivateDeltaFormatted.StartsWith("-") -or -not $peakBaseVm.PrivateDeltaBadgeText.StartsWith("-") -or $peakBaseVm.CPUDeltaFormatted -ne "-1.10%") {
+    throw "Negative baseline shrink diff mismatch: Delta=$($peakBaseVm.PrivateBytesDelta), Fmt='$($peakBaseVm.PrivateDeltaFormatted)', Badge='$($peakBaseVm.PrivateDeltaBadgeText)', CPUDelta='$($peakBaseVm.CPUDeltaFormatted)'."
 }
 # PID-reuse protection: same PID with new CreateTime must become [NEW] instead of subtracting stale process memory
 $pidSnap = @{
     [int]$peakBaseVm.PID = @{
         CreateTime   = 134075000000000000L
+        CPU          = 2.10
         PrivateBytes = 90000000L
         MemoryBytes  = 90000000L
         Handles      = 500
@@ -1987,22 +2000,27 @@ $pidSnap = @{
 $snapEntry = $pidSnap[[int]$peakBaseVm.PID]
 $isRecycledNew = ([string]$snapEntry.CreateTime -ne [string]$peakBaseVm.CreateTime)
 if (-not $isRecycledNew) { throw "CreateTime mismatch expected for recycled PID simulation." }
-$peakBaseVm.SetBaselineState($true, $true, 0L, 0L, 0)
-if ($peakBaseVm.PrivateDeltaFormatted -ne "[NEW]" -or $peakBaseVm.PrivateDeltaBadgeText -ne "[NEW]" -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible") {
-    throw "Post-baseline [NEW] marker mismatch: Fmt='$($peakBaseVm.PrivateDeltaFormatted)'."
+$peakBaseVm.SetBaselineState($true, $true, 0L, 0L, 0, 0.0)
+if ($peakBaseVm.PrivateDeltaFormatted -ne "[NEW]" -or $peakBaseVm.PrivateDeltaBadgeText -ne "[NEW]" -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible" -or $peakBaseVm.CPUDeltaFormatted -ne "[NEW]") {
+    throw "Post-baseline [NEW] marker mismatch: Fmt='$($peakBaseVm.PrivateDeltaFormatted)', CPUDelta='$($peakBaseVm.CPUDeltaFormatted)'."
+}
+# Backward-compatible 5-arg overload check
+$peakBaseVm.SetBaselineState($true, $false, 15000000L, 25000000L, 180)
+if (-not $peakBaseVm.HasBaseline -or $peakBaseVm.SpawnedPostBaseline -or $peakBaseVm.CPUDeltaFormatted -ne "0.00%") {
+    throw "5-arg SetBaselineState overload regression: CPUDeltaFormatted='$($peakBaseVm.CPUDeltaFormatted)'."
 }
 if ([SystemSummaryViewModel]::FormatBytesStatic(1048576.0) -ne "1.0 MB") {
     throw "SystemSummaryViewModel::FormatBytesStatic(1MB) mismatch."
 }
 
-# E. 30-Column Catalog & New Sort Keys Round-Trip in Preferences
+# E. 31-Column Catalog & New Sort Keys Round-Trip in Preferences
 $psrpmModCat = Get-Module -Name PSRPM
-$colCat30 = & $psrpmModCat { Get-PSRPMColumnCatalog }
-if ($colCat30.Count -ne 30) {
-    throw "Expected 30 catalog columns after adding Peak/Delta columns, got $($colCat30.Count)."
+$colCat31 = & $psrpmModCat { Get-PSRPMColumnCatalog }
+if ($colCat31.Count -ne 31) {
+    throw "Expected 31 catalog columns after adding Peak/Delta columns, got $($colCat31.Count)."
 }
-foreach ($reqColKey in @("PeakCPU", "PeakPrivate", "PrivateDelta", "WSDelta")) {
-    $hitCol = $colCat30 | Where-Object { $_.Key -eq $reqColKey } | Select-Object -First 1
+foreach ($reqColKey in @("PeakCPU", "PeakPrivate", "CPUDelta", "PrivateDelta", "WSDelta")) {
+    $hitCol = $colCat31 | Where-Object { $_.Key -eq $reqColKey } | Select-Object -First 1
     if (-not $hitCol -or [bool]$hitCol.DefaultVisible) {
         throw "Catalog entry '$reqColKey' missing or must default to hidden."
     }
@@ -2010,9 +2028,9 @@ foreach ($reqColKey in @("PeakCPU", "PeakPrivate", "PrivateDelta", "WSDelta")) {
 $tempNewColPref = Join-Path ([System.IO.Path]::GetTempPath()) "psrpm_newcols_$([System.Guid]::NewGuid().ToString('N')).json"
 try {
     & $psrpmModCat { param($p) $script:PSRPMPreferencesPathOverride = $p } $tempNewColPref
-    [System.IO.File]::WriteAllText($tempNewColPref, '{"SortProperty":"PrivateBytesDelta","VisibleColumns":["Process","PeakCPU","PeakPrivate","PrivateDelta","WSDelta"]}', [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($tempNewColPref, '{"SortProperty":"CPUDelta","VisibleColumns":["Process","PeakCPU","PeakPrivate","CPUDelta","PrivateDelta","WSDelta"]}', [System.Text.UTF8Encoding]::new($false))
     $newColRead = & $psrpmModCat { Read-PSRPMPreferences }
-    if ($newColRead.Preferences.SortProperty -ne "PrivateBytesDelta" -or ($newColRead.Preferences.VisibleColumns -join ',') -ne "Process,PeakCPU,PeakPrivate,PrivateDelta,WSDelta") {
+    if ($newColRead.Preferences.SortProperty -ne "CPUDelta" -or ($newColRead.Preferences.VisibleColumns -join ',') -ne "Process,PeakCPU,PeakPrivate,CPUDelta,PrivateDelta,WSDelta") {
         throw "Preferences failed to round-trip new Peak/Delta sort key & visible columns."
     }
 } finally {
@@ -2153,7 +2171,7 @@ foreach ($miniName in @("CardMiniCpu", "GridMiniCpu", "CrosshairMiniCpu", "CardM
     }
 }
 try { $netQaWin.Close() } catch {}
-Write-Host "  [PASS] 12M: Verified 6-theme WCAG brushes, Network SysInfo curves/totals, AllSockets ($($allSockRes['Count']) sockets), Hover tooltips, Peaks/Baseline diffs, closure-scope guard & 30-column preferences." -ForegroundColor Green
+Write-Host "  [PASS] 12M: Verified 6-theme WCAG brushes, Network SysInfo curves/totals, AllSockets ($($allSockRes['Count']) sockets), Hover tooltips, Peaks/Baseline diffs, closure-scope guard & 31-column preferences." -ForegroundColor Green
 $sysHoverXmlBytes = [System.IO.File]::ReadAllBytes((Join-Path $repoRoot "PSRPM\UI\SystemInfoWindow.xaml"))
 $msSysHover = [System.IO.MemoryStream]::new($sysHoverXmlBytes)
 $sysHoverWin = [System.Windows.Markup.XamlReader]::Load($msSysHover)
@@ -2423,6 +2441,112 @@ foreach ($stKey in @("BrushSvcRunningBg", "BrushSvcPausedBg", "BrushSvcStoppedBg
 }
 $svcTestWin.Close()
 Write-Host "  [PASS] 12O: Verified Phase 1-5 regressions (H1/H4 Dispose, M1 PID-reuse, M2 CloseTcp & KillTree, M4/M5 helpers, 6-theme parity, ServiceDetail badge/theme, <256B GZIP bypass, PendingNetTimeline)." -ForegroundColor Green
+
+# 12P: UX Audit, WCAG 2.1 AA 6-Theme Contrast, UIA Accessibility, Input Isolation, Local-Default & Empty/Error Regressions
+foreach ($tName12p in @("Light", "Dark", "TokyoNight", "TokyoNightLight", "Classic", "HighContrast")) {
+    $pal12p = [PSRPMThemeRegistry]::GetPalette($tName12p).Brushes
+    foreach ($bgKey12p in @("BrushWindowBg", "BrushToolbarBg", "BrushSurfaceBg")) {
+        foreach ($fgKey12p in @("BrushTextPrimary", "BrushTextSecondary", "BrushTextMuted", "BrushAccent")) {
+            $crTxt = & $getContrastRatio ([string]$pal12p[$fgKey12p]) ([string]$pal12p[$bgKey12p])
+            if ($crTxt -lt 4.5) {
+                throw "WCAG AA failure in theme '$tName12p': '$fgKey12p' vs '$bgKey12p' contrast is $([Math]::Round($crTxt, 2)) (< 4.5:1)."
+            }
+        }
+    }
+    foreach ($helpKey12p in @("BrushHelpSuccessFg", "BrushHelpAmberFg", "BrushHelpVioletFg")) {
+        $crHelp = & $getContrastRatio ([string]$pal12p[$helpKey12p]) ([string]$pal12p["BrushSurfaceBg"])
+        if ($crHelp -lt 4.5) {
+            throw "WCAG AA failure in theme '$tName12p': '$helpKey12p' vs BrushSurfaceBg contrast is $([Math]::Round($crHelp, 2)) (< 4.5:1)."
+        }
+    }
+    foreach ($pair12p in @(
+        @("BrushRowSelectedFg", "BrushRowSelectedBg"),
+        @("BrushBadgeFg", "BrushBadgeBg"),
+        @("BrushKillFg", "BrushKillBg"),
+        @("BrushKillTreeFg", "BrushKillTreeBg")
+    )) {
+        $crPair = & $getContrastRatio ([string]$pal12p[$pair12p[0]]) ([string]$pal12p[$pair12p[1]])
+        if ($crPair -lt 4.5) {
+            throw "WCAG AA failure in theme '$tName12p': '$($pair12p[0])/$($pair12p[1])' contrast is $([Math]::Round($crPair, 2)) (< 4.5:1)."
+        }
+    }
+    foreach ($svcKey12p in @("BrushSvcRunningBg", "BrushSvcPausedBg", "BrushSvcStoppedBg")) {
+        $crSvc = & $getContrastRatio "#FFFFFF" ([string]$pal12p[$svcKey12p])
+        if ($crSvc -lt 4.5) {
+            throw "WCAG AA failure in theme '$tName12p': '#FFFFFF' vs '$svcKey12p' contrast is $([Math]::Round($crSvc, 2)) (< 4.5:1)."
+        }
+    }
+}
+
+$uiDir12p = Join-Path $repoRoot "PSRPM\UI"
+$uiaExpectations = @(
+    @{ File = "MainWindow.xaml";          MinCount = 60; Tokens = @("BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnClearSearch", "BtnClearSearchServices", "BtnClearSearchNetwork", "CardMiniCpu", "BtnProcEmptyClear", "BtnSvcEmptyClear") }
+    @{ File = "PropertiesWindow.xaml";    MinCount = 15; Tokens = @("BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles") }
+    @{ File = "ConnectDialog.xaml";       MinCount = 8;  Tokens = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "BtnConnectSubmit", "BtnConnectCancel") }
+    @{ File = "SystemInfoWindow.xaml";    MinCount = 8;  Tokens = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk") }
+    @{ File = "HelpWindow.xaml";          MinCount = 2;  Tokens = @("HelpTabControl", "BtnHelpClose") }
+    @{ File = "ServiceDetailWindow.xaml"; MinCount = 10; Tokens = @("SvcTabControl", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
+    @{ File = "FindHandleWindow.xaml";    MinCount = 8;  Tokens = @("TxtSearchHandle", "BtnSearchHandle", "BtnCancelSearchHandle", "GridHandleResults") }
+    @{ File = "SelectColumnsWindow.xaml"; MinCount = 10; Tokens = @("TxtColFilter", "BtnColFilterClear", "LstAvailableColumns", "LstColumnOrder") }
+)
+foreach ($uiaSpec in $uiaExpectations) {
+    $xRaw = [System.IO.File]::ReadAllText((Join-Path $uiDir12p $uiaSpec.File))
+    $uiaMatches = [regex]::Matches($xRaw, 'AutomationProperties\.Name="[^"]+"')
+    if ($uiaMatches.Count -lt $uiaSpec.MinCount) {
+        throw "UIA AutomationProperties.Name coverage regression in $($uiaSpec.File): found $($uiaMatches.Count), expected >= $($uiaSpec.MinCount)."
+    }
+    foreach ($tok in $uiaSpec.Tokens) {
+        if ($xRaw -notmatch ("x:Name=""$([regex]::Escape($tok))""[^>]*AutomationProperties\.Name=""[^""]+""")) {
+            throw "UIA AutomationProperties.Name missing on key control '$tok' in $($uiaSpec.File)."
+        }
+    }
+}
+
+if ($psm1Src12 -notmatch 'isInteractiveKeyTarget' -or $psm1Src12 -notmatch 'Key\]::Space[^\r\n]+isInteractiveKeyTarget') {
+    throw "PSRPM.psm1 missing Space focus isolation guard ('$isInteractiveKeyTarget') in PreviewKeyDown."
+}
+if ($psm1Src12 -notmatch 'Key\]::Return[^\r\n]+gridNetworkSockets' -or $psm1Src12 -notmatch 'Key\]::Return[^\r\n]+gridNetworkTimeline' -or $psm1Src12 -notmatch 'add_MouseDoubleClick') {
+    throw "PSRPM.psm1 missing Network Activity Return/MouseDoubleClick row navigation wiring."
+}
+if ($psm1Src12 -notmatch '\$hasExplicitWinRmTarget\s*=' -or $psm1Src12 -notmatch '\$isLocalMode\s*=\s*\[bool\]\$LocalOnly\s*-or\s*\(-not\s*\$hasExplicitWinRmTarget\)') {
+    throw "PSRPM.psm1 Start-PSRPM zero-arg Local Mode routing regression detected."
+}
+$waitAst12p = [System.Management.Automation.Language.Parser]::ParseInput($psm1Src12, [ref]$null, [ref]$null)
+foreach ($cmdFn in @("Start-PSRPM", "Start-RemoteProcessManager")) {
+    $cmdAst = $waitAst12p.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $cmdFn }, $true) | Select-Object -First 1
+    $waitParam = $cmdAst.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq "Wait" } | Select-Object -First 1
+    $noWaitParam = $cmdAst.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq "NoWait" } | Select-Object -First 1
+    $defParam = $cmdAst.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq "Defaults" } | Select-Object -First 1
+    if (-not $waitParam -or $waitParam.StaticType.FullName -ne "System.Management.Automation.SwitchParameter") {
+        throw "$cmdFn missing [switch]`$Wait parameter."
+    }
+    if (-not $noWaitParam -or $noWaitParam.StaticType.FullName -ne "System.Management.Automation.SwitchParameter") {
+        throw "$cmdFn missing backwards-compatible [switch]`$NoWait parameter."
+    }
+    if (-not $defParam -or $defParam.StaticType.FullName -ne "System.Management.Automation.SwitchParameter") {
+        throw "$cmdFn missing [switch]`$Defaults parameter."
+    }
+}
+if ($psm1Src12 -notmatch 'if\s*\(-not\s*\[bool\]\$Wait\)' -or $psm1Src12 -notmatch '\$bound\["Wait"\]\s*=\s*\$true') {
+    throw "PSRPM.psm1 Start-PSRPM default background STA launcher or recursion guard (`$bound['Wait'] = `$true`) regression detected."
+}
+if ($psm1Src12 -notmatch 'Read-PSRPMPreferences\s+-UseDefaults:\$Defaults') {
+    throw "PSRPM.psm1 Start-PSRPM missing -Defaults bypass wiring to Read-PSRPMPreferences."
+}
+if ($psm1Src12 -notmatch '\$prefsDirtyState' -or $psm1Src12 -notmatch '\$markUnsavedPrefs' -or $psm1Src12 -notmatch '\$clearUnsavedPrefs') {
+    throw "PSRPM.psm1 missing opt-in preference dirty cue helpers."
+}
+$mainXaml12p = [System.IO.File]::ReadAllText((Join-Path $uiDir12p "MainWindow.xaml"))
+if ($mainXaml12p -notmatch 'MenuSavePreferences[^>]*never auto-saved') {
+    throw "MainWindow.xaml MenuSavePreferences tooltip must explicitly document opt-in behavior (never auto-saved)."
+}
+$procActSrc12p = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\ProcessActions.ps1"))
+foreach ($hintCode in @('5', '87', '299', '1053', '1060', '1062')) {
+    if ($procActSrc12p -notmatch "\b$hintCode\s*=" -or $procActSrc12p -notmatch 'Hint:') {
+        throw "ProcessActions.ps1 missing actionable Win32/SCM Hint mapping for error code '$hintCode'."
+    }
+}
+Write-Host "  [PASS] 12P: Verified 6-theme WCAG AA contrast (>=4.5:1), 8-XAML UIA labels, Space/Enter isolation, zero-arg Local Mode, opt-in prefs cue & Win32 Hint enrichment." -ForegroundColor Green
 
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()

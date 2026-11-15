@@ -780,8 +780,8 @@ $script:PSRPMActionScriptBlock = {
         }
     } catch {
         $res.Success = $false
-        $errMsg = $_.Exception.Message
-        $res.Message = $errMsg
+        $errMsg = [string]$_.Exception.Message
+        $innerEx = $_.Exception.InnerException
         if ($errMsg -match "reuse detected|identity verification failed|Cannot terminate|Cannot suspend|Cannot resume|Cannot close handle|Cannot close TCP connection|Access denied closing TCP connection|Cannot generate memory dump|Cannot change priority|Refused|no longer exists in active IPv4 table") {
             $res.Status  = "Refused"
             $res.ErrorId = "PSRPM.Process.Refused"
@@ -789,6 +789,40 @@ $script:PSRPMActionScriptBlock = {
             $res.Status  = "Failed"
             $res.ErrorId = "PSRPM.Process.Failed"
         }
+
+        $win32Hints = @{
+            5    = "Access denied. Run PSRPM elevated as Administrator or check if target is a Protected Process Light (PPL)."
+            87   = "Target PID, handle, or connection no longer exists or already exited."
+            299  = "Partial memory copy (bitness mismatch or target exited during inspection)."
+            740  = "Operation requires elevated Administrator privileges."
+            1053 = "Service did not respond to the control request in time."
+            1056 = "An instance of the service is already running."
+            1058 = "Service is disabled; set Startup Type to Manual or Automatic first."
+            1060 = "Specified service is not installed on the target host."
+            1062 = "Service has not been started (already stopped)."
+        }
+        $ntHints = @{
+            "C0000022" = "Access denied (NTSTATUS STATUS_ACCESS_DENIED); target may require elevation or PPL protection prevents access."
+            "C000010A" = "Process is already in the middle of terminating (STATUS_PROCESS_IS_TERMINATING)."
+        }
+
+        $detectedCode = $null
+        if ($errMsg -match 'Win32 [Ee]rror:?\s*(\d+)') {
+            $detectedCode = [int]$Matches[1]
+        } elseif ($innerEx -is [System.ComponentModel.Win32Exception]) {
+            $detectedCode = [int]$innerEx.NativeErrorCode
+            $errMsg = "$errMsg (Win32 Error: $detectedCode)"
+        }
+
+        if ($null -ne $detectedCode -and $win32Hints.ContainsKey($detectedCode)) {
+            $errMsg = "$errMsg Hint: $($win32Hints[$detectedCode])"
+        } elseif ($errMsg -match 'NTSTATUS\s+0x([0-9A-Fa-f]+)') {
+            $ntHex = $Matches[1].ToUpperInvariant()
+            if ($ntHints.ContainsKey($ntHex)) {
+                $errMsg = "$errMsg Hint: $($ntHints[$ntHex])"
+            }
+        }
+        $res.Message = $errMsg
     }
 
     Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue

@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.12.0"
+$script:AppVersion = "1.13.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -169,6 +169,7 @@ function Get-PSRPMColumnCatalog {
         @{ Key = "WorkingSet";     ControlName = "ColWorkingSet";      Header = "Working Set";    Group = "Performance"; Hint = "Physical RAM currently resident in process";             SortProp = "MemoryBytes";       DefaultVisible = $true;  DefaultWidth = 98.0;  IsLocked = $false; IsNetEtw = $false }
         @{ Key = "PeakCPU";        ControlName = "ColPeakCpu";         Header = "Peak CPU";       Group = "Performance"; Hint = "Highest own CPU percentage observed during session";       SortProp = "PeakCPU";           DefaultVisible = $false; DefaultWidth = 76.0;  IsLocked = $false; IsNetEtw = $false }
         @{ Key = "PeakPrivate";    ControlName = "ColPeakPrivate";     Header = "Peak Private";   Group = "Performance"; Hint = "Highest Private Bytes observed during session";          SortProp = "PeakPrivateBytes";  DefaultVisible = $false; DefaultWidth = 102.0; IsLocked = $false; IsNetEtw = $false }
+        @{ Key = "CPUDelta";       ControlName = "ColCpuDelta";        Header = "CPU Delta";      Group = "Performance"; Hint = "Signed own CPU percentage change since baseline (Ctrl+B)"; SortProp = "CPUDelta";        DefaultVisible = $false; DefaultWidth = 78.0;  IsLocked = $false; IsNetEtw = $false }
         @{ Key = "PrivateDelta";   ControlName = "ColPrivateDelta";    Header = "Private Delta";  Group = "Performance"; Hint = "Signed Private Bytes change since baseline (Ctrl+B)";    SortProp = "PrivateBytesDelta"; DefaultVisible = $false; DefaultWidth = 102.0; IsLocked = $false; IsNetEtw = $false }
         @{ Key = "WSDelta";        ControlName = "ColWorkingSetDelta"; Header = "WS Delta";       Group = "Performance"; Hint = "Signed Working Set change since baseline (Ctrl+B)";      SortProp = "MemoryDelta";       DefaultVisible = $false; DefaultWidth = 98.0;  IsLocked = $false; IsNetEtw = $false }
         @{ Key = "PID";            ControlName = "ColPid";          Header = "PID";            Group = "Identity";    Hint = "Windows numeric process identifier";                     SortProp = "PID";             DefaultVisible = $true;  DefaultWidth = 62.0;  IsLocked = $false; IsNetEtw = $false }
@@ -216,16 +217,20 @@ function Get-PSRPMDefaultPreferences {
 }
 
 function Read-PSRPMPreferences {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [switch]$UseDefaults
+    )
     $defaults   = Get-PSRPMDefaultPreferences
     $targetPath = Get-PSRPMPreferencesPath -CustomPath $Path
     $result     = @{
         Preferences    = $defaults
         LoadedFromDisk = $false
         HadParseError  = $false
+        SkippedDisk    = [bool]$UseDefaults
         Path           = $targetPath
     }
-    if ([string]::IsNullOrWhiteSpace($targetPath) -or -not [System.IO.File]::Exists($targetPath)) {
+    if ([bool]$UseDefaults -or [string]::IsNullOrWhiteSpace($targetPath) -or -not [System.IO.File]::Exists($targetPath)) {
         return $result
     }
 
@@ -261,7 +266,7 @@ function Read-PSRPMPreferences {
             }
         }
 
-        $allowedSortProps = @("Name", "PID", "ParentPID", "CPU", "TreeCPU", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "PeakCPU", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Status", "Handles", "Threads", "SessionId", "BasePriority", "Architecture", "CreateTime", "Category", "User", "HostedServices", "CompanyName", "Description", "FileVersion", "CommandLine", "Path")
+        $allowedSortProps = @("Name", "PID", "ParentPID", "CPU", "TreeCPU", "CPUDelta", "NetTotalBps", "TreeNetTotalBps", "NetRxBps", "NetTxBps", "PrivateBytes", "MemoryBytes", "PeakCPU", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Status", "Handles", "Threads", "SessionId", "BasePriority", "Architecture", "CreateTime", "Category", "User", "HostedServices", "CompanyName", "Description", "FileVersion", "CommandLine", "Path")
         if ($null -ne $parsed.PSObject.Properties['SortProperty']) {
             $sProp = [string]$parsed.SortProperty
             if ($sProp -in $allowedSortProps) {
@@ -431,11 +436,16 @@ function Start-PSRPM {
     .SYNOPSIS
         Launches PowerShell Remote Process Manager (PSRPM) with a real-time hierarchical Tree-Grid UI.
     .DESCRIPTION
-        Connects to a remote Windows computer via WinRM (-ComputerName) or executes locally (-LocalOnly)
+        Launches PSRPM locally by default (zero WinRM or Administrator prerequisites when invoked
+        without -ComputerName), or connects to a remote Windows computer via WinRM (-ComputerName)
         with near-zero remote CPU/memory footprint (<2-5ms per tick via native NtQuerySystemInformation
         and differential GZIP JSON telemetry).
+        By default, PSRPM launches in an isolated background STA runspace so your terminal prompt
+        remains unlocked; pass -Wait to run synchronously until the window closes.
     .PARAMETER ComputerName
-        Target remote hostname or IP address. Defaults to 'localhost'.
+        Target remote hostname or IP address for WinRM mode. When omitted (along with -Credential,
+        -Port, and -UseSSL), PSRPM starts in Local-Only Mode automatically. Passing '-ComputerName localhost'
+        explicitly tests/connects over WinRM loopback unless -LocalOnly is also specified.
     .PARAMETER Credential
         Optional PSCredential for authenticating the WinRM PSSession.
     .PARAMETER Port
@@ -445,13 +455,28 @@ function Start-PSRPM {
     .PARAMETER RefreshIntervalMs
         Telemetry polling interval in milliseconds (250 to 60000). Defaults to 1000ms.
     .PARAMETER LocalOnly
-        Run directly in the local PowerShell process without creating a WinRM PSSession or requiring elevation.
+        Force execution directly in the local PowerShell process without creating a WinRM PSSession.
+        Also active automatically when Start-PSRPM is called with no remote connection parameters.
+    .PARAMETER Wait
+        Block the calling PowerShell terminal synchronously until the PSRPM window closes.
+        By default, PSRPM launches in a background STA runspace and returns the prompt immediately.
+    .PARAMETER NoWait
+        Legacy switch retained for backwards compatibility (non-blocking background launch is now
+        the default whenever -Wait is omitted). Alias: -Background.
+    .PARAMETER Defaults
+        Skip loading saved preferences from %LOCALAPPDATA%\PSRPM\preferences.json for this session
+        and start with built-in factory defaults (saved config on disk is left untouched).
+        Aliases: -Default, -NoConfig, -NoPreferences.
+    .EXAMPLE
+        Start-PSRPM
     .EXAMPLE
         Start-PSRPM -ComputerName "SRV-PROD-01" -Credential (Get-Credential)
     .EXAMPLE
         Start-PSRPM -LocalOnly
     .EXAMPLE
-        Start-PSRPM -LocalOnly -NoWait
+        Start-PSRPM -LocalOnly -Wait
+    .EXAMPLE
+        Start-PSRPM -Defaults
     #>
     [CmdletBinding()]
     param(
@@ -477,6 +502,9 @@ function Start-PSRPM {
         [switch]$LocalOnly,
 
         [Parameter(Mandatory = $false)]
+        [switch]$Wait,
+
+        [Parameter(Mandatory = $false)]
         [Alias("Background")]
         [switch]$NoWait,
 
@@ -492,10 +520,18 @@ function Start-PSRPM {
         [switch]$AlwaysOnTop,
 
         [Parameter(Mandatory = $false)]
-        [string]$IconPath
+        [string]$IconPath,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Default", "NoConfig", "NoPreferences")]
+        [switch]$Defaults
     )
 
-    $isLocalMode = [bool]$LocalOnly
+    $hasExplicitWinRmTarget = $PSBoundParameters.ContainsKey("ComputerName") -or
+        $PSBoundParameters.ContainsKey("Credential") -or
+        ($Port -gt 0) -or
+        [bool]$UseSSL
+    $isLocalMode = [bool]$LocalOnly -or (-not $hasExplicitWinRmTarget)
     $session = $null
     $targetLabel = if ($isLocalMode) { $env:COMPUTERNAME } else { $ComputerName }
 
@@ -506,14 +542,15 @@ function Start-PSRPM {
         }
     } catch {}
 
-    # If -NoWait is specified, launch in an isolated STA background runspace and unlock the terminal immediately
-    if ($NoWait) {
+    # Launch in an isolated STA background runspace by default so the terminal stays unlocked; pass -Wait to block until closed
+    if (-not [bool]$Wait) {
         $bound = @{}
         foreach ($k in $PSBoundParameters.Keys) {
-            if ($k -notin @("NoWait", "Background")) {
+            if ($k -notin @("Wait", "NoWait", "Background")) {
                 $bound[$k] = $PSBoundParameters[$k]
             }
         }
+        $bound["Wait"] = $true
 
         $rs = [runspacefactory]::CreateRunspace()
         $rs.ApartmentState = [System.Threading.ApartmentState]::STA
@@ -545,11 +582,11 @@ function Start-PSRPM {
         $handle = $ps.BeginInvoke()
         $script:BackgroundRunspaces.Add(@{ Runspace = $rs; PowerShell = $ps; Handle = $handle })
 
-        Write-Host "[PSRPM] Launched in background (Target: $targetLabel). Terminal remains unlocked." -ForegroundColor Green
+        Write-Host "[PSRPM] Launched in background (Target: $targetLabel). Terminal remains unlocked (use -Wait to block)." -ForegroundColor Green
         return
     }
 
-    # 1. Establish Persistent Remote PSSession (unless -LocalOnly is specified)
+    # 1. Establish Persistent Remote PSSession (when WinRM parameters are explicitly supplied)
     if (-not $isLocalMode) {
         try {
             Write-Host "[PSRPM] Connecting to '$ComputerName' via WinRM..." -ForegroundColor Cyan
@@ -568,7 +605,7 @@ function Start-PSRPM {
             $errMsg = $_.Exception.Message
             if ($ComputerName -in @("localhost", "127.0.0.1", ".", $env:COMPUTERNAME)) {
                 $ans = [System.Windows.MessageBox]::Show(
-                    "Could not establish a WinRM session to '$ComputerName':`n`n$errMsg`n`nWould you like to continue in Local-Only Mode (-LocalOnly) without WinRM or Admin requirements?",
+                    "Could not establish a WinRM loopback session to '$ComputerName':`n`n$errMsg`n`nWould you like to continue in Local-Only Mode (zero WinRM/Admin required)?`nTip: Running 'Start-PSRPM' without -ComputerName starts in Local-Only Mode automatically.",
                     "PSRPM - WinRM Connection Fallback",
                     [System.Windows.MessageBoxButton]::YesNo,
                     [System.Windows.MessageBoxImage]::Question
@@ -581,7 +618,7 @@ function Start-PSRPM {
                 }
             } else {
                 [System.Windows.MessageBox]::Show(
-                    "Failed to connect to remote computer '$ComputerName' via WinRM:`n`n$errMsg`n`nTip: You can still launch the UI using -LocalOnly and connect from File -> Connect to Remote Computer.",
+                    "Failed to connect to remote computer '$ComputerName' via WinRM:`n`n$errMsg`n`nTip: Launch without -ComputerName (or pass -LocalOnly) for Local-Only Mode, then use File -> Connect to Remote Computer.",
                     "PSRPM - WinRM Connection Error",
                     [System.Windows.MessageBoxButton]::OK,
                     [System.Windows.MessageBoxImage]::Error
@@ -693,14 +730,16 @@ function Start-PSRPM {
         }
     }
 
-    $prefLoadResult = Read-PSRPMPreferences
+    $prefLoadResult = Read-PSRPMPreferences -UseDefaults:$Defaults
     $savedPrefs     = $prefLoadResult.Preferences
     if (-not $PSBoundParameters.ContainsKey('RefreshIntervalMs') -and $savedPrefs -and $savedPrefs.RefreshIntervalMs -ge 250) {
         $RefreshIntervalMs = [int]$savedPrefs.RefreshIntervalMs
     }
 
     &$writeAuditLog "INIT" "PSRPM initialized for target '$targetLabel' (Mode: $(if ($isLocalMode) { 'LocalOnly' } else { 'WinRM PSSession' }), Interval: ${RefreshIntervalMs}ms)."
-    if ($prefLoadResult.HadParseError) {
+    if ($prefLoadResult.SkippedDisk) {
+        &$writeAuditLog "PREFS" "Skipped saved preferences (-Defaults specified); using factory defaults (saved config on disk left untouched)."
+    } elseif ($prefLoadResult.HadParseError) {
         &$writeAuditLog "WARN" "Ignoring malformed preferences file '$($prefLoadResult.Path)'; using factory defaults."
     } elseif ($prefLoadResult.LoadedFromDisk) {
         &$writeAuditLog "PREFS" "Loaded saved user preferences from '$($prefLoadResult.Path)'."
@@ -765,6 +804,48 @@ function Start-PSRPM {
         }
     }
 
+    $menuSavePreferences  = $window.FindName("MenuSavePreferences")
+    $menuResetPreferences = $window.FindName("MenuResetPreferences")
+    $prefsDirtyState      = @{
+        IsDirty   = $false
+        Announced = $false
+        Suppress  = $false
+        Reasons   = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    }
+    $updateSavePrefsCue = {
+        if (-not $menuSavePreferences) { return }
+        if ([bool]$prefsDirtyState.IsDirty) {
+            $reasonList = if ($prefsDirtyState.Reasons.Count -gt 0) {
+                (@($prefsDirtyState.Reasons) | Sort-Object) -join ", "
+            } else {
+                "Session settings"
+            }
+            $menuSavePreferences.Header = "_Save Current Preferences as Default *"
+            $menuSavePreferences.ToolTip = ("Unsaved session changes ({0}). Preferences are opt-in and never auto-saved on exit; click to save to %LOCALAPPDATA%\PSRPM\preferences.json." -f $reasonList)
+        } else {
+            $menuSavePreferences.Header = "_Save Current Preferences as Default"
+            $menuSavePreferences.ToolTip = "Opt-in: Save current theme, columns, sort/view mode, log console state, and options to %LOCALAPPDATA%\PSRPM\preferences.json (never auto-saved on exit)"
+        }
+    }
+    $markUnsavedPrefs = {
+        param([string]$reason = "Settings")
+        if ([bool]$prefsDirtyState.Suppress -or (-not $window.IsLoaded)) { return }
+        if ($reason) { [void]$prefsDirtyState.Reasons.Add($reason) }
+        $prefsDirtyState.IsDirty = $true
+        &$updateSavePrefsCue
+        if (-not [bool]$prefsDirtyState.Announced) {
+            $prefsDirtyState.Announced = $true
+            &$writeAuditLog "PREFS" ("Session preference changed ({0}). Preferences are opt-in only and never auto-saved on exit; use Options -> Save Current Preferences as Default to persist." -f $reason)
+        }
+    }
+    $clearUnsavedPrefs = {
+        $prefsDirtyState.IsDirty = $false
+        $prefsDirtyState.Announced = $false
+        $prefsDirtyState.Reasons.Clear()
+        &$updateSavePrefsCue
+    }
+    &$updateSavePrefsCue
+
     $stateContainer.CurrentTheme = "Light"
     $stateContainer.ThemePalette = [PSRPMThemeRegistry]::GetPalette("Light")
 
@@ -773,6 +854,7 @@ function Start-PSRPM {
         $themeMode = if ($themeArg -is [bool]) { if ($themeArg) { "Dark" } else { "Light" } } else { [string]$themeArg }
         if (-not $themeMode) { $themeMode = "Light" }
 
+        $prevTheme = [string]$stateContainer.CurrentTheme
         $palette = [PSRPMThemeRegistry]::GetPalette($themeMode)
         $resolvedMode = [string]$palette.Name
         $isDark = [bool]$palette.IsDark
@@ -821,6 +903,9 @@ function Start-PSRPM {
             if ($activeModal -and $activeModal.IsLoaded) {
                 &$syncDialogThemeBrushes $activeModal
             }
+        }
+        if ($prevTheme -ne $resolvedMode) {
+            &$markUnsavedPrefs "Theme"
         }
     }
 
@@ -871,6 +956,7 @@ function Start-PSRPM {
 
     $setCategoryHighlighting = {
         param([bool]$enable)
+        $prevHighlight = [bool]$stateContainer.EnableCategoryHighlights
         $stateContainer.EnableCategoryHighlights = $enable
         if ($menuHighlightCategories) { $menuHighlightCategories.IsChecked = $enable }
         if ($btnToggleHighlights) {
@@ -890,6 +976,9 @@ function Start-PSRPM {
                     $cachedVm.SetCategoryHighlights($enable)
                 }
             }
+        }
+        if ($prevHighlight -ne $enable) {
+            &$markUnsavedPrefs "Highlighting"
         }
         &$writeAuditLog "OPTIONS" ("Row category highlighting set to {0} (New/Exiting lifecycle flashes remain active)." -f $(if ($enable) { "Standard" } else { "Minimal" }))
     }
@@ -913,6 +1002,7 @@ function Start-PSRPM {
     $menuAlwaysOnTop = $window.FindName("MenuAlwaysOnTop")
     $setAlwaysOnTop = {
         param([bool]$enable)
+        $prevTopmost = [bool]$stateContainer.AlwaysOnTop
         $stateContainer.AlwaysOnTop = $enable
         $window.Topmost = $enable
         if ($menuAlwaysOnTop) { $menuAlwaysOnTop.IsChecked = $enable }
@@ -920,6 +1010,9 @@ function Start-PSRPM {
             if ($activeModal -and $activeModal.IsLoaded) {
                 $activeModal.Topmost = $enable
             }
+        }
+        if ($prevTopmost -ne $enable) {
+            &$markUnsavedPrefs "Always On Top"
         }
         &$writeAuditLog "OPTIONS" ("Always On Top window pinning {0}." -f $(if ($enable) { "enabled" } else { "disabled" }))
     }
@@ -990,6 +1083,7 @@ function Start-PSRPM {
 
     $setViewMode = {
         param([bool]$treeMode)
+        $prevTreeMode = [bool]$stateContainer.IsTreeMode
         $stateContainer.IsTreeMode = $treeMode
         if ($treeMode) {
             $stateContainer.SortProperty   = "PID"
@@ -1021,10 +1115,14 @@ function Start-PSRPM {
             }
         }
         & $engineHandle.RefreshTree
+        if ($prevTreeMode -ne $treeMode) {
+            &$markUnsavedPrefs "View Mode"
+        }
     }
 
     $setTreeSortOrder = {
         param([bool]$newestFirst)
+        $prevNewestFirst = [bool]$stateContainer.TreeSortNewestFirst
         $stateContainer.TreeSortNewestFirst = $newestFirst
         if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newestFirst }
         if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newestFirst) }
@@ -1036,6 +1134,9 @@ function Start-PSRPM {
             }
             & $engineHandle.RefreshTree
         }
+        if ($prevNewestFirst -ne $newestFirst) {
+            &$markUnsavedPrefs "Tree Order"
+        }
         &$writeAuditLog "VIEW" ("Tree View ordering set to {0}." -f $(if ($newestFirst) { "Newest First (Creation Time Descending)" } else { "Classic Process Explorer (Oldest First)" }))
     }
 
@@ -1046,18 +1147,25 @@ function Start-PSRPM {
         $sortProp = $col.SortMemberPath
         if (-not $sortProp) { $sortProp = "PID" }
 
+        $prevSortProp = [string]$stateContainer.SortProperty
+        $prevSortDesc = [bool]$stateContainer.SortDescending
+
         $next = Get-PSRPMNextColumnSortState `
             -IsTreeMode ([bool]$stateContainer.IsTreeMode) `
             -CurrentTreeNewestFirst ([bool]$stateContainer.TreeSortNewestFirst) `
-            -CurrentSortProperty ([string]$stateContainer.SortProperty) `
-            -CurrentSortDescending ([bool]$stateContainer.SortDescending) `
+            -CurrentSortProperty $prevSortProp `
+            -CurrentSortDescending $prevSortDesc `
             -ClickedSortProperty $sortProp
 
         if ($next.IsTreeMode) {
             $newest = [bool]$next.TreeSortNewestFirst
+            $prevNewestSort = [bool]$stateContainer.TreeSortNewestFirst
             $stateContainer.TreeSortNewestFirst = $newest
             if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newest }
             if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newest) }
+            if ($prevNewestSort -ne $newest) {
+                &$markUnsavedPrefs "Tree Order"
+            }
             &$setViewMode $true
             return
         }
@@ -1072,6 +1180,9 @@ function Start-PSRPM {
             [System.ComponentModel.ListSortDirection]::Ascending
         }
 
+        if (($prevSortProp -ne [string]$next.SortProperty) -or ($prevSortDesc -ne [bool]$next.SortDescending)) {
+            &$markUnsavedPrefs "Sort Order"
+        }
         &$setViewMode $false
     })
 
@@ -1142,7 +1253,7 @@ function Start-PSRPM {
         if (-not $cur) {
             # ALL active
             if ($txtFilterLegendLabel) {
-                $txtFilterLegendLabel.Text = "Filter Legend:"
+                $txtFilterLegendLabel.Text = "Filter:"
                 $txtFilterLegendLabel.FontWeight = [System.Windows.FontWeights]::SemiBold
                 $txtFilterLegendLabel.Foreground = $window.FindResource("BrushTextMuted")
             }
@@ -1174,7 +1285,7 @@ function Start-PSRPM {
                 $btnLegendOwn.Opacity = 0.85
             }
             if ($btnLegendPackaged) {
-                $btnLegendPackaged.Content = "Packaged / WebView"
+                $btnLegendPackaged.Content = "Packaged"
                 $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Normal
                 $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(1)
                 $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.Border
@@ -1218,7 +1329,7 @@ function Start-PSRPM {
                     $btnLegendOwn.Opacity = 0.45
                 }
                 if ($btnLegendPackaged) {
-                    $btnLegendPackaged.Content = "Packaged / WebView"
+                    $btnLegendPackaged.Content = "Packaged"
                     $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(1)
                     $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.Border
@@ -1251,7 +1362,7 @@ function Start-PSRPM {
                     $btnLegendOwn.Opacity = 1.0
                 }
                 if ($btnLegendPackaged) {
-                    $btnLegendPackaged.Content = "Packaged / WebView"
+                    $btnLegendPackaged.Content = "Packaged"
                     $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(1)
                     $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.Border
@@ -1325,6 +1436,17 @@ function Start-PSRPM {
     if ($btnLegendService)  { $btnLegendService.add_Click({ &$setCategoryFilter "Service" }) }
     if ($btnLegendOwn)      { $btnLegendOwn.add_Click({ &$setCategoryFilter "Own" }) }
     if ($btnLegendPackaged) { $btnLegendPackaged.add_Click({ &$setCategoryFilter "Packaged" }) }
+    $btnProcEmptyClear = $window.FindName("BtnProcEmptyClear")
+    if ($btnProcEmptyClear) {
+        $btnProcEmptyClear.add_Click({
+            if ($txtSearch) { $txtSearch.Text = "" }
+            $stateContainer.FilterText     = ""
+            $stateContainer.CategoryFilter = ""
+            &$updateLegendFilterUi
+            & $engineHandle.RefreshTree
+            if ($gridProcesses) { $gridProcesses.Focus() }
+        })
+    }
     &$updateLegendFilterUi
 
     # 9B. Status Bar Responsive Overflow Sync
@@ -1466,6 +1588,7 @@ function Start-PSRPM {
     $setPollingRate = {
         param([int]$ms, [bool]$pause)
         $prevPaused = [bool]$stateContainer.IsPaused
+        $prevInterval = [int]$stateContainer.IntervalMs
         $stateContainer.IsPaused = $pause
         if (-not $pause -and $ms -ge 250) {
             $stateContainer.IntervalMs = $ms
@@ -1484,6 +1607,9 @@ function Start-PSRPM {
             } else {
                 &$writeAuditLog "RATE" "Telemetry collection resumed (Interval: $($stateContainer.IntervalMs) ms)."
             }
+        }
+        if (-not $pause -and $ms -ge 250 -and $prevInterval -ne $ms) {
+            &$markUnsavedPrefs "Refresh Interval"
         }
         [void]$stateContainer.WakeEvent.Set()
     }
@@ -1609,6 +1735,7 @@ function Start-PSRPM {
                     }
                 }
             }
+            &$markUnsavedPrefs "Verbose Log"
         })
     }
     if ($chkStreamTicks) {
@@ -1616,6 +1743,7 @@ function Start-PSRPM {
             $val = [bool]$chkStreamTicks.IsChecked
             $stateContainer.VerboseTelemetryLog = $val
             if ($menuVerbose) { $menuVerbose.IsChecked = $val }
+            &$markUnsavedPrefs "Verbose Log"
         })
     }
     if ($chkLogAutoScroll) {
@@ -1630,6 +1758,7 @@ function Start-PSRPM {
                     $stateContainer.IsAppendingLog = $false
                 }
             }
+            &$markUnsavedPrefs "Log Console"
         })
     }
     if ($txtLogConsole) {
@@ -1689,6 +1818,7 @@ function Start-PSRPM {
                 }
             }
         }
+        &$markUnsavedPrefs "Log Console"
     }
     if ($menuViewLog)      { $menuViewLog.add_Click($toggleLogPane) }
     if ($btnShowLog)       { $btnShowLog.add_Click($toggleLogPane) }
@@ -1737,9 +1867,17 @@ function Start-PSRPM {
     if ($btnCopyLog)       { $btnCopyLog.add_Click({ if ($txtLogConsole -and $txtLogConsole.Text) { [void](&$copyToClipboardSafe $txtLogConsole.Text "" "") } }) }
 
     # 12. Process & Service Operations Dispatcher
-    $menuConfirmKill      = $window.FindName("MenuConfirmKill")
-    $menuSavePreferences  = $window.FindName("MenuSavePreferences")
-    $menuResetPreferences = $window.FindName("MenuResetPreferences")
+    $menuConfirmKill = $window.FindName("MenuConfirmKill")
+    if ($menuConfirmKill) {
+        $menuConfirmKill.add_Click({
+            &$markUnsavedPrefs "Confirm Kill"
+        })
+    }
+    if ($gridProcesses) {
+        $gridProcesses.add_ColumnReordered({
+            &$markUnsavedPrefs "Column Order"
+        })
+    }
     $jssAction = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
     $jssAction.MaxJsonLength = 10485760
 
@@ -1902,6 +2040,7 @@ function Start-PSRPM {
                 $script:ColumnWidthsMap[$ck] = $fitW
             }
         }
+        &$markUnsavedPrefs "Columns"
     }
 
     $resetColumnsToDefault = {
@@ -1919,6 +2058,7 @@ function Start-PSRPM {
         if ($menuColTreeNet) { $menuColTreeNet.IsChecked = $true }
         if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $false }
         &$applyColumnLayout $true
+        &$markUnsavedPrefs "Columns"
         &$writeAuditLog "VIEW" "Reset Process columns to default layout."
     }
 
@@ -1963,10 +2103,14 @@ function Start-PSRPM {
             param([string]$selectKey)
             $orderItems.Clear()
             $visNum = 1
+            $activeVisCount = 0
+            $etwGatedCount  = 0
             foreach ($ok in $dlgState.OrderKeys) {
                 $it = $itemByKey[$ok]
                 if ($it -and [bool]$it.IsChecked) {
-                    $suffix = if ($it.IsLocked) { " (Locked)" } elseif ($it.IsNetEtw -and -not $isNetActiveNow) { " (ETW off)" } else { "" }
+                    $isGated = ([bool]$it.IsNetEtw -and -not $isNetActiveNow)
+                    $suffix = if ($it.IsLocked) { " (Locked)" } elseif ($isGated) { " (ETW off)" } else { "" }
+                    if ($isGated) { $etwGatedCount++ } else { $activeVisCount++ }
                     $oObj = [PSCustomObject]@{
                         Key        = $ok
                         IsLocked   = [bool]$it.IsLocked
@@ -1977,7 +2121,11 @@ function Start-PSRPM {
                 }
             }
             if ($txtSelCount) {
-                $txtSelCount.Text = ("{0} of {1} visible" -f $orderItems.Count, $availItems.Count)
+                if ($etwGatedCount -gt 0) {
+                    $txtSelCount.Text = ("{0} of {1} visible (+{2} ETW off)" -f $activeVisCount, $availItems.Count, $etwGatedCount)
+                } else {
+                    $txtSelCount.Text = ("{0} of {1} visible" -f $activeVisCount, $availItems.Count)
+                }
             }
             if ($selectKey) {
                 for ($oi = 0; $oi -lt $orderItems.Count; $oi++) {
@@ -2183,6 +2331,7 @@ function Start-PSRPM {
             $script:ColumnOrderList.Clear()
             foreach ($ok in $dlgState.OrderKeys) { $script:ColumnOrderList.Add($ok) }
             &$applyColumnLayout $false
+            &$markUnsavedPrefs "Columns"
 
             if ($etwPickCount -gt 0 -and -not $isNetActiveNow -and $statusText) {
                 $statusText.Text = "Column layout updated. Enable Per-Process Network Monitoring (Ctrl+Shift+N) to show live Net ETW columns."
@@ -2232,6 +2381,7 @@ function Start-PSRPM {
                             [void]$script:UserVisibleCols.Remove($tk)
                         }
                         &$applyColumnLayout $false
+                        &$markUnsavedPrefs "Columns"
                     })
                     [void]$sender.Items.Add($miHide)
                     [void]$sender.Items.Add([System.Windows.Controls.Separator]::new())
@@ -2256,6 +2406,7 @@ function Start-PSRPM {
                         [void]$script:UserVisibleCols.Remove($tk)
                     }
                     &$applyColumnLayout $false
+                    &$markUnsavedPrefs "Columns"
                 })
                 [void]$sender.Items.Add($mi)
             }
@@ -2284,115 +2435,121 @@ function Start-PSRPM {
         param([hashtable]$prefs, [bool]$overrideCli = $false)
         if (-not $prefs) { return }
 
-        $targetTheme = if (-not $overrideCli -and $Dark.IsPresent) {
-            "Dark"
-        } elseif (-not $overrideCli -and $PSBoundParameters.ContainsKey('Theme') -and $Theme) {
-            $Theme
-        } else {
-            [string]$prefs.Theme
-        }
-        &$applyTheme $targetTheme
-        &$setCategoryHighlighting ([bool]$prefs.EnableCategoryHighlights)
-
-        $targetTopmost = if (-not $overrideCli -and $AlwaysOnTop.IsPresent) { $true } else { [bool]$prefs.AlwaysOnTop }
-        &$setAlwaysOnTop $targetTopmost
-
-        if ($menuConfirmKill) {
-            $menuConfirmKill.IsChecked = [bool]$prefs.ConfirmKill
-        }
-
-        $verboseVal = [bool]$prefs.VerboseTelemetryLog
-        $stateContainer.VerboseTelemetryLog = $verboseVal
-        if ($menuVerbose)    { $menuVerbose.IsChecked    = $verboseVal }
-        if ($chkStreamTicks) { $chkStreamTicks.IsChecked = $verboseVal }
-
-        $autoScrollVal = [bool]$prefs.LogAutoScroll
-        $stateContainer.LogAutoScroll = $autoScrollVal
-        if ($chkLogAutoScroll) { $chkLogAutoScroll.IsChecked = $autoScrollVal }
-
-        $targetRate = if (-not $overrideCli -and $PSBoundParameters.ContainsKey('RefreshIntervalMs')) {
-            [int]$RefreshIntervalMs
-        } else {
-            [int]$prefs.RefreshIntervalMs
-        }
-        &$setPollingRate $targetRate $false
-
-        $newestVal = [bool]$prefs.TreeSortNewestFirst
-        $stateContainer.TreeSortNewestFirst = $newestVal
-        if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newestVal }
-        if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newestVal) }
-
-        if ($prefs.ContainsKey('VisibleColumns') -and $prefs.VisibleColumns) {
-            $script:UserVisibleCols.Clear()
-            [void]$script:UserVisibleCols.Add("Process")
-            foreach ($vc in @($prefs.VisibleColumns)) {
-                $vcKey = [string]$vc
-                if ($colDefByKey.Contains($vcKey) -and -not [bool]$colDefByKey[$vcKey].IsNetEtw) {
-                    [void]$script:UserVisibleCols.Add($vcKey)
-                }
-            }
-        }
-        if ($prefs.ContainsKey('ColumnOrder') -and $prefs.ColumnOrder) {
-            $script:ColumnOrderList.Clear()
-            foreach ($oc in @($prefs.ColumnOrder)) {
-                $script:ColumnOrderList.Add([string]$oc)
-            }
-        }
-        if ($prefs.ContainsKey('ColumnWidths') -and $prefs.ColumnWidths -is [System.Collections.IDictionary]) {
-            $script:ColumnWidthsMap = @{}
-            foreach ($wk in $prefs.ColumnWidths.Keys) {
-                $script:ColumnWidthsMap[[string]$wk] = [double]$prefs.ColumnWidths[$wk]
-            }
-        } else {
-            $script:ColumnWidthsMap = @{}
-        }
-        &$applyColumnLayout $true
-
-        if ([bool]$prefs.IsTreeMode) {
-            &$setViewMode $true
-        } else {
-            $stateContainer.SortProperty   = [string]$prefs.SortProperty
-            $stateContainer.SortDescending = [bool]$prefs.SortDescending
-            foreach ($c in $gridProcesses.Columns) { $c.SortDirection = $null }
-            $dir = if ($stateContainer.SortDescending) {
-                [System.ComponentModel.ListSortDirection]::Descending
+        $prefsDirtyState.Suppress = $true
+        try {
+            $targetTheme = if (-not $overrideCli -and $Dark.IsPresent) {
+                "Dark"
+            } elseif (-not $overrideCli -and $PSBoundParameters.ContainsKey('Theme') -and $Theme) {
+                $Theme
             } else {
-                [System.ComponentModel.ListSortDirection]::Ascending
+                [string]$prefs.Theme
             }
-            foreach ($c in $gridProcesses.Columns) {
-                if ($c.SortMemberPath -eq $stateContainer.SortProperty) {
-                    $c.SortDirection = $dir
-                    break
-                }
-            }
-            &$setViewMode $false
-        }
+            &$applyTheme $targetTheme
+            &$setCategoryHighlighting ([bool]$prefs.EnableCategoryHighlights)
 
-        if ($logPane) {
-            $reqLogH = if ($prefs.LogPaneHeight -ge $minLogPaneHeight) { [double]$prefs.LogPaneHeight } else { $defaultLogPaneHeight }
-            $logPane.Height = $reqLogH
-            if ([bool]$prefs.LogPaneVisible) {
-                $logPane.Visibility = "Visible"
-                & $clampLogPaneHeight $reqLogH
-                if ($menuViewLog) { $menuViewLog.IsChecked = $true }
-                if ($txtLogConsole -and $autoScrollVal) {
-                    try {
-                        $stateContainer.IsAppendingLog = $true
-                        $txtLogConsole.ScrollToEnd()
-                    } finally {
-                        $stateContainer.IsAppendingLog = $false
+            $targetTopmost = if (-not $overrideCli -and $AlwaysOnTop.IsPresent) { $true } else { [bool]$prefs.AlwaysOnTop }
+            &$setAlwaysOnTop $targetTopmost
+
+            if ($menuConfirmKill) {
+                $menuConfirmKill.IsChecked = [bool]$prefs.ConfirmKill
+            }
+
+            $verboseVal = [bool]$prefs.VerboseTelemetryLog
+            $stateContainer.VerboseTelemetryLog = $verboseVal
+            if ($menuVerbose)    { $menuVerbose.IsChecked    = $verboseVal }
+            if ($chkStreamTicks) { $chkStreamTicks.IsChecked = $verboseVal }
+
+            $autoScrollVal = [bool]$prefs.LogAutoScroll
+            $stateContainer.LogAutoScroll = $autoScrollVal
+            if ($chkLogAutoScroll) { $chkLogAutoScroll.IsChecked = $autoScrollVal }
+
+            $targetRate = if (-not $overrideCli -and $PSBoundParameters.ContainsKey('RefreshIntervalMs')) {
+                [int]$RefreshIntervalMs
+            } else {
+                [int]$prefs.RefreshIntervalMs
+            }
+            &$setPollingRate $targetRate $false
+
+            $newestVal = [bool]$prefs.TreeSortNewestFirst
+            $stateContainer.TreeSortNewestFirst = $newestVal
+            if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.IsChecked  = $newestVal }
+            if ($menuTreeOrderClassic) { $menuTreeOrderClassic.IsChecked = (-not $newestVal) }
+
+            if ($prefs.ContainsKey('VisibleColumns') -and $prefs.VisibleColumns) {
+                $script:UserVisibleCols.Clear()
+                [void]$script:UserVisibleCols.Add("Process")
+                foreach ($vc in @($prefs.VisibleColumns)) {
+                    $vcKey = [string]$vc
+                    if ($colDefByKey.Contains($vcKey) -and -not [bool]$colDefByKey[$vcKey].IsNetEtw) {
+                        [void]$script:UserVisibleCols.Add($vcKey)
                     }
                 }
-            } else {
-                $logPane.Visibility = "Collapsed"
-                if ($menuViewLog) { $menuViewLog.IsChecked = $false }
             }
+            if ($prefs.ContainsKey('ColumnOrder') -and $prefs.ColumnOrder) {
+                $script:ColumnOrderList.Clear()
+                foreach ($oc in @($prefs.ColumnOrder)) {
+                    $script:ColumnOrderList.Add([string]$oc)
+                }
+            }
+            if ($prefs.ContainsKey('ColumnWidths') -and $prefs.ColumnWidths -is [System.Collections.IDictionary]) {
+                $script:ColumnWidthsMap = @{}
+                foreach ($wk in $prefs.ColumnWidths.Keys) {
+                    $script:ColumnWidthsMap[[string]$wk] = [double]$prefs.ColumnWidths[$wk]
+                }
+            } else {
+                $script:ColumnWidthsMap = @{}
+            }
+            &$applyColumnLayout $true
+
+            if ([bool]$prefs.IsTreeMode) {
+                &$setViewMode $true
+            } else {
+                $stateContainer.SortProperty   = [string]$prefs.SortProperty
+                $stateContainer.SortDescending = [bool]$prefs.SortDescending
+                foreach ($c in $gridProcesses.Columns) { $c.SortDirection = $null }
+                $dir = if ($stateContainer.SortDescending) {
+                    [System.ComponentModel.ListSortDirection]::Descending
+                } else {
+                    [System.ComponentModel.ListSortDirection]::Ascending
+                }
+                foreach ($c in $gridProcesses.Columns) {
+                    if ($c.SortMemberPath -eq $stateContainer.SortProperty) {
+                        $c.SortDirection = $dir
+                        break
+                    }
+                }
+                &$setViewMode $false
+            }
+
+            if ($logPane) {
+                $reqLogH = if ($prefs.LogPaneHeight -ge $minLogPaneHeight) { [double]$prefs.LogPaneHeight } else { $defaultLogPaneHeight }
+                $logPane.Height = $reqLogH
+                if ([bool]$prefs.LogPaneVisible) {
+                    $logPane.Visibility = "Visible"
+                    & $clampLogPaneHeight $reqLogH
+                    if ($menuViewLog) { $menuViewLog.IsChecked = $true }
+                    if ($txtLogConsole -and $autoScrollVal) {
+                        try {
+                            $stateContainer.IsAppendingLog = $true
+                            $txtLogConsole.ScrollToEnd()
+                        } finally {
+                            $stateContainer.IsAppendingLog = $false
+                        }
+                    }
+                } else {
+                    $logPane.Visibility = "Collapsed"
+                    if ($menuViewLog) { $menuViewLog.IsChecked = $false }
+                }
+            }
+        } finally {
+            $prefsDirtyState.Suppress = $false
         }
     }
 
     if ($prefLoadResult.LoadedFromDisk) {
         &$applyPreferencesObject $savedPrefs $false
     }
+    &$clearUnsavedPrefs
 
     if ($menuSavePreferences) {
         $menuSavePreferences.add_Click({
@@ -2428,7 +2585,8 @@ function Start-PSRPM {
                     ColumnWidths             = $script:ColumnWidthsMap
                 }
                 $savedPath = Save-PSRPMPreferences -Preferences $snapshot
-                &$writeAuditLog "PREFS" "Saved current preferences as default to '$savedPath'."
+                &$clearUnsavedPrefs
+                &$writeAuditLog "PREFS" "Saved current preferences as default to '$savedPath' (opt-in persistence)."
                 if ($statusText) {
                     $statusText.Text = "Saved current preferences as default ($savedPath)."
                 }
@@ -2444,6 +2602,7 @@ function Start-PSRPM {
                 $removed = Reset-PSRPMPreferences
                 $factory = Get-PSRPMDefaultPreferences
                 &$applyPreferencesObject $factory $true
+                &$clearUnsavedPrefs
                 $msg = if ($removed) {
                     "Deleted saved preferences file and restored factory defaults."
                 } else {
@@ -3357,11 +3516,18 @@ function Start-PSRPM {
         }
     })
 
+    $svcEmptyOverlay   = $window.FindName("SvcEmptyStateOverlay")
+    $txtSvcEmptyTitle  = $window.FindName("TxtSvcEmptyTitle")
+    $txtSvcEmptyHint   = $window.FindName("TxtSvcEmptyHint")
+    $btnSvcEmptyClear  = $window.FindName("BtnSvcEmptyClear")
+
     $updateSvcSummaryText = {
-        if (-not $txtSvcSummary -or $null -eq $servicesCollection) { return }
+        if ($null -eq $servicesCollection) { return }
         $totCount = $servicesCollection.Count
+        $sTerm = if ($txtSearchServices) { $txtSearchServices.Text.Trim() } else { "" }
         if ($totCount -eq 0) {
-            $txtSvcSummary.Text = "0 Services"
+            if ($txtSvcSummary) { $txtSvcSummary.Text = "0 Services" }
+            if ($svcEmptyOverlay) { $svcEmptyOverlay.Visibility = [System.Windows.Visibility]::Collapsed }
             return
         }
         $runCount = 0
@@ -3369,14 +3535,23 @@ function Start-PSRPM {
             if ($svm.Status -eq "Running") { $runCount++ }
         }
         $stopCount = $totCount - $runCount
-        $sTerm = if ($txtSearchServices) { $txtSearchServices.Text.Trim() } else { "" }
+        $visCount = $totCount
         if ([string]::IsNullOrWhiteSpace($sTerm)) {
-            $txtSvcSummary.Text = "$totCount Services ($runCount Running, $stopCount Stopped)"
+            if ($txtSvcSummary) { $txtSvcSummary.Text = "$totCount Services ($runCount Running, $stopCount Stopped)" }
         } else {
             $cv = [System.Windows.Data.CollectionViewSource]::GetDefaultView($servicesCollection)
             $visCount = 0
             if ($cv) { foreach ($ci in $cv) { $visCount++ } }
-            $txtSvcSummary.Text = "$visCount of $totCount Services ($runCount Running, $stopCount Stopped)"
+            if ($txtSvcSummary) { $txtSvcSummary.Text = "$visCount of $totCount Services ($runCount Running, $stopCount Stopped)" }
+        }
+        if ($svcEmptyOverlay) {
+            if (-not [string]::IsNullOrWhiteSpace($sTerm) -and $visCount -eq 0) {
+                if ($txtSvcEmptyTitle) { $txtSvcEmptyTitle.Text = ("No services match '{0}'" -f $sTerm) }
+                if ($txtSvcEmptyHint)  { $txtSvcEmptyHint.Text  = ("Showing 0 of {0} Windows services on target host." -f $totCount) }
+                $svcEmptyOverlay.Visibility = [System.Windows.Visibility]::Visible
+            } else {
+                $svcEmptyOverlay.Visibility = [System.Windows.Visibility]::Collapsed
+            }
         }
     }
 
@@ -3419,6 +3594,13 @@ function Start-PSRPM {
         $btnClearSearchServices.add_Click({
             if ($txtSearchServices) { $txtSearchServices.Text = "" }
             &$updateServicesFilter
+        })
+    }
+    if ($btnSvcEmptyClear) {
+        $btnSvcEmptyClear.add_Click({
+            if ($txtSearchServices) { $txtSearchServices.Text = "" }
+            &$updateServicesFilter
+            if ($gridServices) { $gridServices.Focus() }
         })
     }
 
@@ -4356,6 +4538,10 @@ function Start-PSRPM {
         $btnPickCred   = $connWin.FindName("BtnPickCredential")
         $txtCredStatus = $connWin.FindName("TxtCredStatus")
         $chkOpenNewTab = $connWin.FindName("ChkOpenInNewTab")
+        $bdConnectErr  = $connWin.FindName("BdConnectError")
+        $txtConnectErr = $connWin.FindName("TxtConnectError")
+        $txtConnProg   = $connWin.FindName("TxtConnectProgress")
+        $btnSubmit     = $connWin.FindName("BtnConnectSubmit")
 
         if ($chkOpenNewTab) {
             $chkOpenNewTab.IsChecked = [bool]$forceNewTab
@@ -4373,8 +4559,35 @@ function Start-PSRPM {
         $txtComp.Text = if ($forceNewTab) { "localhost" } else { $stateContainer.TargetDisplayName }
         $credHolder   = @{ Value = $Credential }
 
-        $rbRemote.add_Checked({ $gridInputs.IsEnabled = $true })
-        $rbLocal.add_Checked({  $gridInputs.IsEnabled = $false })
+        $setConnectBanner = {
+            param([bool]$isError, [string]$msg)
+            if ($isError) {
+                if ($txtConnProg) { $txtConnProg.Visibility = [System.Windows.Visibility]::Collapsed }
+                if ($txtConnectErr) { $txtConnectErr.Text = $msg }
+                if ($bdConnectErr) { $bdConnectErr.Visibility = [System.Windows.Visibility]::Visible }
+            } else {
+                if ($bdConnectErr) { $bdConnectErr.Visibility = [System.Windows.Visibility]::Collapsed }
+                if (-not [string]::IsNullOrWhiteSpace($msg) -and $txtConnProg) {
+                    $txtConnProg.Text = $msg
+                    $txtConnProg.Visibility = [System.Windows.Visibility]::Visible
+                } elseif ($txtConnProg) {
+                    $txtConnProg.Visibility = [System.Windows.Visibility]::Collapsed
+                }
+            }
+        }
+        $setConnectBusy = {
+            param([bool]$busy)
+            if ($btnSubmit)     { $btnSubmit.IsEnabled     = (-not $busy) }
+            if ($rbRemote)      { $rbRemote.IsEnabled      = (-not $busy) }
+            if ($rbLocal)       { $rbLocal.IsEnabled       = (-not $busy) }
+            if ($chkOpenNewTab) { $chkOpenNewTab.IsEnabled = (-not $busy) }
+            if ($gridInputs)    { $gridInputs.IsEnabled    = ((-not $busy) -and (-not [bool]$rbLocal.IsChecked)) }
+        }
+
+        $rbRemote.add_Checked({ $gridInputs.IsEnabled = $true; &$setConnectBanner $false "" })
+        $rbLocal.add_Checked({  $gridInputs.IsEnabled = $false; &$setConnectBanner $false "" })
+        if ($txtComp) { $txtComp.add_TextChanged({ &$setConnectBanner $false "" }) }
+        if ($txtPort) { $txtPort.add_TextChanged({ &$setConnectBanner $false "" }) }
 
         $btnPickCred.add_Click({
             try {
@@ -4386,21 +4599,30 @@ function Start-PSRPM {
             } catch {}
         })
 
-        $connWin.FindName("BtnConnectSubmit").add_Click({
+        $btnSubmit.add_Click({
             $useLocal = [bool]$rbLocal.IsChecked
             $compName = $txtComp.Text.Trim()
             if (-not $useLocal -and [string]::IsNullOrWhiteSpace($compName)) {
-                [System.Windows.MessageBox]::Show($connWin, "Please enter a remote computer name or IP address.", "PSRPM", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                &$setConnectBanner $true "Please enter a remote computer name or IP address."
+                if ($txtComp) { [void]$txtComp.Focus() }
                 return
             }
 
-            $portNum = 0
-            [void][int]::TryParse($txtPort.Text.Trim(), [ref]$portNum)
+            $portText = $txtPort.Text.Trim()
+            $portNum  = 0
+            if (-not $useLocal -and -not [string]::IsNullOrWhiteSpace($portText)) {
+                if (-not [int]::TryParse($portText, [ref]$portNum) -or $portNum -lt 1 -or $portNum -gt 65535) {
+                    &$setConnectBanner $true "Custom WinRM port must be a number between 1 and 65535 (or leave blank for default 5985 / 5986)."
+                    if ($txtPort) { [void]$txtPort.Focus() }
+                    return
+                }
+            }
             $useSslVal = [bool]$chkSsl.IsChecked
             $openNew   = if ($chkOpenNewTab) { [bool]$chkOpenNewTab.IsChecked } else { $false }
             $targetLabel = if ($useLocal) { "$env:COMPUTERNAME" } else { $compName }
 
-            $connWin.IsEnabled = $false
+            &$setConnectBusy $true
+            &$setConnectBanner $false $(if ($useLocal) { "Initializing Local-Only telemetry session for '$targetLabel'..." } else { "Connecting to '$targetLabel' via WinRM..." })
 
             if ($openNew) {
                 &$writeAuditLog "CONNECT" "Opening new host session tab for '$targetLabel'..."
@@ -4422,11 +4644,14 @@ function Start-PSRPM {
                 $localTabsCol     = $hostTabsCollection
                 $localActionSel   = $actionSelectHostTab
                 $localCreateTabVm = $fnCreateHostTabVm
+                $localSetBanner   = $setConnectBanner
+                $localSetBusy     = $setConnectBusy
 
                 & $localEngine.SendCommand $addCmd ({
                     param($res)
                     try {
-                        $localConnWin.IsEnabled = $true
+                        if (-not $localConnWin -or -not $localConnWin.IsLoaded) { return }
+                        &$localSetBusy $false
                         if ($res.Success) {
                             $tabTitle = $res.Target
                             if ($res.IsLocal) {
@@ -4451,17 +4676,11 @@ function Start-PSRPM {
                             $localConnWin.Close()
                         } else {
                             &$localLog "ERROR" "Failed to connect to '$localComp': $($res.Error)"
-                            [System.Windows.MessageBox]::Show(
-                                $localConnWin,
-                                "Failed to connect to '$localComp':`n`n$($res.Error)`n`nTip: If WinRM remoting is not configured on this computer, choose 'Local Host Only' to monitor processes without WinRM.",
-                                "PSRPM - Connection Error",
-                                [System.Windows.MessageBoxButton]::OK,
-                                [System.Windows.MessageBoxImage]::Error
-                            ) | Out-Null
+                            &$localSetBanner $true "Connection to '$localComp' failed: $($res.Error)`nTip: Choose 'Local Host Only' if WinRM is not configured, or verify firewall/TrustedHosts."
                         }
                     } catch {
                         &$localLog "ERROR" "AddTabSession UI callback error: $($_.Exception.Message)"
-                        $localConnWin.Close()
+                        if ($localConnWin -and $localConnWin.IsLoaded) { $localConnWin.Close() }
                     }
                 }.GetNewClosure())
             } else {
@@ -4480,28 +4699,25 @@ function Start-PSRPM {
                 $localComp         = $compName
                 $curTab            = $script:ActiveHostTab
                 $localSyncTargetUi = $syncTargetSwitchUi
+                $localSetBanner    = $setConnectBanner
+                $localSetBusy      = $setConnectBusy
 
                 & $engineHandle.SendCommand $switchCmd ({
                     param($res)
                     try {
-                        $localConnWin.IsEnabled = $true
+                        if (-not $localConnWin -or -not $localConnWin.IsLoaded) { return }
+                        &$localSetBusy $false
                         if ($res.Success) {
                             & $localSyncTargetUi $curTab
                             &$localLog "CONNECT" $res.Message
                             $localConnWin.Close()
                         } else {
                             &$localLog "ERROR" "Failed to connect to '$localComp': $($res.Error)"
-                            [System.Windows.MessageBox]::Show(
-                                $localConnWin,
-                                "Failed to connect to '$localComp':`n`n$($res.Error)`n`nTip: If WinRM remoting is not configured on this computer, choose 'Local Host Only' to monitor processes without WinRM.",
-                                "PSRPM - Connection Error",
-                                [System.Windows.MessageBoxButton]::OK,
-                                [System.Windows.MessageBoxImage]::Error
-                            ) | Out-Null
+                            &$localSetBanner $true "Connection to '$localComp' failed: $($res.Error)`nTip: Choose 'Local Host Only' if WinRM is not configured, or verify firewall/TrustedHosts."
                         }
                     } catch {
                         &$localLog "ERROR" "SwitchTarget UI callback error: $($_.Exception.Message)"
-                        $localConnWin.Close()
+                        if ($localConnWin -and $localConnWin.IsLoaded) { $localConnWin.Close() }
                     }
                 }.GetNewClosure())
             }
@@ -4947,6 +5163,10 @@ function Start-PSRPM {
         if ($qNet -and $tcSys) {
             $qNet.add_MouseLeftButtonDown({ param($s,$e) if ($e.ClickCount -eq 2) { $tcSys.SelectedIndex = 4; $e.Handled = $true } }.GetNewClosure())
         }
+        $btnOpenNetTab = $sysWin.FindName("BtnOpenNetworkTab")
+        if ($btnOpenNetTab -and $tcSys) {
+            $btnOpenNetTab.add_Click({ $tcSys.SelectedIndex = 4 }.GetNewClosure())
+        }
 
         # Wire interactive hover + crosshair tracking on all SysInfo charts
         & $bindChartHover $sysHoverState ($sysWin.FindName("BorderQuadCpuChart"))    ($sysWin.FindName("CanvasQuadCpu"))    ($sysWin.FindName("CrosshairQuadCpu"))    "Cpu"    $false $false "Double-click to open CPU tab"
@@ -5202,11 +5422,39 @@ function Start-PSRPM {
     $script:ActiveFindHandleWin  = $null
     $script:FindHandleControls   = @{}
     $script:FindHandleResultsCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+    $findSearchState = @{
+        ActiveGen = 0
+        IsScanning = $false
+        StartUtc  = [DateTime]::MinValue
+        Query     = ""
+        Target    = ""
+        Timer     = $null
+    }
+
+    $cancelHandleSearch = {
+        param([string]$reasonText = "Search cancelled.")
+        $findSearchState.ActiveGen = ([int]$findSearchState.ActiveGen) + 1
+        $findSearchState.IsScanning = $false
+        if ($findSearchState.Timer) {
+            try { $findSearchState.Timer.Stop() } catch {}
+        }
+        $ctrls     = $script:FindHandleControls
+        $btnSearch = $ctrls['BtnSearchHandle']
+        $btnCancel = $ctrls['BtnCancelSearchHandle']
+        $pbSearch  = $ctrls['PbHandleSearch']
+        $txtStatus = $ctrls['TxtHandleStatus']
+        if ($btnSearch) { $btnSearch.IsEnabled = $true }
+        if ($btnCancel) { $btnCancel.Visibility = [System.Windows.Visibility]::Collapsed }
+        if ($pbSearch)  { $pbSearch.Visibility  = [System.Windows.Visibility]::Collapsed }
+        if ($txtStatus -and $reasonText) { $txtStatus.Text = $reasonText }
+    }
 
     $executeHandleSearch = {
         $ctrls     = $script:FindHandleControls
         $txtBox    = $ctrls['TxtSearchHandle']
         $btnSearch = $ctrls['BtnSearchHandle']
+        $btnCancel = $ctrls['BtnCancelSearchHandle']
+        $pbSearch  = $ctrls['PbHandleSearch']
         $txtStatus = $ctrls['TxtHandleStatus']
         $findWin   = $script:ActiveFindHandleWin
         $localCol  = $script:FindHandleResultsCol
@@ -5217,8 +5465,19 @@ function Start-PSRPM {
             return
         }
 
+        $findSearchState.ActiveGen  = ([int]$findSearchState.ActiveGen) + 1
+        $findSearchState.IsScanning = $true
+        $findSearchState.StartUtc   = [DateTime]::UtcNow
+        $findSearchState.Query      = $q
+        $findSearchState.Target     = [string]$stateContainer.TargetDisplayName
+        $myGen      = [int]$findSearchState.ActiveGen
+        $localState = $findSearchState
+
         if ($btnSearch) { $btnSearch.IsEnabled = $false }
-        if ($txtStatus) { $txtStatus.Text = "Searching across processes on '$($stateContainer.TargetDisplayName)' for '$q'..." }
+        if ($btnCancel) { $btnCancel.Visibility = [System.Windows.Visibility]::Visible }
+        if ($pbSearch)  { $pbSearch.Visibility  = [System.Windows.Visibility]::Visible }
+        if ($txtStatus) { $txtStatus.Text = "Searching across processes on '$($stateContainer.TargetDisplayName)' for '$q'... (0.0s)" }
+        if ($findSearchState.Timer) { $findSearchState.Timer.Start() }
 
         $cmdFind = @{
             CommandType = "FindHandles"
@@ -5232,7 +5491,14 @@ function Start-PSRPM {
             param($res)
             if ($findWin -and $findWin.IsLoaded) {
                 $findWin.Dispatcher.Invoke([Action]({
+                    if ([int]$localState.ActiveGen -ne $myGen) { return }
+                    $localState.IsScanning = $false
+                    if ($localState.Timer) {
+                        try { $localState.Timer.Stop() } catch {}
+                    }
                     if ($btnSearch) { $btnSearch.IsEnabled = $true }
+                    if ($btnCancel) { $btnCancel.Visibility = [System.Windows.Visibility]::Collapsed }
+                    if ($pbSearch)  { $pbSearch.Visibility  = [System.Windows.Visibility]::Collapsed }
                     if ($res.Success -and $res.PayloadJson) {
                         $parsedList = $localJss.DeserializeObject($res.PayloadJson)
                         for ($i = $localCol.Count - 1; $i -ge 0; $i--) { $localCol.RemoveAt($i) }
@@ -5390,28 +5656,43 @@ function Start-PSRPM {
         # Apply active theme brushes from main window
         &$syncDialogThemeBrushes $findWin
 
-        $txtSearchHandle = $findWin.FindName("TxtSearchHandle")
-        $btnSearchHandle = $findWin.FindName("BtnSearchHandle")
-        $txtHandleStatus = $findWin.FindName("TxtHandleStatus")
-        $gridHandles     = $findWin.FindName("GridHandleResults")
-        $ctxCloseHandle  = $findWin.FindName("CtxCloseHandle")
-        $ctxGoToProcess  = $findWin.FindName("CtxGoToProcess")
-        $ctxCopyPath     = $findWin.FindName("CtxCopyPath")
-        $btnCloseHandle  = $findWin.FindName("BtnCloseHandle")
-        $btnGoToProcess  = $findWin.FindName("BtnGoToProcess")
-        $btnCopyPath     = $findWin.FindName("BtnCopyPath")
-        $btnCloseDlg     = $findWin.FindName("BtnCloseDlg")
+        $txtSearchHandle      = $findWin.FindName("TxtSearchHandle")
+        $btnSearchHandle      = $findWin.FindName("BtnSearchHandle")
+        $btnCancelSearch      = $findWin.FindName("BtnCancelSearchHandle")
+        $pbHandleSearch       = $findWin.FindName("PbHandleSearch")
+        $txtHandleStatus      = $findWin.FindName("TxtHandleStatus")
+        $gridHandles          = $findWin.FindName("GridHandleResults")
+        $ctxCloseHandle       = $findWin.FindName("CtxCloseHandle")
+        $ctxGoToProcess       = $findWin.FindName("CtxGoToProcess")
+        $ctxCopyPath          = $findWin.FindName("CtxCopyPath")
+        $btnCloseHandle       = $findWin.FindName("BtnCloseHandle")
+        $btnGoToProcess       = $findWin.FindName("BtnGoToProcess")
+        $btnCopyPath          = $findWin.FindName("BtnCopyPath")
+        $btnCloseDlg          = $findWin.FindName("BtnCloseDlg")
 
         if ($txtSearchHandle) { $txtSearchHandle.Text = "" }
         if ($txtHandleStatus) { $txtHandleStatus.Text = "Enter a file name, folder path, DLL, or registry key to search across processes." }
 
         $script:ActiveFindHandleWin = $findWin
         $script:FindHandleControls = @{
-            TxtSearchHandle   = $txtSearchHandle
-            BtnSearchHandle   = $btnSearchHandle
-            TxtHandleStatus   = $txtHandleStatus
-            GridHandleResults = $gridHandles
+            TxtSearchHandle       = $txtSearchHandle
+            BtnSearchHandle       = $btnSearchHandle
+            BtnCancelSearchHandle = $btnCancelSearch
+            PbHandleSearch        = $pbHandleSearch
+            TxtHandleStatus       = $txtHandleStatus
+            GridHandleResults     = $gridHandles
         }
+
+        $findSearchState.IsScanning = $false
+        $findTimer = [System.Windows.Threading.DispatcherTimer]::new([System.Windows.Threading.DispatcherPriority]::Background, $findWin.Dispatcher)
+        $findTimer.Interval = [TimeSpan]::FromMilliseconds(150)
+        $findTimer.add_Tick({
+            if ($findSearchState.IsScanning -and $script:FindHandleControls['TxtHandleStatus']) {
+                $elSec = ([DateTime]::UtcNow - $findSearchState.StartUtc).TotalSeconds
+                $script:FindHandleControls['TxtHandleStatus'].Text = ("Searching '{0}' across processes on '{1}'... ({2:F1}s)" -f $findSearchState.Query, $findSearchState.Target, $elSec)
+            }
+        })
+        $findSearchState.Timer = $findTimer
 
         if ($gridHandles) {
             $gridHandles.ItemsSource = $script:FindHandleResultsCol
@@ -5425,6 +5706,7 @@ function Start-PSRPM {
         }
 
         if ($btnSearchHandle) { $btnSearchHandle.add_Click({ &$executeHandleSearch }) }
+        if ($btnCancelSearch) { $btnCancelSearch.add_Click({ &$cancelHandleSearch "Search cancelled by user." }) }
         if ($txtSearchHandle) {
             $txtSearchHandle.add_KeyDown({
                 param($s, $e)
@@ -5448,7 +5730,9 @@ function Start-PSRPM {
             $mods = [System.Windows.Input.Keyboard]::Modifiers
             $isCtrl = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
             if ($e.Key -eq [System.Windows.Input.Key]::Escape) {
-                if ($script:ActiveFindHandleWin) {
+                if ($findSearchState.IsScanning) {
+                    &$cancelHandleSearch "Search cancelled by user."
+                } elseif ($script:ActiveFindHandleWin) {
                     $script:ActiveFindHandleWin.Close()
                 }
                 $e.Handled = $true
@@ -5465,6 +5749,8 @@ function Start-PSRPM {
         })
 
         $findWin.add_Closed({
+            &$cancelHandleSearch ""
+            $findSearchState.Timer = $null
             for ($i = $script:FindHandleResultsCol.Count - 1; $i -ge 0; $i--) { $script:FindHandleResultsCol.RemoveAt($i) }
             $script:ActiveFindHandleWin = $null
             $script:FindHandleControls.Clear()
@@ -5707,11 +5993,12 @@ function Start-PSRPM {
             foreach ($vm in $engineHandle.ProcessMap.Values) {
                 $snapMap[[int]$vm.PID] = @{
                     CreateTime   = [string]$vm.CreateTime
+                    CPU          = [double]$vm.CPU
                     PrivateBytes = [long]$vm.PrivateBytes
                     MemoryBytes  = [long]$vm.MemoryBytes
                     Handles      = [int]$vm.Handles
                 }
-                $vm.SetBaselineState($true, $false, [long]$vm.PrivateBytes, [long]$vm.MemoryBytes, [int]$vm.Handles)
+                $vm.SetBaselineState($true, $false, [long]$vm.PrivateBytes, [long]$vm.MemoryBytes, [int]$vm.Handles, [double]$vm.CPU)
             }
         }
         $stateContainer.HasBaseline       = $true
@@ -6677,7 +6964,7 @@ function Start-PSRPM {
     foreach ($netGridRef in @($gridNetworkSockets, $gridNetworkTimeline)) {
         if ($netGridRef) {
             & {
-                param($gTarget)
+                param($gTarget, $localSelFn)
                 $gTarget.add_PreviewMouseRightButtonDown({
                     param($sender, $e)
                     $dep = [System.Windows.DependencyObject]$e.OriginalSource
@@ -6696,7 +6983,25 @@ function Start-PSRPM {
                         }
                     }
                 }.GetNewClosure())
-            } $netGridRef
+                $gTarget.add_MouseDoubleClick({
+                    param($sender, $e)
+                    $dep = [System.Windows.DependencyObject]$e.OriginalSource
+                    while ($null -ne $dep -and $dep -ne $gTarget) {
+                        if ($dep -is [System.Windows.Controls.DataGridRow] -and $null -ne $dep.Item) {
+                            $rowPid = 0
+                            try { $rowPid = [int]$dep.Item.PID } catch { $rowPid = 0 }
+                            & $localSelFn $rowPid $true
+                            $e.Handled = $true
+                            break
+                        }
+                        if ($dep -is [System.Windows.Media.Visual] -or $dep -is [System.Windows.Media.Media3D.Visual3D]) {
+                            $dep = [System.Windows.Media.VisualTreeHelper]::GetParent($dep)
+                        } else {
+                            $dep = [System.Windows.LogicalTreeHelper]::GetParent($dep)
+                        }
+                    }
+                }.GetNewClosure())
+            } $netGridRef $selectProcessInMainGrid
         }
     }
     $ctxNetSockCloseConn = $window.FindName("CtxNetSockCloseConn")
@@ -6941,6 +7246,36 @@ function Start-PSRPM {
     }
 
     # 16. Global Keyboard Accelerators
+    $isInteractiveKeyTarget = {
+        param($src)
+        foreach ($cand in @($src, [System.Windows.Input.Keyboard]::FocusedElement)) {
+            $dep = $cand -as [System.Windows.DependencyObject]
+            while ($null -ne $dep) {
+                if ($dep -is [System.Windows.Controls.Primitives.TextBoxBase] -or
+                    $dep -is [System.Windows.Controls.PasswordBox] -or
+                    $dep -is [System.Windows.Controls.Primitives.ButtonBase] -or
+                    $dep -is [System.Windows.Controls.MenuItem] -or
+                    $dep -is [System.Windows.Controls.Primitives.MenuBase] -or
+                    $dep -is [System.Windows.Controls.TabItem] -or
+                    $dep -is [System.Windows.Controls.ComboBox] -or
+                    $dep -is [System.Windows.Controls.ComboBoxItem] -or
+                    $dep -is [System.Windows.Controls.Slider] -or
+                    $dep -is [System.Windows.Controls.Primitives.ScrollBar]) {
+                    return $true
+                }
+                if ($dep -is [System.Windows.Controls.DataGrid] -or $dep -is [System.Windows.Window]) {
+                    break
+                }
+                if ($dep -is [System.Windows.Media.Visual] -or $dep -is [System.Windows.Media.Media3D.Visual3D]) {
+                    $dep = [System.Windows.Media.VisualTreeHelper]::GetParent($dep)
+                } else {
+                    $dep = [System.Windows.LogicalTreeHelper]::GetParent($dep)
+                }
+            }
+        }
+        return $false
+    }
+
     $window.add_PreviewKeyDown({
         param($sender, $e)
         $mods = [System.Windows.Input.Keyboard]::Modifiers
@@ -6954,7 +7289,7 @@ function Start-PSRPM {
         } elseif ($e.Key -eq [System.Windows.Input.Key]::F5) {
             &$triggerImmediateRefresh
             $e.Handled = $true
-        } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $searchHasFocus) {
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $searchHasFocus -and -not (&$isInteractiveKeyTarget $e.OriginalSource)) {
             &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused)
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::B) {
@@ -7077,6 +7412,16 @@ function Start-PSRPM {
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Return -and $gridProcesses.IsKeyboardFocusWithin) {
             &$actionShowProperties
             $e.Handled = $true
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Return -and $gridNetworkSockets -and $gridNetworkSockets.IsKeyboardFocusWithin -and $gridNetworkSockets.SelectedItem) {
+            $rowPid = 0
+            try { $rowPid = [int]$gridNetworkSockets.SelectedItem.PID } catch { $rowPid = 0 }
+            &$selectProcessInMainGrid $rowPid $true
+            $e.Handled = $true
+        } elseif ($e.Key -eq [System.Windows.Input.Key]::Return -and $gridNetworkTimeline -and $gridNetworkTimeline.IsKeyboardFocusWithin -and $gridNetworkTimeline.SelectedItem) {
+            $rowPid = 0
+            try { $rowPid = [int]$gridNetworkTimeline.SelectedItem.PID } catch { $rowPid = 0 }
+            &$selectProcessInMainGrid $rowPid $true
+            $e.Handled = $true
         }
     })
 
@@ -7100,7 +7445,7 @@ function Start-PSRPM {
             }
         } catch {}
         finally {
-            if ($LocalOnly -and ('PSRPM.EtwNetConsumerV1' -as [type])) {
+            if ($isLocalMode -and ('PSRPM.EtwNetConsumerV1' -as [type])) {
                 try {
                     [PSRPM.EtwNetConsumerV1]::Active = 0
                     $th = [PSRPM.EtwNetConsumerV1]::ActiveTraceHandle
@@ -7182,6 +7527,9 @@ function Start-RemoteProcessManager {
         [switch]$LocalOnly,
 
         [Parameter(Mandatory = $false)]
+        [switch]$Wait,
+
+        [Parameter(Mandatory = $false)]
         [Alias("Background")]
         [switch]$NoWait,
 
@@ -7197,7 +7545,11 @@ function Start-RemoteProcessManager {
         [switch]$AlwaysOnTop,
 
         [Parameter(Mandatory = $false)]
-        [string]$IconPath
+        [string]$IconPath,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Default", "NoConfig", "NoPreferences")]
+        [switch]$Defaults
     )
     Start-PSRPM @PSBoundParameters
 }

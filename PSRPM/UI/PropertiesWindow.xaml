@@ -1,7 +1,7 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Process Properties"
-        Height="640" Width="760" MinHeight="520" MinWidth="660"
+        Height="660" Width="980" MinHeight="520" MinWidth="760"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BrushWindowBg}"
@@ -20,7 +20,7 @@
         <SolidColorBrush x:Key="BrushTreeLine" Color="#64748B"/>
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
-        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#475569"/>
         <SolidColorBrush x:Key="BrushRowHover" Color="#220284C7"/>
         <SolidColorBrush x:Key="BrushRowSelectedBg" Color="#006CBE"/>
         <SolidColorBrush x:Key="BrushRowSelectedFg" Color="#FFFFFF"/>
@@ -33,8 +33,9 @@
         <SolidColorBrush x:Key="ColTint_Net" Color="#1A0284C7"/>
         <SolidColorBrush x:Key="ColTint_PrivateBytes" Color="#28EAB308"/>
         <SolidColorBrush x:Key="ColTint_WorkingSet" Color="#22F97316"/>
-        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
-        <SolidColorBrush x:Key="BrushBadgeBg" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0369A1"/>
+        <SolidColorBrush x:Key="BrushBadgeBg" Color="#0369A1"/>
+        <SolidColorBrush x:Key="BrushBadgeFg" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="BrushTargetNodeBg" Color="#E0F2FE"/>
         <SolidColorBrush x:Key="BrushKillBg" Color="#FEE2E2"/>
         <SolidColorBrush x:Key="BrushKillFg" Color="#991B1B"/>
@@ -204,7 +205,7 @@
         </Grid.RowDefinitions>
 
         <!-- Multi-Tab Deep Inspector (Sysinternals Process Explorer Classic Horizontal Tabs) -->
-        <TabControl x:Name="PropTabControl" Grid.Row="0">
+        <TabControl x:Name="PropTabControl" AutomationProperties.Name="Process Properties Tabs" Grid.Row="0">
             <!-- TAB 1: Image -->
             <TabItem Header="Image">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
@@ -237,37 +238,37 @@
                                 <Grid Margin="0,2">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="85"/>
-                                        <ColumnDefinition Width="170"/>
+                                        <ColumnDefinition Width="1.2*"/>
                                         <ColumnDefinition Width="75"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Version:" Foreground="{DynamicResource BrushTextSecondary}"/>
-                                    <TextBlock x:Name="PropVersion" Grid.Column="1" Text="N/A" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                    <TextBlock x:Name="PropVersion" Grid.Column="1" Text="N/A" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock Grid.Column="2" Text="Build Time:" Foreground="{DynamicResource BrushTextSecondary}"/>
-                                    <TextBlock x:Name="PropBuildTime" Grid.Column="3" Text="N/A" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                    <TextBlock x:Name="PropBuildTime" Grid.Column="3" Text="N/A" Foreground="{DynamicResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </Grid>
 
                                 <!-- Path + Copy -->
                                 <TextBlock Text="Path:" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,6,0,2"/>
                                 <DockPanel>
-                                    <Button x:Name="BtnCopyPath" DockPanel.Dock="Right" Content="Copy Path" Width="78" Margin="6,0,0,0" Padding="4,2"/>
-                                    <TextBox x:Name="PropPath" IsReadOnly="True"/>
+                                    <Button x:Name="BtnCopyPath" DockPanel.Dock="Right" Content="Copy Path" AutomationProperties.Name="Copy Image Path" Width="78" Margin="6,0,0,0" Padding="4,2"/>
+                                    <TextBox x:Name="PropPath" AutomationProperties.Name="Executable Image Path" IsReadOnly="True"/>
                                 </DockPanel>
 
                                 <!-- Command Line + Copy -->
                                 <TextBlock Text="Command line:" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,6,0,2"/>
                                 <DockPanel>
-                                    <Button x:Name="BtnCopyCmd" DockPanel.Dock="Right" Content="Copy Cmd" Width="78" Margin="6,0,0,0" Padding="4,2"/>
-                                    <TextBox x:Name="PropCmdLine" IsReadOnly="True"/>
+                                    <Button x:Name="BtnCopyCmd" DockPanel.Dock="Right" Content="Copy Cmd" AutomationProperties.Name="Copy Command Line" Width="78" Margin="6,0,0,0" Padding="4,2"/>
+                                    <TextBox x:Name="PropCmdLine" AutomationProperties.Name="Process Command Line" IsReadOnly="True"/>
                                 </DockPanel>
 
                                 <!-- Current Directory -->
                                 <TextBlock Text="Current directory:" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,6,0,2"/>
-                                <TextBox x:Name="PropWorkDir" IsReadOnly="True" Text="Querying remote PEB..."/>
+                                <TextBox x:Name="PropWorkDir" AutomationProperties.Name="Process Working Directory" IsReadOnly="True" Text="Querying remote PEB..."/>
 
                                 <!-- Autostart Location -->
                                 <TextBlock Text="Autostart Location:" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,6,0,2"/>
-                                <TextBox x:Name="PropAutostart" IsReadOnly="True" Text="n/a"/>
+                                <TextBox x:Name="PropAutostart" AutomationProperties.Name="Autostart Location" IsReadOnly="True" Text="n/a"/>
                             </StackPanel>
                         </GroupBox>
 
@@ -293,14 +294,14 @@
                                 <Grid Margin="0,3">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="95"/>
-                                        <ColumnDefinition Width="175"/>
+                                        <ColumnDefinition Width="1.25*"/>
                                         <ColumnDefinition Width="55"/>
-                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="0.9*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Started:" Foreground="{DynamicResource BrushTextSecondary}"/>
-                                    <TextBlock x:Name="PropStartTime" Grid.Column="1" Text="N/A" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                    <TextBlock x:Name="PropStartTime" Grid.Column="1" Text="N/A" Foreground="{DynamicResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock Grid.Column="2" Text="Image:" Foreground="{DynamicResource BrushTextSecondary}"/>
-                                    <TextBlock x:Name="PropArch" Grid.Column="3" Text="64-bit (x64)" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                    <TextBlock x:Name="PropArch" Grid.Column="3" Text="64-bit (x64)" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </Grid>
                                 <Grid Margin="0,3">
                                     <Grid.ColumnDefinitions>
@@ -310,7 +311,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Verified Signer:" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="PropSignature" Grid.Column="1" Text="Click 'Verify' to check Authenticode signature" Foreground="{DynamicResource BrushAccent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                    <Button x:Name="BtnVerifySig" Grid.Column="2" Content="Verify" Padding="12,2" Margin="6,0,0,0" ToolTip="Verify Authenticode Digital Signature on Target Host"/>
+                                    <Button x:Name="BtnVerifySig" Grid.Column="2" Content="Verify" AutomationProperties.Name="Verify Authenticode Digital Signature" Padding="12,2" Margin="6,0,0,0" ToolTip="Verify Authenticode Digital Signature on Target Host"/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -460,7 +461,7 @@
                                                 <!-- Left: SELECTED Badge + Process Name -->
                                                 <DockPanel LastChildFill="True" VerticalAlignment="Center">
                                                     <Border DockPanel.Dock="Left" Background="{DynamicResource BrushBadgeBg}" CornerRadius="2" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="{Binding TargetBadgeVisibility}">
-                                                        <TextBlock Text="SELECTED" Foreground="White" FontSize="9" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="SELECTED" Foreground="{DynamicResource BrushBadgeFg}" FontSize="9" FontWeight="SemiBold"/>
                                                     </Border>
                                                     <TextBlock Text="{Binding Name}" FontWeight="{Binding NodeFontWeight}" Foreground="{DynamicResource BrushTextPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                 </DockPanel>
@@ -476,22 +477,22 @@
 
             <!-- TAB 3: DLLs -->
             <TabItem Header="DLLs">
-                <DataGrid x:Name="GridPropDlls" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" EnableRowVirtualization="True">
+                <DataGrid x:Name="GridPropDlls" AutomationProperties.Name="Loaded DLL Modules Table" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" EnableRowVirtualization="True">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="145"/>
-                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="195"/>
-                        <DataGridTextColumn Header="Company Name" Binding="{Binding CompanyName}" Width="140"/>
-                        <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="105"/>
-                        <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="75" ElementStyle="{StaticResource RightTabularText}"/>
-                        <DataGridTextColumn Header="Base Address" Binding="{Binding BaseAddress}" Width="115"/>
-                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="135" MinWidth="95"/>
+                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="165" MinWidth="110"/>
+                        <DataGridTextColumn Header="Company Name" Binding="{Binding CompanyName}" Width="138" MinWidth="95"/>
+                        <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="100" MinWidth="75"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="68" MinWidth="54" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn Header="Base Address" Binding="{Binding BaseAddress}" Width="126" MinWidth="95"/>
+                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" MinWidth="200"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </TabItem>
 
             <!-- TAB 4: Handles -->
             <TabItem Header="Handles">
-                <DataGrid x:Name="GridPropHandles" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" EnableRowVirtualization="True">
+                <DataGrid x:Name="GridPropHandles" AutomationProperties.Name="Process Open Handles Table" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" EnableRowVirtualization="True">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
                             <MenuItem x:Name="CtxPropCloseHandle" Header="Close Selected Handle..." InputGestureText="Del"/>
@@ -511,7 +512,7 @@
 
             <!-- TAB 5: TCP/IP -->
             <TabItem Header="TCP/IP">
-                <DataGrid x:Name="GridNetConnections" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
+                <DataGrid x:Name="GridNetConnections" AutomationProperties.Name="Process TCP and UDP Connections Table" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="75"/>
                         <DataGridTextColumn Header="Local Address" Binding="{Binding LocalEndpoint}" Width="210"/>
@@ -523,7 +524,7 @@
 
             <!-- TAB 6: Services -->
             <TabItem Header="Services">
-                <DataGrid x:Name="GridPropServices" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
+                <DataGrid x:Name="GridPropServices" AutomationProperties.Name="Hosted Windows Services Table" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150"/>
                         <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="260"/>
@@ -536,7 +537,7 @@
 
             <!-- TAB 7: Environment -->
             <TabItem Header="Environment">
-                <DataGrid x:Name="GridPropEnv" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
+                <DataGrid x:Name="GridPropEnv" AutomationProperties.Name="Process Environment Variables Table" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeaderWidth="0" RowHeight="22" Margin="4">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Variable" Binding="{Binding Key}" Width="210"/>
                         <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
@@ -549,8 +550,8 @@
         <DockPanel Grid.Row="1" Margin="0,10,0,0">
             <!-- Left: Process Control Actions (Always accessible from every tab) -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
-                <Button x:Name="BtnSuspendResume" Content="Suspend" Width="82" Height="26" Margin="0,0,6,0" ToolTip="Suspend or Resume Process"/>
-                <Button x:Name="BtnPropCreateDump" Content="Create Dump..." Width="105" Height="26" Margin="0,0,6,0" ToolTip="Open Minidump / Full Memory Dump menu (%SystemRoot%\Temp\PSRPM_Dumps or %LOCALAPPDATA%\PSRPM\Dumps on Target Host)">
+                <Button x:Name="BtnSuspendResume" Content="Suspend" Width="82" Height="26" Margin="0,0,6,0" ToolTip="Suspend or Resume Process" AutomationProperties.Name="Suspend or Resume Process"/>
+                <Button x:Name="BtnPropCreateDump" Content="Create Dump..." Width="105" Height="26" Margin="0,0,6,0" ToolTip="Open Minidump / Full Memory Dump menu (%SystemRoot%\Temp\PSRPM_Dumps or %LOCALAPPDATA%\PSRPM\Dumps on Target Host)" AutomationProperties.Name="Create Process Memory Dump">
                     <Button.ContextMenu>
                         <ContextMenu>
                             <MenuItem x:Name="MenuPropMiniDump" Header="Create Minidump..."/>
@@ -558,15 +559,15 @@
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <Button x:Name="BtnPropEndProcess" Content="Kill Process" Width="92" Height="26" Margin="0,0,6,0" Background="{DynamicResource BrushKillBg}" Foreground="{DynamicResource BrushKillFg}" BorderBrush="{DynamicResource BrushKillBorder}" FontWeight="SemiBold" ToolTip="Kill selected process (Del)"/>
-                <Button x:Name="BtnPropEndTree" Content="Kill Process Tree" Width="116" Height="26" Background="{DynamicResource BrushKillTreeBg}" Foreground="{DynamicResource BrushKillTreeFg}" BorderBrush="{DynamicResource BrushKillTreeBorder}" FontWeight="SemiBold" ToolTip="Kill selected process and all descendants (Shift+Del)"/>
+                <Button x:Name="BtnPropEndProcess" Content="Kill Process" AutomationProperties.Name="Kill Process" Width="92" Height="26" Margin="0,0,6,0" Background="{DynamicResource BrushKillBg}" Foreground="{DynamicResource BrushKillFg}" BorderBrush="{DynamicResource BrushKillBorder}" FontWeight="SemiBold" ToolTip="Kill selected process (Del)"/>
+                <Button x:Name="BtnPropEndTree" Content="Kill Process Tree" AutomationProperties.Name="Kill Process Tree" Width="116" Height="26" Background="{DynamicResource BrushKillTreeBg}" Foreground="{DynamicResource BrushKillTreeFg}" BorderBrush="{DynamicResource BrushKillTreeBorder}" FontWeight="SemiBold" ToolTip="Kill selected process and all descendants (Shift+Del)"/>
             </StackPanel>
 
             <!-- Right: Dialog Management -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock x:Name="PropHeaderName" Text="" Visibility="Collapsed"/>
-                <Button x:Name="BtnRefreshInspector" Content="Refresh" Width="78" Height="26" Margin="0,0,6,0" ToolTip="Refresh Inspector Data"/>
-                <Button x:Name="BtnCloseProp" Content="Close" Width="72" Height="26" IsCancel="True"/>
+                <Button x:Name="BtnRefreshInspector" Content="Refresh" AutomationProperties.Name="Refresh Process Properties" Width="78" Height="26" Margin="0,0,6,0" ToolTip="Refresh Inspector Data"/>
+                <Button x:Name="BtnCloseProp" Content="Close" AutomationProperties.Name="Close Process Properties" Width="72" Height="26" IsCancel="True"/>
             </StackPanel>
         </DockPanel>
     </Grid>

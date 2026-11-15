@@ -19,7 +19,7 @@
         <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
-        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#475569"/>
         <SolidColorBrush x:Key="BrushRowHover" Color="#220284C7"/>
         <SolidColorBrush x:Key="BrushRowSelectedBg" Color="#006CBE"/>
         <SolidColorBrush x:Key="BrushRowSelectedFg" Color="#FFFFFF"/>
@@ -66,7 +66,7 @@
         <!-- Header -->
         <DockPanel Grid.Row="0" Margin="0,0,0,10">
             <Border DockPanel.Dock="Right" Background="{DynamicResource BrushHeaderBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                <TextBlock x:Name="TxtSelectedCount" Text="10 of 30 visible" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextSecondary}"/>
+                <TextBlock x:Name="TxtSelectedCount" Text="10 of 31 visible" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextSecondary}"/>
             </Border>
             <StackPanel>
                 <TextBlock Text="Select Process Columns" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
@@ -79,9 +79,9 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Left" Text="Presets:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="BtnPresetDefault" Content="Default (10)" Style="{StaticResource PresetButtonStyle}" ToolTip="Restore the standard PSRPM 10-column layout"/>
-                    <Button x:Name="BtnPresetProcExp" Content="Process Explorer" Style="{StaticResource PresetButtonStyle}" ToolTip="Default layout plus Version and Command Line"/>
-                    <Button x:Name="BtnPresetForensic" Content="Forensic / Security" Style="{StaticResource PresetButtonStyle}" ToolTip="PID, Parent PID, User, Session, Architecture, Start Time, Version, Image Path, Command Line"/>
+                    <Button x:Name="BtnPresetDefault" Content="Default (10)" AutomationProperties.Name="Preset Default 10 Columns" Style="{StaticResource PresetButtonStyle}" ToolTip="Restore the standard PSRPM 10-column layout"/>
+                    <Button x:Name="BtnPresetProcExp" Content="Process Explorer" AutomationProperties.Name="Preset Process Explorer Layout" Style="{StaticResource PresetButtonStyle}" ToolTip="Default layout plus Version and Command Line"/>
+                    <Button x:Name="BtnPresetForensic" Content="Forensic / Security" AutomationProperties.Name="Preset Forensic and Security Layout" Style="{StaticResource PresetButtonStyle}" ToolTip="PID, Parent PID, User, Session, Architecture, Start Time, Version, Image Path, Command Line"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -114,7 +114,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="TxtColFilter" Grid.Column="0" Padding="6,3" VerticalContentAlignment="Center" ToolTip="Filter available columns by name, category, or description"/>
+                            <TextBox x:Name="TxtColFilter" Grid.Column="0" Padding="6,3" VerticalContentAlignment="Center" ToolTip="Filter available columns by name, category, or description" AutomationProperties.Name="Filter Available Columns"/>
                             <TextBlock Grid.Column="0" Text="Filter columns..." Foreground="{DynamicResource BrushTextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -127,12 +127,12 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                            <Button x:Name="BtnColFilterClear" Grid.Column="1" Content="Clear" Padding="7,2" Margin="6,0,0,0" FontSize="11"/>
+                            <Button x:Name="BtnColFilterClear" Grid.Column="1" Content="Clear" Padding="7,2" Margin="6,0,0,0" FontSize="11" AutomationProperties.Name="Clear Column Filter"/>
                         </Grid>
                     </Border>
 
                     <!-- Columns CheckList -->
-                    <ListBox x:Name="LstAvailableColumns" Grid.Row="2" BorderThickness="0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox x:Name="LstAvailableColumns" AutomationProperties.Name="Available Columns List" Grid.Row="2" BorderThickness="0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -149,7 +149,7 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked, Mode=TwoWay}" IsEnabled="{Binding IsCheckEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked, Mode=TwoWay}" IsEnabled="{Binding IsCheckEnabled}" AutomationProperties.Name="{Binding Header}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                     <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource BrushTextPrimary}"/>
                                         <TextBlock Text="{Binding Hint}" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" TextTrimming="CharacterEllipsis"/>
@@ -177,12 +177,12 @@
                         <TextBlock Text="Display Order (Visible)" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
                     </Border>
 
-                    <ListBox x:Name="LstColumnOrder" Grid.Row="1" BorderThickness="0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" DisplayMemberPath="OrderLabel" SelectionMode="Single" Padding="2"/>
+                    <ListBox x:Name="LstColumnOrder" AutomationProperties.Name="Active Columns Display Order" Grid.Row="1" BorderThickness="0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" DisplayMemberPath="OrderLabel" SelectionMode="Single" Padding="2"/>
 
                     <Border Grid.Row="2" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,1,0,0" Padding="6">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="BtnColMoveUp" Content="Move Up" Padding="10,3" Margin="0,0,6,0" FontSize="11"/>
-                            <Button x:Name="BtnColMoveDown" Content="Move Down" Padding="10,3" FontSize="11"/>
+                            <Button x:Name="BtnColMoveUp" Content="Move Up" AutomationProperties.Name="Move Selected Column Up" Padding="10,3" Margin="0,0,6,0" FontSize="11"/>
+                            <Button x:Name="BtnColMoveDown" Content="Move Down" AutomationProperties.Name="Move Selected Column Down" Padding="10,3" FontSize="11"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -191,10 +191,10 @@
 
         <!-- Footer -->
         <DockPanel Grid.Row="3" Margin="0,12,0,0">
-            <Button x:Name="BtnColResetDefaults" DockPanel.Dock="Left" Content="Reset Defaults" Height="28" Padding="12,4"/>
+            <Button x:Name="BtnColResetDefaults" DockPanel.Dock="Left" Content="Reset Defaults" AutomationProperties.Name="Reset Columns to Defaults" Height="28" Padding="12,4"/>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="BtnColOk" Content="OK" Width="88" Height="28" Margin="0,0,8,0" IsDefault="True" FontWeight="SemiBold"/>
-                <Button x:Name="BtnColCancel" Content="Cancel" Width="84" Height="28" IsCancel="True"/>
+                <Button x:Name="BtnColOk" Content="OK" AutomationProperties.Name="Apply Column Selection" Width="88" Height="28" Margin="0,0,8,0" IsDefault="True" FontWeight="SemiBold"/>
+                <Button x:Name="BtnColCancel" Content="Cancel" AutomationProperties.Name="Cancel Column Selection" Width="84" Height="28" IsCancel="True"/>
             </StackPanel>
         </DockPanel>
     </Grid>

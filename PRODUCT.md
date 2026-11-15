@@ -25,7 +25,7 @@ Traditional remote administration on Windows forced operators into severe trade-
 | :--- | :--- | :--- |
 | **Windows Systems & Domain Admins** | Multi-server triage, hung service diagnostics, runaway resource troubleshooting. | Multi-Host Tabbed Session Bar, Service Process mapping, Windows Service control (Start/Stop/Restart), CPU Priority adjustment. |
 | **Incident Responders & Threat Hunters** | Live incident response, anomalous process tree detection, unauthorized persistence verification. | Parent-child Tree-Grid, Authenticode signature verification, PEB CurrentDirectory/Environment inspection, TCP/IP socket tables, Two-Phase Atomic `KillTree`. |
-| **Desktop Support & Fleet Engineers** | End-user workstation troubleshooting without interrupting user sessions or screen sharing. | WinRM remoting (`-ComputerName`), `-LocalOnly` zero-privilege mode, `-NoWait` background terminal execution, Packaged/WebView2 semantic grouping. |
+| **Desktop Support & Fleet Engineers** | End-user workstation troubleshooting without interrupting user sessions or screen sharing. | WinRM remoting (`-ComputerName`), `-LocalOnly` zero-privilege mode, default non-blocking background terminal execution (`-Wait` to block), Packaged/WebView2 semantic grouping. |
 | **DevOps & Windows SREs** | Diagnosing production microservices, CI/CD runner bottlenecks, memory leakage verification. | 5-Tab System Information graphs, 240-sample circular ring buffers, GZIP wire telemetry monitoring, CSV/JSON forensic snapshots. |
 
 ---
@@ -36,7 +36,7 @@ Every capability in PSRPM is governed by four strict architectural non-negotiabl
 
 ```mermaid
 flowchart TD
-    P1["1. Seamless Connectivity<br/>* Persistent WinRM PSSession (-ComputerName)<br/>* Zero-privilege local mode (-LocalOnly)<br/>* Unlocked background runspaces (-NoWait)"]
+    P1["1. Seamless Connectivity<br/>* Persistent WinRM PSSession (-ComputerName)<br/>* Zero-privilege local mode (-LocalOnly)<br/>* Unlocked background runspaces (default; -Wait to block)"]
     P2["2. Ultra-Low Overhead<br/>* < 0.25% Remote CPU (2-8ms NtQuerySystemInformation)<br/>* ~1.1-1.8 KB/s Steady-State GZIP Wire<br/>* < 20 KB Ring Buffer RAM per Host"]
     P3["3. Process Explorer UX<br/>* Single-surface Hierarchical Tree-Grid<br/>* Semantic Row Colors & Column Tints<br/>* 7-Tab Inspector & 5-Tab System Graphs<br/>* Multi-Host Warm Standby Tabs"]
     P4["4. 100% Fileless Architecture<br/>* Zero Add-Type -TypeDefinition / csc.exe<br/>* Zero disk writes to %TEMP%<br/>* Pure In-Memory Reflection.Emit & PS 5.1 Classes"]
@@ -128,9 +128,9 @@ psrpm -ComputerName "10.20.30.40" -Credential $cred -Port 5986 -UseSSL
 # 3. Zero-Privilege Local Execution (No WinRM or Admin required)
 psrpm -LocalOnly
 
-# 4. Asynchronous Background Execution (Terminal remains unlocked)
-psrpm -LocalOnly -NoWait
-psrpm -ComputerName "SRV-PROD-01" -NoWait
+# 4. Synchronous Blocking Execution (default launches asynchronously in a background STA runspace)
+psrpm -LocalOnly -Wait
+psrpm -ComputerName "SRV-PROD-01" -Wait
 ```
 
 ### Parameter Matrix
@@ -142,7 +142,9 @@ psrpm -ComputerName "SRV-PROD-01" -NoWait
 | `-UseSSL` | `Switch` | `$false` | Enforce HTTPS encryption for WinRM remoting. |
 | `-RefreshIntervalMs` | `Int32` | `1000` | Polling rate in milliseconds (`250` to `60000`). |
 | `-LocalOnly` (`-Local`) | `Switch` | `$false` | Run directly in-process without WinRM remoting. |
-| `-NoWait` (`-Background`) | `Switch` | `$false` | Launch asynchronously in background STA runspace, returning prompt immediately. |
+| `-Wait` | `Switch` | `$false` | Block the calling terminal synchronously until closed (default launches asynchronously in a background STA runspace). |
+| `-NoWait` (`-Background`) | `Switch` | Legacy alias | Retained for backwards compatibility (background non-blocking launch is now active by default). |
+| `-Defaults` (`-Default`, `-NoConfig`, `-NoPreferences`) | `Switch` | `$false` | Skip loading saved `%LOCALAPPDATA%\PSRPM\preferences.json` for the session and start with factory defaults (leaves saved config untouched on disk). |
 
 ---
 

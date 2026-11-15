@@ -18,11 +18,11 @@
         <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
-        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#475569"/>
         <SolidColorBrush x:Key="BrushSparkBg" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="BrushSparkBorder" Color="#94A3B8"/>
         <SolidColorBrush x:Key="BrushSparkGrid" Color="#CBD5E1"/>
-        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0369A1"/>
         <SolidColorBrush x:Key="BrushNetRxStroke" Color="#0284C7"/>
         <SolidColorBrush x:Key="BrushNetRxFill" Color="#440284C7"/>
         <SolidColorBrush x:Key="BrushNetTxStroke" Color="#EA580C"/>
@@ -76,7 +76,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="SysInfoTabControl" Grid.Row="0" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}">
+        <TabControl x:Name="SysInfoTabControl" AutomationProperties.Name="System Information Tabs" Grid.Row="0" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}">
             <!-- TAB 1: SUMMARY -->
             <TabItem Header="Summary" Padding="10,3">
                 <Grid Margin="10,8">
@@ -115,7 +115,7 @@
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Host" Style="{StaticResource LblMuted}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HwHost}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Operating" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="OS" Style="{StaticResource LblMuted}"/>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HwOS}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="CPU" Style="{StaticResource LblMuted}"/>
@@ -135,7 +135,7 @@
                                     <ColumnDefinition Width="72"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="72"/>
+                                    <ColumnDefinition Width="84"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
@@ -147,7 +147,7 @@
 
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Memory" Style="{StaticResource LblMuted}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HwMemoryGBText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
-                                <TextBlock Grid.Row="0" Grid.Column="3" Text="Commit Lim" Style="{StaticResource LblMuted}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="3" Text="Commit Limit" Style="{StaticResource LblMuted}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="4" Text="{Binding HwCommitLimitGBText}" Style="{StaticResource ValText}" Background="{DynamicResource BrushToolbarBg}" Padding="4,0"/>
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Boot" Style="{StaticResource LblMuted}"/>
@@ -177,7 +177,7 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- CPU Usage Quadrant -->
-                        <Grid x:Name="QuadCpu" Grid.Column="0" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open CPU tab">
+                        <Grid x:Name="QuadCpu" Grid.Column="0" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open CPU tab" AutomationProperties.Name="CPU Usage Summary Card">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
@@ -221,7 +221,7 @@
                         </Grid>
 
                         <!-- System Commit Quadrant -->
-                        <Grid x:Name="QuadCommit" Grid.Column="2" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open Memory tab">
+                        <Grid x:Name="QuadCommit" Grid.Column="2" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open Memory tab" AutomationProperties.Name="System Commit Summary Card">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
@@ -271,7 +271,7 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Physical Memory Quadrant -->
-                        <Grid x:Name="QuadRam" Grid.Column="0" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open Memory tab">
+                        <Grid x:Name="QuadRam" Grid.Column="0" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open Memory tab" AutomationProperties.Name="Physical Memory Summary Card">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
@@ -312,7 +312,7 @@
                         </Grid>
 
                         <!-- I/O Quadrant -->
-                        <Grid x:Name="QuadIo" Grid.Column="2" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open I/O tab">
+                        <Grid x:Name="QuadIo" Grid.Column="2" Background="Transparent" Cursor="Hand" ToolTip="Double-click to open I/O tab" AutomationProperties.Name="Disk and Device I/O Summary Card">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
@@ -356,7 +356,7 @@
                     </Grid>
 
                     <!-- Row 3: Live Network Throughput Summary Strip (Double-Click for Network Tab) -->
-                    <Border x:Name="QuadNet" Grid.Row="3" Margin="0,8,0,0" Padding="8,5" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Cursor="Hand" ToolTipService.IsEnabled="False">
+                    <Border x:Name="QuadNet" Grid.Row="3" Margin="0,8,0,0" Padding="8,5" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="3" Cursor="Hand" ToolTipService.IsEnabled="False" AutomationProperties.Name="Live Network Throughput Summary">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -378,7 +378,7 @@
                                 <TextBlock Text="Scale Peak: " Foreground="{DynamicResource BrushTextMuted}" FontSize="11" VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding NetPeakRateFormatted}" Style="{StaticResource ValNum}"/>
                             </StackPanel>
-                            <TextBlock Grid.Column="2" Text="Double-click for Network tab" Foreground="{DynamicResource BrushAccent}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnOpenNetworkTab" Grid.Column="2" Content="Open Network tab ->" Background="Transparent" BorderThickness="0" Padding="4,1" Foreground="{DynamicResource BrushAccent}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" Cursor="Hand" ToolTip="Open detailed Network performance tab (or double-click strip)" AutomationProperties.Name="Open Detailed Network Tab"/>
                         </Grid>
                     </Border>
                 </Grid>
@@ -546,7 +546,7 @@
                         </GroupBox>
                     </Grid>
 
-                    <CheckBox x:Name="ChkPerCpuGraph" Grid.Row="3" Content="Show one graph per CPU" IsChecked="{Binding ShowOneGraphPerCpu}" Margin="2,2,0,0" Cursor="Hand"/>
+                    <CheckBox x:Name="ChkPerCpuGraph" Grid.Row="3" Content="Show one graph per CPU" AutomationProperties.Name="Show One Graph Per Logical CPU" IsChecked="{Binding ShowOneGraphPerCpu}" Margin="2,2,0,0" Cursor="Hand"/>
                 </Grid>
             </TabItem>
 
@@ -1003,7 +1003,7 @@
 
         <!-- Bottom Action Bar -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button x:Name="BtnSysInfoOk" Content="OK" Width="88" Height="26" IsDefault="True" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1.5" Cursor="Hand"/>
+            <Button x:Name="BtnSysInfoOk" Content="OK" Width="88" Height="26" IsDefault="True" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1.5" Cursor="Hand" AutomationProperties.Name="Close System Information Window"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -18,7 +18,7 @@
         <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
-        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#475569"/>
         <SolidColorBrush x:Key="BrushRowHover" Color="#F1F5F9"/>
         <SolidColorBrush x:Key="BrushRowSelectedBg" Color="#006CBE"/>
         <SolidColorBrush x:Key="BrushRowSelectedFg" Color="#FFFFFF"/>
@@ -66,23 +66,27 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Handle or DLL substring:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
-                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtSearchHandle" Height="26" VerticalContentAlignment="Center" Padding="4,0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1"/>
-                <Button Grid.Row="0" Grid.Column="2" x:Name="BtnSearchHandle" Content="Search" Width="75" Height="26" Margin="6,0,0,0" Style="{StaticResource ActionButtonStyle}" IsDefault="True"/>
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtSearchHandle" Height="26" VerticalContentAlignment="Center" Padding="4,0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" AutomationProperties.Name="Handle or DLL Substring Query"/>
+                <Button Grid.Row="0" Grid.Column="2" x:Name="BtnSearchHandle" Content="Search" Width="75" Height="26" Margin="6,0,0,0" Style="{StaticResource ActionButtonStyle}" IsDefault="True" AutomationProperties.Name="Search Open Handles and Loaded DLLs"/>
+                <Button Grid.Row="0" Grid.Column="3" x:Name="BtnCancelSearchHandle" Content="Cancel" Width="68" Height="26" Margin="6,0,0,0" Style="{StaticResource ActionButtonStyle}" Visibility="Collapsed" AutomationProperties.Name="Cancel Handle Search"/>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" x:Name="TxtHandleStatus" Text="Enter a file name, folder path, DLL, or registry key to search across processes." Foreground="{DynamicResource BrushTextMuted}" FontSize="11" Margin="0,5,0,0"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" x:Name="TxtHandleStatus" Text="Enter a file name, folder path, DLL, or registry key to search across processes." Foreground="{DynamicResource BrushTextMuted}" FontSize="11" Margin="0,5,0,0"/>
+                <ProgressBar Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" x:Name="PbHandleSearch" Height="3" IsIndeterminate="True" Visibility="Collapsed" Foreground="{DynamicResource BrushAccent}" Background="Transparent" BorderThickness="0" Margin="0,5,0,0" AutomationProperties.Name="Handle Search Progress"/>
             </Grid>
         </Border>
 
         <!-- Search Results Grid -->
-        <DataGrid Grid.Row="1" x:Name="GridHandleResults"
+        <DataGrid Grid.Row="1" x:Name="GridHandleResults" AutomationProperties.Name="Find Handle and DLL Search Results"
                   AutoGenerateColumns="False" IsReadOnly="True"
                   SelectionMode="Single" SelectionUnit="FullRow"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
@@ -153,10 +157,10 @@
 
         <!-- Bottom Action Strip -->
         <DockPanel Grid.Row="2" Margin="0,8,0,0">
-            <Button x:Name="BtnCloseHandle" DockPanel.Dock="Left" Content="Close Selected Handle" Style="{StaticResource ActionButtonStyle}" ToolTip="Forcibly close the selected handle in the target process (Del)"/>
-            <Button x:Name="BtnGoToProcess" DockPanel.Dock="Left" Content="Go to Process in Tree" Style="{StaticResource ActionButtonStyle}" ToolTip="Select this process in the main process tree (Enter)"/>
-            <Button x:Name="BtnCopyPath" DockPanel.Dock="Left" Content="Copy Object Path" Style="{StaticResource ActionButtonStyle}" ToolTip="Copy selected object path to clipboard (Ctrl+C)"/>
-            <Button x:Name="BtnCloseDlg" DockPanel.Dock="Right" Content="Close" Width="75" Style="{StaticResource ActionButtonStyle}"/>
+            <Button x:Name="BtnCloseHandle" DockPanel.Dock="Left" Content="Close Selected Handle" Style="{StaticResource ActionButtonStyle}" ToolTip="Forcibly close the selected handle in the target process (Del)" AutomationProperties.Name="Close Selected Handle"/>
+            <Button x:Name="BtnGoToProcess" DockPanel.Dock="Left" Content="Go to Process in Tree" Style="{StaticResource ActionButtonStyle}" ToolTip="Select this process in the main process tree (Enter)" AutomationProperties.Name="Go to Process in Tree"/>
+            <Button x:Name="BtnCopyPath" DockPanel.Dock="Left" Content="Copy Object Path" Style="{StaticResource ActionButtonStyle}" ToolTip="Copy selected object path to clipboard (Ctrl+C)" AutomationProperties.Name="Copy Object Path"/>
+            <Button x:Name="BtnCloseDlg" DockPanel.Dock="Right" Content="Close" Width="75" Style="{StaticResource ActionButtonStyle}" AutomationProperties.Name="Close Find Handle Window"/>
         </DockPanel>
     </Grid>
 </Window>

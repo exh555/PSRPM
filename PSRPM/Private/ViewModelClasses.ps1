@@ -48,7 +48,7 @@ class PSRPMThemeRegistry {
                     BrushTreeLine        = "#565F89"
                     BrushTextPrimary     = "#C0CAF5"
                     BrushTextSecondary   = "#A9B1D6"
-                    BrushTextMuted       = "#7E85A8"
+                    BrushTextMuted       = "#8890B5"
                     BrushRowHover        = "#202330"
                     BrushRowSelectedBg   = "#3D59A1"
                     BrushRowSelectedFg   = "#FFFFFF"
@@ -60,6 +60,10 @@ class PSRPMThemeRegistry {
                     BrushMenuHover       = "#202330"
                     BrushAccent          = "#7AA2F7"
                     BrushBadgeBg         = "#3D59A1"
+                    BrushBadgeFg         = "#FFFFFF"
+                    BrushHelpSuccessFg   = "#9ECE6A"
+                    BrushHelpAmberFg     = "#E0AF68"
+                    BrushHelpVioletFg    = "#BB9AF7"
                     ColTint_CPU          = "#149ECE6A"
                     ColTint_Net          = "#147AA2F7"
                     ColTint_PrivateBytes = "#14E0AF68"
@@ -146,9 +150,9 @@ class PSRPMThemeRegistry {
                     BrushSigSignedFg     = "#9ECE6A"
                     BrushSigUnsignedFg   = "#F7768E"
                     BrushStatusActiveFg  = "#9ECE6A"
-                    BrushStatusIdleFg    = "#7E85A8"
+                    BrushStatusIdleFg    = "#8890B5"
                     BrushStatusExitedFg  = "#F7768E"
-                    BrushSvcRunningBg    = "#0D9488"
+                    BrushSvcRunningBg    = "#0F766E"
                     BrushSvcPausedBg     = "#9E6A1C"
                     BrushSvcStoppedBg    = "#3D59A1"
                 }
@@ -168,8 +172,8 @@ class PSRPMThemeRegistry {
                     ActiveFg      = "#C0CAF5"
                     StandbyBg     = "#16161E"
                     StandbyBorder = "#292E42"
-                    StandbyFg     = "#7E85A8"
-                    BadgeLocalBg  = "#0D9488"
+                    StandbyFg     = "#8890B5"
+                    BadgeLocalBg  = "#0F766E"
                     BadgeWinRmBg  = "#3D59A1"
                 }
                 Legend = @{
@@ -200,9 +204,9 @@ class PSRPMThemeRegistry {
                     BrushTreeLine        = "#707280"
                     BrushTextPrimary     = "#343B59"
                     BrushTextSecondary   = "#40434F"
-                    BrushTextMuted       = "#5A607D"
+                    BrushTextMuted       = "#4C516D"
                     BrushRowHover        = "#DCDEE3"
-                    BrushRowSelectedBg   = "#2959AA"
+                    BrushRowSelectedBg   = "#224E99"
                     BrushRowSelectedFg   = "#FFFFFF"
                     BrushSparkBg         = "#E6E7ED"
                     BrushSparkBorder     = "#C1C2C7"
@@ -210,8 +214,12 @@ class PSRPMThemeRegistry {
                     BrushMenuBg          = "#D6D8DF"
                     BrushMenuBorder      = "#C1C2C7"
                     BrushMenuHover       = "#E1E2E8"
-                    BrushAccent          = "#2959AA"
-                    BrushBadgeBg         = "#2959AA"
+                    BrushAccent          = "#224E99"
+                    BrushBadgeBg         = "#224E99"
+                    BrushBadgeFg         = "#FFFFFF"
+                    BrushHelpSuccessFg   = "#166534"
+                    BrushHelpAmberFg     = "#92400E"
+                    BrushHelpVioletFg    = "#6D28D9"
                     ColTint_CPU          = "#1F385F0D"
                     ColTint_Net          = "#1A2959AA"
                     ColTint_PrivateBytes = "#228F5E15"
@@ -258,9 +266,9 @@ class PSRPMThemeRegistry {
                     BrushNetTxFill       = "#4433635C"
                     BrushDeltaGrowthFg   = "#8C2D3D"
                     BrushDeltaShrinkFg   = "#2F5E1B"
-                    BrushDeltaNewFg      = "#2959AA"
+                    BrushDeltaNewFg      = "#224E99"
                     BrushBadgeTcpBg      = "#D6DDF0"
-                    BrushBadgeTcpFg      = "#2959AA"
+                    BrushBadgeTcpFg      = "#224E99"
                     BrushBadgeUdpBg      = "#CDE3EA"
                     BrushBadgeUdpFg      = "#0F4B6E"
                     BrushStateEstBg      = "#CFE3CC"
@@ -298,11 +306,11 @@ class PSRPMThemeRegistry {
                     BrushSigSignedFg     = "#264709"
                     BrushSigUnsignedFg   = "#8C2D3D"
                     BrushStatusActiveFg  = "#385F0D"
-                    BrushStatusIdleFg    = "#5A607D"
+                    BrushStatusIdleFg    = "#4C516D"
                     BrushStatusExitedFg  = "#8C2D3D"
                     BrushSvcRunningBg    = "#33635C"
                     BrushSvcPausedBg     = "#8F5E15"
-                    BrushSvcStoppedBg    = "#5A607D"
+                    BrushSvcStoppedBg    = "#4C516D"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#E6E7ED"; Fg = "#343B59" }
@@ -316,13 +324,13 @@ class PSRPMThemeRegistry {
                 }
                 TabColors = @{
                     ActiveBg      = "#E6E7ED"
-                    ActiveBorder  = "#2959AA"
+                    ActiveBorder  = "#224E99"
                     ActiveFg      = "#343B59"
                     StandbyBg     = "#D6D8DF"
                     StandbyBorder = "#C1C2C7"
-                    StandbyFg     = "#5A607D"
+                    StandbyFg     = "#4C516D"
                     BadgeLocalBg  = "#33635C"
-                    BadgeWinRmBg  = "#2959AA"
+                    BadgeWinRmBg  = "#224E99"
                 }
                 Legend = @{
                     AllActiveBorder = "#2959AA"
@@ -364,6 +372,10 @@ class PSRPMThemeRegistry {
                     BrushMenuHover       = "#222222"
                     BrushAccent          = "#FFFF00"
                     BrushBadgeBg         = "#0055FF"
+                    BrushBadgeFg         = "#FFFFFF"
+                    BrushHelpSuccessFg   = "#00FF00"
+                    BrushHelpAmberFg     = "#FFFF00"
+                    BrushHelpVioletFg    = "#D8B4FE"
                     ColTint_CPU          = "#2200FF00"
                     ColTint_Net          = "#220088FF"
                     ColTint_PrivateBytes = "#22FFFF00"
@@ -504,7 +516,7 @@ class PSRPMThemeRegistry {
                     BrushTreeLine        = "#808080"
                     BrushTextPrimary     = "#000000"
                     BrushTextSecondary   = "#333333"
-                    BrushTextMuted       = "#666666"
+                    BrushTextMuted       = "#4D4D4D"
                     BrushRowHover        = "#220A246A"
                     BrushRowSelectedBg   = "#0A246A"
                     BrushRowSelectedFg   = "#FFFFFF"
@@ -516,6 +528,10 @@ class PSRPMThemeRegistry {
                     BrushMenuHover       = "#D4D0C8"
                     BrushAccent          = "#0A246A"
                     BrushBadgeBg         = "#0A246A"
+                    BrushBadgeFg         = "#FFFFFF"
+                    BrushHelpSuccessFg   = "#166534"
+                    BrushHelpAmberFg     = "#92400E"
+                    BrushHelpVioletFg    = "#6D28D9"
                     ColTint_CPU          = "#2222C55E"
                     ColTint_Net          = "#1A0284C7"
                     ColTint_PrivateBytes = "#28EAB308"
@@ -560,9 +576,9 @@ class PSRPMThemeRegistry {
                     BrushNetRxFill       = "#5538BDF8"
                     BrushNetTxStroke     = "#008000"
                     BrushNetTxFill       = "#4D16A34A"
-                    BrushDeltaGrowthFg   = "#B91C1C"
-                    BrushDeltaShrinkFg   = "#15803D"
-                    BrushDeltaNewFg      = "#0369A1"
+                    BrushDeltaGrowthFg   = "#991B1B"
+                    BrushDeltaShrinkFg   = "#166534"
+                    BrushDeltaNewFg      = "#075985"
                     BrushBadgeTcpBg      = "#E0E0FF"
                     BrushBadgeTcpFg      = "#0A246A"
                     BrushBadgeUdpBg      = "#E0FFFF"
@@ -599,14 +615,14 @@ class PSRPMThemeRegistry {
                     BrushMiniCpuFill     = "#3322C55E"
                     BrushMiniCommitFill  = "#33EAB308"
                     BrushMiniRamFill     = "#33F97316"
-                    BrushSigSignedFg     = "#15803D"
-                    BrushSigUnsignedFg   = "#B91C1C"
-                    BrushStatusActiveFg  = "#16A34A"
+                    BrushSigSignedFg     = "#166534"
+                    BrushSigUnsignedFg   = "#991B1B"
+                    BrushStatusActiveFg  = "#166534"
                     BrushStatusIdleFg    = "#475569"
-                    BrushStatusExitedFg  = "#DC2626"
-                    BrushSvcRunningBg    = "#16A34A"
-                    BrushSvcPausedBg     = "#D97706"
-                    BrushSvcStoppedBg    = "#64748B"
+                    BrushStatusExitedFg  = "#991B1B"
+                    BrushSvcRunningBg    = "#15803D"
+                    BrushSvcPausedBg     = "#B45309"
+                    BrushSvcStoppedBg    = "#475569"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#FFFFFF"; Fg = "#000000" }
@@ -620,13 +636,13 @@ class PSRPMThemeRegistry {
                 }
                 TabColors = @{
                     ActiveBg      = "#FFFFFF"
-                    ActiveBorder  = "#0284C7"
+                    ActiveBorder  = "#0369A1"
                     ActiveFg      = "#0F172A"
                     StandbyBg     = "#E2E8F0"
                     StandbyBorder = "#CBD5E1"
                     StandbyFg     = "#475569"
-                    BadgeLocalBg  = "#0D9488"
-                    BadgeWinRmBg  = "#0284C7"
+                    BadgeLocalBg  = "#0F766E"
+                    BadgeWinRmBg  = "#0369A1"
                 }
                 Legend = @{
                     AllActiveBorder = "#0A246A"
@@ -636,8 +652,8 @@ class PSRPMThemeRegistry {
                     Packaged = @{ Bg = "#E0FFFF"; Border = "#06B6D4"; ActiveBg = "#22D3EE"; ActiveBorder = "#0E7490"; ActiveText = "#0E7490"; Fg = "#000000" }
                 }
                 Banner = @{
-                    Cap2   = @{ Bg = "#FEF3C7"; Border = "#F59E0B"; BadgeBg = "#D97706"; Fg = "#0F172A"; MutedFg = "#475569"; BtnBg = "#FFFFFF"; BtnFg = "#0F172A" }
-                    Cap3   = @{ Bg = "#E0F2FE"; Border = "#0284C7"; BadgeBg = "#0284C7"; Fg = "#0F172A"; MutedFg = "#475569" }
+                    Cap2   = @{ Bg = "#FEF3C7"; Border = "#F59E0B"; BadgeBg = "#B45309"; Fg = "#0F172A"; MutedFg = "#475569"; BtnBg = "#FFFFFF"; BtnFg = "#0F172A" }
+                    Cap3   = @{ Bg = "#E0F2FE"; Border = "#0284C7"; BadgeBg = "#0369A1"; Fg = "#0F172A"; MutedFg = "#475569" }
                     CapErr = @{ Bg = "#FEE2E2"; Border = "#EF4444"; BadgeBg = "#DC2626"; Fg = "#0F172A"; MutedFg = "#475569" }
                 }
             }
@@ -667,7 +683,11 @@ class PSRPMThemeRegistry {
                     BrushMenuBorder      = "#334155"
                     BrushMenuHover       = "#26354D"
                     BrushAccent          = "#38BDF8"
-                    BrushBadgeBg         = "#0284C7"
+                    BrushBadgeBg         = "#0369A1"
+                    BrushBadgeFg         = "#FFFFFF"
+                    BrushHelpSuccessFg   = "#4ADE80"
+                    BrushHelpAmberFg     = "#FBBF24"
+                    BrushHelpVioletFg    = "#C4B5FD"
                     ColTint_CPU          = "#1422C55E"
                     ColTint_Net          = "#120284C7"
                     ColTint_PrivateBytes = "#14EAB308"
@@ -777,8 +797,8 @@ class PSRPMThemeRegistry {
                     StandbyBg     = "#1E293B"
                     StandbyBorder = "#334155"
                     StandbyFg     = "#94A3B8"
-                    BadgeLocalBg  = "#0D9488"
-                    BadgeWinRmBg  = "#0284C7"
+                    BadgeLocalBg  = "#0F766E"
+                    BadgeWinRmBg  = "#0369A1"
                 }
                 Legend = @{
                     AllActiveBorder = "#38BDF8"
@@ -788,8 +808,8 @@ class PSRPMThemeRegistry {
                     Packaged = @{ Bg = "#0E3A47"; Border = "#0891B2"; ActiveBg = "#155E75"; ActiveBorder = "#22D3EE"; ActiveText = "#67E8F9"; Fg = "#F8FAFC" }
                 }
                 Banner = @{
-                    Cap2   = @{ Bg = "#451A03"; Border = "#F59E0B"; BadgeBg = "#D97706"; Fg = "#FEF3C7"; MutedFg = "#FDE68A"; BtnBg = "#1E293B"; BtnFg = "#F8FAFC" }
-                    Cap3   = @{ Bg = "#082F49"; Border = "#0284C7"; BadgeBg = "#0284C7"; Fg = "#E0F2FE"; MutedFg = "#BAE6FD" }
+                    Cap2   = @{ Bg = "#451A03"; Border = "#F59E0B"; BadgeBg = "#B45309"; Fg = "#FEF3C7"; MutedFg = "#FDE68A"; BtnBg = "#1E293B"; BtnFg = "#F8FAFC" }
+                    Cap3   = @{ Bg = "#082F49"; Border = "#0284C7"; BadgeBg = "#0369A1"; Fg = "#E0F2FE"; MutedFg = "#BAE6FD" }
                     CapErr = @{ Bg = "#450A0A"; Border = "#EF4444"; BadgeBg = "#DC2626"; Fg = "#FEE2E2"; MutedFg = "#FECACA" }
                 }
             }
@@ -808,7 +828,7 @@ class PSRPMThemeRegistry {
                 BrushTreeLine        = "#64748B"
                 BrushTextPrimary     = "#0F172A"
                 BrushTextSecondary   = "#334155"
-                BrushTextMuted       = "#64748B"
+                BrushTextMuted       = "#475569"
                 BrushRowHover        = "#220284C7"
                 BrushRowSelectedBg   = "#006CBE"
                 BrushRowSelectedFg   = "#FFFFFF"
@@ -818,8 +838,12 @@ class PSRPMThemeRegistry {
                 BrushMenuBg          = "#FFFFFF"
                 BrushMenuBorder      = "#CBD5E1"
                 BrushMenuHover       = "#F1F5F9"
-                BrushAccent          = "#0284C7"
-                BrushBadgeBg         = "#0284C7"
+                BrushAccent          = "#0369A1"
+                BrushBadgeBg         = "#0369A1"
+                BrushBadgeFg         = "#FFFFFF"
+                BrushHelpSuccessFg   = "#166534"
+                BrushHelpAmberFg     = "#92400E"
+                BrushHelpVioletFg    = "#6D28D9"
                 ColTint_CPU          = "#2222C55E"
                 ColTint_Net          = "#1A0284C7"
                 ColTint_PrivateBytes = "#28EAB308"
@@ -865,7 +889,7 @@ class PSRPMThemeRegistry {
                 BrushNetTxStroke     = "#15803D"
                 BrushNetTxFill       = "#4D22C55E"
                 BrushDeltaGrowthFg   = "#B91C1C"
-                BrushDeltaShrinkFg   = "#15803D"
+                BrushDeltaShrinkFg   = "#166534"
                 BrushDeltaNewFg      = "#0369A1"
                 BrushBadgeTcpBg      = "#E0F2FE"
                 BrushBadgeTcpFg      = "#0369A1"
@@ -903,14 +927,14 @@ class PSRPMThemeRegistry {
                 BrushMiniCpuFill     = "#3322C55E"
                 BrushMiniCommitFill  = "#33EAB308"
                 BrushMiniRamFill     = "#33F97316"
-                BrushSigSignedFg     = "#15803D"
+                BrushSigSignedFg     = "#166534"
                 BrushSigUnsignedFg   = "#B91C1C"
-                BrushStatusActiveFg  = "#16A34A"
+                BrushStatusActiveFg  = "#166534"
                 BrushStatusIdleFg    = "#475569"
-                BrushStatusExitedFg  = "#DC2626"
-                BrushSvcRunningBg    = "#16A34A"
-                BrushSvcPausedBg     = "#D97706"
-                BrushSvcStoppedBg    = "#64748B"
+                BrushStatusExitedFg  = "#B91C1C"
+                BrushSvcRunningBg    = "#15803D"
+                BrushSvcPausedBg     = "#B45309"
+                BrushSvcStoppedBg    = "#475569"
             }
             Rows = @{
                 Default   = @{ Bg = "#FFFFFF"; Fg = "#0F172A" }
@@ -924,24 +948,24 @@ class PSRPMThemeRegistry {
             }
             TabColors = @{
                 ActiveBg      = "#FFFFFF"
-                ActiveBorder  = "#0284C7"
+                ActiveBorder  = "#0369A1"
                 ActiveFg      = "#0F172A"
                 StandbyBg     = "#E2E8F0"
                 StandbyBorder = "#CBD5E1"
                 StandbyFg     = "#475569"
-                BadgeLocalBg  = "#0D9488"
-                BadgeWinRmBg  = "#0284C7"
+                BadgeLocalBg  = "#0F766E"
+                BadgeWinRmBg  = "#0369A1"
             }
             Legend = @{
-                AllActiveBorder = "#0284C7"
+                AllActiveBorder = "#0369A1"
                 AllIdleBorder   = "#94A3B8"
                 Service  = @{ Bg = "#FFE4E6"; Border = "#FDA4AF"; ActiveBg = "#FECDD3"; ActiveBorder = "#BE123C"; ActiveText = "#BE123C"; Fg = "#0F172A" }
                 Own      = @{ Bg = "#E0E7FF"; Border = "#A5B4FC"; ActiveBg = "#C7D2FE"; ActiveBorder = "#4338CA"; ActiveText = "#4338CA"; Fg = "#0F172A" }
                 Packaged = @{ Bg = "#67E8F9"; Border = "#06B6D4"; ActiveBg = "#22D3EE"; ActiveBorder = "#0E7490"; ActiveText = "#0E7490"; Fg = "#0F172A" }
             }
             Banner = @{
-                Cap2   = @{ Bg = "#FEF3C7"; Border = "#F59E0B"; BadgeBg = "#D97706"; Fg = "#0F172A"; MutedFg = "#475569"; BtnBg = "#FFFFFF"; BtnFg = "#0F172A" }
-                Cap3   = @{ Bg = "#E0F2FE"; Border = "#0284C7"; BadgeBg = "#0284C7"; Fg = "#0F172A"; MutedFg = "#475569" }
+                Cap2   = @{ Bg = "#FEF3C7"; Border = "#F59E0B"; BadgeBg = "#B45309"; Fg = "#0F172A"; MutedFg = "#475569"; BtnBg = "#FFFFFF"; BtnFg = "#0F172A" }
+                Cap3   = @{ Bg = "#E0F2FE"; Border = "#0284C7"; BadgeBg = "#0369A1"; Fg = "#0F172A"; MutedFg = "#475569" }
                 CapErr = @{ Bg = "#FEE2E2"; Border = "#EF4444"; BadgeBg = "#DC2626"; Fg = "#0F172A"; MutedFg = "#475569" }
             }
         }
@@ -1009,12 +1033,16 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [bool]$HasBaseline
     [bool]$SpawnedPostBaseline
+    [double]$BaselineCPU
     [long]$BaselinePrivateBytes
     [long]$BaselineMemoryBytes
     [int]$BaselineHandles
+    [double]$CPUDelta
     [long]$PrivateBytesDelta
     [long]$MemoryDelta
     [int]$HandlesDelta
+    [string]$CPUDeltaFormatted
+    [string]$CPUDeltaBrush
     [string]$PrivateDeltaFormatted
     [string]$PrivateDeltaBadgeText
     [string]$PrivateDeltaBadgeVisibility
@@ -1121,12 +1149,16 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
         $this.HasBaseline                = $false
         $this.SpawnedPostBaseline        = $false
+        $this.BaselineCPU                = 0.0
         $this.BaselinePrivateBytes       = 0L
         $this.BaselineMemoryBytes        = 0L
         $this.BaselineHandles            = 0
+        $this.CPUDelta                   = 0.0
         $this.PrivateBytesDelta          = 0L
         $this.MemoryDelta                = 0L
         $this.HandlesDelta               = 0
+        $this.CPUDeltaFormatted          = ""
+        $this.CPUDeltaBrush              = "#475569"
         $this.PrivateDeltaFormatted      = ""
         $this.PrivateDeltaBadgeText      = ""
         $this.PrivateDeltaBadgeVisibility= "Collapsed"
@@ -1257,6 +1289,13 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $treeC  = if ($this.TreeCPUFormatted) { "$($this.TreeCPUFormatted)%" } else { "0.00%" }
         $pkCpu  = if ($this.PeakCPUFormatted) { "$($this.PeakCPUFormatted)%" } else { "0.00%" }
         $tip = "CPU: $curCpu | Tree CPU: $treeC | Session Peak: $pkCpu"
+        if ($this.HasBaseline) {
+            if ($this.SpawnedPostBaseline) {
+                $tip += "`nBaseline: [NEW] Spawned post-baseline"
+            } else {
+                $tip += "`nBaseline Delta: $($this.CPUDeltaFormatted)"
+            }
+        }
         if ($this.CpuCellToolTip -ne $tip) {
             $this.CpuCellToolTip = $tip
             $this.OnPropertyChanged('CpuCellToolTip')
@@ -1289,7 +1328,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             if ($this.SpawnedPostBaseline) {
                 [void]$sb.Append("`nBaseline: [NEW] Spawned after baseline")
             } else {
-                [void]$sb.Append("`nBaseline: Private $($this.PrivateDeltaFormatted) | WS $($this.MemoryDeltaFormatted) | Handles $($this.HandlesDeltaFormatted)")
+                [void]$sb.Append("`nBaseline: CPU $($this.CPUDeltaFormatted) | Private $($this.PrivateDeltaFormatted) | WS $($this.MemoryDeltaFormatted) | Handles $($this.HandlesDeltaFormatted)")
             }
         }
         $newTip = $sb.ToString()
@@ -1326,26 +1365,44 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $neutralHex = $brushes[3]
 
         if (-not $this.HasBaseline) {
+            $this.CPUDelta          = 0.0
             $this.PrivateBytesDelta = 0L
             $this.MemoryDelta       = 0L
             $this.HandlesDelta      = 0
+            $cFmt = ""; $cBr = $neutralHex
             $pFmt = ""; $pBadge = ""; $pVis = "Collapsed"; $pBr = $neutralHex
             $wFmt = ""; $wBadge = ""; $wVis = "Collapsed"; $wBr = $neutralHex
             $hFmt = ""; $hBr = $neutralHex
         } elseif ($this.SpawnedPostBaseline) {
+            $this.CPUDelta          = [Math]::Round($this.CPU, 2)
             $this.PrivateBytesDelta = $this.PrivateBytes
             $this.MemoryDelta       = $this.MemoryBytes
             $this.HandlesDelta      = $this.Handles
+            $cFmt = "[NEW]"; $cBr = $newHex
             $pFmt = "[NEW]"; $pBadge = "[NEW]"; $pVis = "Visible"; $pBr = $newHex
             $wFmt = "[NEW]"; $wBadge = "[NEW]"; $wVis = "Visible"; $wBr = $newHex
             $hFmt = "[NEW]"; $hBr = $newHex
         } else {
+            $cd = [Math]::Round($this.CPU - $this.BaselineCPU, 2)
+            if ([Math]::Abs($cd) -lt 0.005) { $cd = 0.0 }
             $pd = $this.PrivateBytes - $this.BaselinePrivateBytes
             $wd = $this.MemoryBytes  - $this.BaselineMemoryBytes
             $hd = $this.Handles      - $this.BaselineHandles
+            $this.CPUDelta          = $cd
             $this.PrivateBytesDelta = $pd
             $this.MemoryDelta       = $wd
             $this.HandlesDelta      = $hd
+
+            if ($cd -gt 0.0) {
+                $cFmt = "+$($cd.ToString('F2'))%"
+                $cBr  = $growthHex
+            } elseif ($cd -lt 0.0) {
+                $cFmt = "$($cd.ToString('F2'))%"
+                $cBr  = $shrinkHex
+            } else {
+                $cFmt = "0.00%"
+                $cBr  = $neutralHex
+            }
 
             $pFmt = [ProcessItemViewModel]::FormatSignedKB($pd)
             $pSig = ([Math]::Abs($pd) -ge 65536L)
@@ -1363,6 +1420,9 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $hBr  = if ($hd -gt 0) { $growthHex } elseif ($hd -lt 0) { $shrinkHex } else { $neutralHex }
         }
 
+        if ($this.CPUDeltaFormatted -ne $cFmt)           { $this.CPUDeltaFormatted = $cFmt;           $this.OnPropertyChanged('CPUDeltaFormatted') }
+        if ($this.CPUDeltaBrush -ne $cBr)                { $this.CPUDeltaBrush = $cBr;                $this.OnPropertyChanged('CPUDeltaBrush') }
+
         if ($this.PrivateDeltaFormatted -ne $pFmt)       { $this.PrivateDeltaFormatted = $pFmt;       $this.OnPropertyChanged('PrivateDeltaFormatted') }
         if ($this.PrivateDeltaBadgeText -ne $pBadge)     { $this.PrivateDeltaBadgeText = $pBadge;     $this.OnPropertyChanged('PrivateDeltaBadgeText') }
         if ($this.PrivateDeltaBadgeVisibility -ne $pVis) { $this.PrivateDeltaBadgeVisibility = $pVis; $this.OnPropertyChanged('PrivateDeltaBadgeVisibility') }
@@ -1376,14 +1436,22 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($this.HandlesDeltaFormatted -ne $hFmt)       { $this.HandlesDeltaFormatted = $hFmt;       $this.OnPropertyChanged('HandlesDeltaFormatted') }
         if ($this.HandlesDeltaBrush -ne $hBr)            { $this.HandlesDeltaBrush = $hBr;            $this.OnPropertyChanged('HandlesDeltaBrush') }
 
+        $this.OnPropertyChanged('CPUDelta')
         $this.OnPropertyChanged('PrivateBytesDelta')
         $this.OnPropertyChanged('MemoryDelta')
         $this.OnPropertyChanged('HandlesDelta')
+        $this.RefreshCpuCellToolTip()
     }
 
     [void] SetBaselineState([bool]$hasBase, [bool]$spawnedNew, [long]$basePriv, [long]$baseWs, [int]$baseHnd) {
+        $fallbackCpu = if ($hasBase -and (-not $spawnedNew)) { $this.CPU } else { 0.0 }
+        $this.SetBaselineState($hasBase, $spawnedNew, $basePriv, $baseWs, $baseHnd, $fallbackCpu)
+    }
+
+    [void] SetBaselineState([bool]$hasBase, [bool]$spawnedNew, [long]$basePriv, [long]$baseWs, [int]$baseHnd, [double]$baseCpu) {
         $this.HasBaseline          = $hasBase
         $this.SpawnedPostBaseline  = $spawnedNew
+        $this.BaselineCPU          = $baseCpu
         $this.BaselinePrivateBytes = $basePriv
         $this.BaselineMemoryBytes  = $baseWs
         $this.BaselineHandles      = $baseHnd
@@ -1394,7 +1462,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] ClearBaseline() {
-        $this.SetBaselineState($false, $false, 0L, 0L, 0)
+        $this.SetBaselineState($false, $false, 0L, 0L, 0, 0.0)
     }
 
     [void] AddSessionNetworkBytes([long]$rxBytes, [long]$txBytes) {
@@ -1504,7 +1572,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             }
         }
 
-        if ($this.HasBaseline -and ($privChanged -or $wsChanged -or $hndChanged)) {
+        if ($this.HasBaseline -and ($cpuChanged -or $privChanged -or $wsChanged -or $hndChanged)) {
             $this.UpdateBaselineDiffs()
         }
         if ($anyMetricChanged -or [string]::IsNullOrEmpty($this.ProcessHoverToolTip)) {

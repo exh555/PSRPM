@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-15
+
+### Added
+- **Zero-Argument Local Mode, Non-Blocking Default & `-Defaults` Bypass (`PSRPM.psm1`, `PRODUCT.md`, `README.md`, `docs/USER_GUIDE.md`, `HelpWindow.xaml`)**:
+  - Calling `Start-PSRPM` / `Start-RemoteProcessManager` (`psrpm`) without `-ComputerName`, `-Credential`, `-Port`, or `-UseSSL` now defaults to Local-Only Mode and launches asynchronously in a background STA runspace.
+  - Added `[switch]$Wait` to block the calling terminal until closed (retaining `-NoWait` / `-Background` as backwards-compatible switches).
+  - Added `[switch]$Defaults` (`-Default`, `-NoConfig`, `-NoPreferences`) to temporarily skip loading saved `%LOCALAPPDATA%\PSRPM\preferences.json` without modifying config on disk.
+- **`CPUDelta` Baseline Column & 31-Column Catalog (`ViewModelClasses.ps1`, `RunspaceEngine.ps1`, `PSRPM.psm1`, `MainWindow.xaml`, `SelectColumnsWindow.xaml`)**:
+  - Added `CPUDelta` (`ColCpuDelta` / `CPU Delta`) as the 31st column in `Get-PSRPMColumnCatalog` with `BaselineCPU` / `CPUDelta` tracking, numeric sorting, 6-argument `SetBaselineState` (retaining the 5-argument overload), and baseline CPU tooltips.
+- **WCAG 2.1 AA Contrast, UIA Accessibility & Test `12P` (`ViewModelClasses.ps1`, `UI/*.xaml`, `Tests/Test-PSRPMEngine.ps1`)**:
+  - Added `AutomationProperties.Name` UIA accessibility labels across all 8 XAML windows and dialogs.
+  - Added Test `12P` in `Tests/Test-PSRPMEngine.ps1` covering 6-theme WCAG 2.1 AA contrast (`>= 4.5:1`), 8-XAML UIA coverage, `Space`/`Return` focus isolation, zero-arg Local Mode & `-Wait`/`-Defaults`, opt-in preferences cues, and Win32/SCM `Hint:` enrichment.
+- **Crisp 96 DPI Screenshot Gallery & Network Activity Capture (`tools/Capture-Screenshots.ps1`, `docs/screenshots/`, `screenshots/`, `README.md`)**:
+  - Added `12_network_activity_sockets_etw_light.png` illustrating TCPView-style Active Sockets, quick filter chips, and opt-in Kernel ETW telemetry, and updated `Capture-Screenshots.ps1` to render crisp 96 DPI offscreen WPF frames across all 12 captures.
+
+### Changed
+- **6-Theme Contrast Refinement & UX Polish (`ViewModelClasses.ps1`, `PSRPM.psm1`, `UI/*.xaml`)**:
+  - Updated muted text, accent, badge, status, service pill, and Help card tokens (`BrushBadgeFg`, `BrushHelpSuccessFg`, `BrushHelpAmberFg`, `BrushHelpVioletFg`) across all 6 themes (`Light`, `Dark`, `TokyoNight`, `TokyoNightLight`, `Classic`, `HighContrast`) to meet `>= 4.5:1` WCAG AA contrast.
+  - Added opt-in unsaved preferences dirty indicator (`*` + changed-area tooltip on `MenuSavePreferences`), responsive toolbar `WrapPanel` layout, centered filter empty-state overlays (`ProcEmptyStateOverlay`, `SvcEmptyStateOverlay`) with clear buttons, `Return` and double-click jump-to-tree navigation from `GridNetworkSockets` and `GridNetworkTimeline`, `(+Z ETW off)` visibility counts in `SelectColumnsWindow`, wider `PropertiesWindow` (`980x660`) with `TextTrimming` tooltips, and an explicit `Open Network tab ->` button (`BtnOpenNetworkTab`) in `SystemInfoWindow`.
+- **Release Automation Synchronization (`tools/Set-ReleaseVersion.ps1`, `Tests/Test-ReleaseReadiness.ps1`, `.agent/skills/release/SKILL.md`)**:
+  - Extended `Set-ReleaseVersion.ps1` and `Test-ReleaseReadiness.ps1` to synchronize and verify `PSRPM.psm1` (`$script:AppVersion`), `README.md` comparison header and SemVer footer, and `docs/USER_GUIDE.md` About version alongside the 5 core assets, and updated the release skill protocol to require secondary reference checks and `Test-PSRPMExtendedQA.ps1 -WriteTrackedReport`.
+
+### Fixed
+- **Input Isolation, Inline Validation, Search Cancellation & Action Hints (`PSRPM.psm1`, `ProcessActions.ps1`, `ConnectDialog.xaml`, `FindHandleWindow.xaml`)**:
+  - Guarded global `Space` pause/resume via `$isInteractiveKeyTarget` so interactive controls receive `Space` natively.
+  - Replaced modal `ConnectDialog` error popups and full-window disabling with inline validation (`1`–`65535` port validation), inline progress/error banners (`TxtConnectProgress`, `BdConnectError`, `TxtConnectError`), and targeted busy-control states.
+  - Made `FindHandleWindow` searches cancellable via `BtnCancelSearchHandle` / `Esc`, generation-guarded async callbacks, indeterminate `PbHandleSearch`, and a live elapsed timer.
+  - Fixed window-close ETW cleanup to check `$isLocalMode` instead of `$LocalOnly` so zero-arg local sessions tear down `PSRPM.EtwNetConsumerV1` cleanly.
+  - Enriched `ProcessActions.ps1` failures with actionable `Hint:` messages for common Win32 (`5`, `87`, `299`, `740`, `1053`, `1056`, `1058`, `1060`, `1062`) and NTSTATUS (`C0000022`, `C000010A`) error codes.
+
 ## [1.12.0] - 2026-11-14
 
 ### Added

@@ -16,14 +16,14 @@
         <SolidColorBrush x:Key="BrushBorderSubtle" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
-        <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
-        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushTextMuted" Color="#475569"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0369A1"/>
         <SolidColorBrush x:Key="BrushRowHover" Color="#220284C7"/>
         <SolidColorBrush x:Key="BrushRowSelectedBg" Color="#006CBE"/>
         <SolidColorBrush x:Key="BrushRowSelectedFg" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="BrushSvcRunningBg" Color="#16A34A"/>
-        <SolidColorBrush x:Key="BrushSvcPausedBg" Color="#D97706"/>
-        <SolidColorBrush x:Key="BrushSvcStoppedBg" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushSvcRunningBg" Color="#15803D"/>
+        <SolidColorBrush x:Key="BrushSvcPausedBg" Color="#B45309"/>
+        <SolidColorBrush x:Key="BrushSvcStoppedBg" Color="#475569"/>
 
         <Style x:Key="EllipsisCellText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -148,13 +148,13 @@
         </Border>
 
         <!-- Main TabControl -->
-        <TabControl x:Name="SvcTabControl" Grid.Row="1" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" Margin="0,0,0,12">
+        <TabControl x:Name="SvcTabControl" AutomationProperties.Name="Service Details Tabs" Grid.Row="1" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" Margin="0,0,0,12">
             <!-- Tab 1: General & Configuration -->
             <TabItem Header="General">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
                     <StackPanel>
                         <GroupBox Header="Description" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="8,6" Margin="0,0,0,10">
-                            <TextBox x:Name="TxtDlgDescription" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                            <TextBox x:Name="TxtDlgDescription" AutomationProperties.Name="Service Description" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                                      Height="80" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"
                                      BorderThickness="0" VerticalScrollBarVisibility="Auto"/>
                         </GroupBox>
@@ -173,16 +173,16 @@
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Executable Path:" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Margin="0,5"/>
-                                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtDlgPath" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtDlgPath" AutomationProperties.Name="Service Executable Path" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Startup Type:" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Margin="0,5"/>
-                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtDlgStartup" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtDlgStartup" AutomationProperties.Name="Service Startup Type" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Log On As:" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Margin="0,5"/>
-                                <TextBox Grid.Row="2" Grid.Column="1" x:Name="TxtDlgAccount" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" x:Name="TxtDlgAccount" AutomationProperties.Name="Service Log On Account" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
 
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Prerequisites:" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Margin="0,5"/>
-                                <TextBox Grid.Row="3" Grid.Column="1" x:Name="TxtDlgDepSummary" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                <TextBox Grid.Row="3" Grid.Column="1" x:Name="TxtDlgDepSummary" AutomationProperties.Name="Service Prerequisites Summary" IsReadOnly="True" Padding="5,3" Margin="0,5" BorderBrush="{DynamicResource BrushBorderSubtle}" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}"/>
                             </Grid>
                         </GroupBox>
                     </StackPanel>
@@ -200,7 +200,7 @@
 
                     <!-- Prerequisites -->
                     <GroupBox Grid.Row="0" Header="This service depends on the following components (Prerequisites):" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="4" Margin="0,0,0,6">
-                        <DataGrid x:Name="GridDlgPrereqs" AutoGenerateColumns="False" IsReadOnly="True"
+                        <DataGrid x:Name="GridDlgPrereqs" AutomationProperties.Name="Service Prerequisites Table" AutoGenerateColumns="False" IsReadOnly="True"
                                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                                   HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
                                   Background="{DynamicResource BrushSurfaceBg}"
@@ -247,9 +247,9 @@
                                 </Style>
                             </DataGrid.CellStyle>
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150" ElementStyle="{StaticResource EllipsisCellText}"/>
-                                <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="*" ElementStyle="{StaticResource EllipsisCellText}"/>
-                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150" MinWidth="110" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="*" MinWidth="160" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" MinWidth="70" ElementStyle="{StaticResource EllipsisCellText}"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </GroupBox>
@@ -258,7 +258,7 @@
 
                     <!-- Dependents -->
                     <GroupBox Grid.Row="2" Header="The following components depend on this service (Dependents):" BorderBrush="{DynamicResource BrushBorderSubtle}" Padding="4" Margin="0,6,0,0">
-                        <DataGrid x:Name="GridDlgDependents" AutoGenerateColumns="False" IsReadOnly="True"
+                        <DataGrid x:Name="GridDlgDependents" AutomationProperties.Name="Service Dependents Table" AutoGenerateColumns="False" IsReadOnly="True"
                                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                                   HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
                                   Background="{DynamicResource BrushSurfaceBg}"
@@ -305,9 +305,9 @@
                                 </Style>
                             </DataGrid.CellStyle>
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150" ElementStyle="{StaticResource EllipsisCellText}"/>
-                                <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="*" ElementStyle="{StaticResource EllipsisCellText}"/>
-                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Service Name" Binding="{Binding Name}" Width="150" MinWidth="110" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="*" MinWidth="160" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" MinWidth="70" ElementStyle="{StaticResource EllipsisCellText}"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </GroupBox>
@@ -318,11 +318,11 @@
         <!-- Bottom Action Buttons -->
         <DockPanel Grid.Row="2">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button x:Name="BtnDlgStart" Content="Start Service" Style="{StaticResource DialogButtonStyle}"/>
-                <Button x:Name="BtnDlgStop" Content="Stop Service" Style="{StaticResource DialogButtonStyle}"/>
-                <Button x:Name="BtnDlgRestart" Content="Restart Service" Style="{StaticResource DialogButtonStyle}"/>
+                <Button x:Name="BtnDlgStart" Content="Start Service" AutomationProperties.Name="Start Service" Style="{StaticResource DialogButtonStyle}"/>
+                <Button x:Name="BtnDlgStop" Content="Stop Service" AutomationProperties.Name="Stop Service" Style="{StaticResource DialogButtonStyle}"/>
+                <Button x:Name="BtnDlgRestart" Content="Restart Service" AutomationProperties.Name="Restart Service" Style="{StaticResource DialogButtonStyle}"/>
             </StackPanel>
-            <Button x:Name="BtnDlgClose" DockPanel.Dock="Right" Content="Close" Width="80" Height="26" IsCancel="True" HorizontalAlignment="Right" Margin="0" Style="{StaticResource DialogButtonStyle}"/>
+            <Button x:Name="BtnDlgClose" DockPanel.Dock="Right" Content="Close" AutomationProperties.Name="Close Service Details" Width="80" Height="26" IsCancel="True" HorizontalAlignment="Right" Margin="0" Style="{StaticResource DialogButtonStyle}"/>
         </DockPanel>
     </Grid>
 </Window>

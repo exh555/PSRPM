@@ -1434,6 +1434,10 @@ function Start-PSRPMEngine {
         }
     }.GetNewClosure()
 
+    $procEmptyOverlay  = $Window.FindName("ProcEmptyStateOverlay")
+    $txtProcEmptyTitle = $Window.FindName("TxtProcEmptyTitle")
+    $txtProcEmptyHint  = $Window.FindName("TxtProcEmptyHint")
+
     $updateViewCollections = {
         & $recalculateTreeCpu
         $isTreeMode = [bool]$stateContainer.IsTreeMode
@@ -1524,7 +1528,7 @@ function Start-PSRPMEngine {
         }
 
         # Fast Array.Sort helper (avoids PowerShell pipeline Sort-Object overhead)
-        $isNumericSort = $sortProp -in @("PID", "ParentPID", "SessionId", "BasePriority", "CreateTime", "CPU", "TreeCPU", "PeakCPU", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+        $isNumericSort = $sortProp -in @("PID", "ParentPID", "SessionId", "BasePriority", "CreateTime", "CPU", "TreeCPU", "PeakCPU", "CPUDelta", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
         $sortNodes = {
             param($list)
             $cnt = $list.Count
@@ -1542,6 +1546,7 @@ function Start-PSRPMEngine {
                     "CPU"               { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].CPU) + ([double]$arr[$idx].PID * 1e-9) } }
                     "TreeCPU"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].TreeCPU) + ([double]$arr[$idx].PID * 1e-9) } }
                     "PeakCPU"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PeakCPU } }
+                    "CPUDelta"          { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].CPUDelta } }
                     "Threads"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Threads) + ([double]$arr[$idx].PID * 1e-9) } }
                     "Handles"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Handles) + ([double]$arr[$idx].PID * 1e-9) } }
                     "NetTotalBps"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTotalBps } }
@@ -1787,6 +1792,19 @@ function Start-PSRPMEngine {
         }
 
         &$reconcileCollection $ProcessCollection $desiredList $gridProcesses
+
+        if ($procEmptyOverlay) {
+            if ($hasFilter -and $desiredList.Count -eq 0 -and $processMap.Count -gt 0) {
+                $parts = [System.Collections.Generic.List[string]]::new()
+                if ($filterTxt.Length -gt 0) { [void]$parts.Add(("search '{0}'" -f $filterTxt)) }
+                if ($catFilter.Length -gt 0) { [void]$parts.Add(("category '{0}'" -f $catFilter)) }
+                if ($txtProcEmptyTitle) { $txtProcEmptyTitle.Text = "No processes match the active filter" }
+                if ($txtProcEmptyHint)  { $txtProcEmptyHint.Text  = ("Filter: {0} (0 of {1} processes shown)." -f ($parts -join " + "), $processMap.Count) }
+                $procEmptyOverlay.Visibility = [System.Windows.Visibility]::Visible
+            } else {
+                $procEmptyOverlay.Visibility = [System.Windows.Visibility]::Collapsed
+            }
+        }
     }.GetNewClosure()
 
     # UI DispatcherTimer (150ms responsiveness for commands & telemetry)
@@ -2298,9 +2316,10 @@ function Start-PSRPMEngine {
                             $bSnaps = $stateContainer.BaselineSnapshots
                             if ($bSnaps -and $bSnaps.ContainsKey($pidVal) -and ([long]$bSnaps[$pidVal].CreateTime -eq [long]$vm.CreateTime)) {
                                 $snap = $bSnaps[$pidVal]
-                                $vm.SetBaselineState($true, $false, [long]$snap.PrivateBytes, [long]$snap.MemoryBytes, [int]$snap.Handles)
+                                $snapCpu = if ($snap.ContainsKey('CPU')) { [double]$snap.CPU } else { 0.0 }
+                                $vm.SetBaselineState($true, $false, [long]$snap.PrivateBytes, [long]$snap.MemoryBytes, [int]$snap.Handles, $snapCpu)
                             } else {
-                                $vm.SetBaselineState($true, $true, 0L, 0L, 0)
+                                $vm.SetBaselineState($true, $true, 0L, 0L, 0, 0.0)
                             }
                         }
 

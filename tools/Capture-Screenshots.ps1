@@ -1,6 +1,6 @@
 # Requires -Version 5.1
 # PSRPM Marketing & Documentation Screenshot Generator
-# Generates ultra-high-DPI 2x Retina screenshots of PSRPM in Clean Light Mode
+# Generates crisp native-DPI screenshots of PSRPM in Clean Light Mode
 # Strict 7-bit ASCII, 100% in-memory WPF RenderTargetBitmap, zero csc.exe.
 
 $ErrorActionPreference = 'Stop'
@@ -18,7 +18,7 @@ Get-ChildItem -Path $outDir -Filter "*.png" | Remove-Item -Force -ErrorAction Si
 Get-ChildItem -Path $docsOut -Filter "*.png" | Remove-Item -Force -ErrorAction SilentlyContinue
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host " PSRPM Light Mode Ultra-HD (2x Scaling) Screenshot Generator" -ForegroundColor Cyan
+Write-Host " PSRPM Light Mode Screenshot Generator" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
 # Load Required Assemblies
@@ -171,37 +171,62 @@ function New-ModernWindowFrame {
     return $outerBorder
 }
 
-# Helper: Save FrameworkElement to PNG at 192 DPI (Double Scaling / 2x Retina)
+# Helper: Save FrameworkElement to PNG via offscreen WPF Window (crisp native 96 DPI layout)
 function Export-ElementToPng {
     param(
         [System.Windows.FrameworkElement]$element,
         [string]$fileName,
         [double]$width,
         [double]$height,
-        [double]$dpi = 192.0
+        [double]$dpi = 96.0
     )
 
     $element.Width = $width
     $element.Height = $height
+    $element.UseLayoutRounding = $true
+    $element.SnapsToDevicePixels = $true
+    [System.Windows.Media.TextOptions]::SetTextFormattingMode($element, [System.Windows.Media.TextFormattingMode]::Display)
 
-    $size = [System.Windows.Size]::new($width, $height)
-    $element.Measure($size)
-    $element.Arrange([System.Windows.Rect]::new(0, 0, $width, $height))
-    $element.UpdateLayout()
-
-    [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
-        [System.Windows.Threading.DispatcherPriority]::Render,
-        [Action]{}
-    )
+    $capWin = [System.Windows.Window]::new()
+    $capWin.WindowStyle = [System.Windows.WindowStyle]::None
+    $capWin.ResizeMode = [System.Windows.ResizeMode]::NoResize
+    $capWin.ShowInTaskbar = $false
+    $capWin.AllowsTransparency = $true
+    $capWin.Background = [System.Windows.Media.Brushes]::Transparent
+    $capWin.SizeToContent = [System.Windows.SizeToContent]::WidthAndHeight
+    $capWin.Left = -32000
+    $capWin.Top = -32000
+    $capWin.Content = $element
 
     $scale = $dpi / 96.0
-    $pxW = [int]($width * $scale)
-    $pxH = [int]($height * $scale)
+    $pxW = [int][Math]::Round($width * $scale)
+    $pxH = [int][Math]::Round($height * $scale)
 
-    $rtb = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(
-        $pxW, $pxH, $dpi, $dpi, [System.Windows.Media.PixelFormats]::Pbgra32
-    )
-    $rtb.Render($element)
+    $rtb = $null
+    try {
+        $capWin.Show()
+        $size = [System.Windows.Size]::new($width, $height)
+        $element.Measure($size)
+        $element.Arrange([System.Windows.Rect]::new(0, 0, $width, $height))
+        $element.UpdateLayout()
+
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
+            [Action]{}
+        )
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Render,
+            [Action]{}
+        )
+
+        $rtb = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(
+            $pxW, $pxH, $dpi, $dpi, [System.Windows.Media.PixelFormats]::Pbgra32
+        )
+        $rtb.Render($element)
+    } finally {
+        $capWin.Content = $null
+        $capWin.Close()
+    }
 
     $enc = [System.Windows.Media.Imaging.PngBitmapEncoder]::new()
     $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($rtb))
@@ -216,39 +241,17 @@ function Export-ElementToPng {
     [System.IO.File]::Copy($target1, $target2, $true)
 
     $sizeKB = [Math]::Round((Get-Item $target1).Length / 1024.0, 1)
-    Write-Host "  [SAVED] $fileName ($sizeKB KB, ${pxW}x${pxH} @ 2x DPI)" -ForegroundColor Green
+    Write-Host "  [SAVED] $fileName ($sizeKB KB, ${pxW}x${pxH} @ $([int]$dpi) DPI)" -ForegroundColor Green
 }
 
 # Helper: Apply Light Theme to Window Resources
 function Apply-WindowThemeLight {
     param([System.Windows.FrameworkElement]$win)
 
-    $setBrush = {
-        param($k, $hex)
-        $b = Get-Brush $hex
-        $win.Resources[$k] = $b
+    $pal = [PSRPMThemeRegistry]::GetPalette("Light")
+    foreach ($kv in $pal.Brushes.GetEnumerator()) {
+        $win.Resources[[string]$kv.Key] = (Get-Brush ([string]$kv.Value))
     }
-
-    &$setBrush "BrushWindowBg"       "#F8FAFC"
-    &$setBrush "BrushToolbarBg"      "#F1F5F9"
-    &$setBrush "BrushSurfaceBg"      "#FFFFFF"
-    &$setBrush "BrushHeaderBg"       "#E2E8F0"
-    &$setBrush "BrushBorderSubtle"   "#CBD5E1"
-    &$setBrush "BrushTreeLine"       "#64748B"
-    &$setBrush "BrushTextPrimary"    "#0F172A"
-    &$setBrush "BrushTextSecondary"  "#334155"
-    &$setBrush "BrushTextMuted"      "#64748B"
-    &$setBrush "BrushRowHover"       "#220284C7"
-    &$setBrush "BrushRowSelectedBg"  "#006CBE"
-    &$setBrush "BrushRowSelectedFg"  "#FFFFFF"
-    &$setBrush "BrushSparkBg"        "#FFFFFF"
-    &$setBrush "BrushSparkBorder"    "#94A3B8"
-    &$setBrush "ColTint_CPU"          "#2222C55E"
-    &$setBrush "ColTint_PrivateBytes" "#28EAB308"
-    &$setBrush "ColTint_WorkingSet"   "#22F97316"
-    &$setBrush "BrushMenuBg"         "#FFFFFF"
-    &$setBrush "BrushMenuBorder"     "#CBD5E1"
-    &$setBrush "BrushMenuHover"      "#F1F5F9"
 }
 
 # ------------------------------------------------------------------
@@ -428,8 +431,20 @@ $sysExtended = @(
     32450,      # 23: scDelta (System Calls / sec)
     24800000,   # 24: ioReadDelta (Bytes/s)
     12400000,   # 25: ioWriteDelta (Bytes/s)
-    1200000     # 26: ioOtherDelta (Bytes/s)
+    1200000,    # 26: ioOtherDelta (Bytes/s)
+    1420.0,     # 27: NetRxKBs (KB/s)
+    480.0,      # 28: NetTxKBs (KB/s)
+    3240.0,     # 29: DiskReadKBs (KB/s)
+    1510.0,     # 30: DiskWriteKBs (KB/s)
+    4           # 31: DiskQueueDepth (IOPS)
 )
+
+for ($ni = 0; $ni -lt 240; $ni++) {
+    [void]$sumVm.NetRxHistory240.Enqueue([Math]::Max(120.0, [Math]::Sin($ni * 0.14) * 620.0 + 1180.0))
+    [void]$sumVm.NetTxHistory240.Enqueue([Math]::Max(40.0,  [Math]::Cos($ni * 0.11) * 210.0 + 420.0))
+}
+$sumVm.SessionNetRxBytes = 42860544.0
+$sumVm.SessionNetTxBytes = 14820112.0
 
 $sumVm.UpdateExtendedTelemetry($sysExtended, $null)
 
@@ -597,9 +612,9 @@ function Build-ObservableTree {
 $mainXamlBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "MainWindow.xaml"))
 
 # ------------------------------------------------------------------
-# SCREENSHOT 1: Main Window (Light Mode Hero - Wide 1520x840 @ 2x DPI)
+# SCREENSHOT 1: Main Window (Light Mode Hero - Wide 1520x840 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 1] Capturing Main Window (Wide Light Mode, 192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 1] Capturing Main Window (Wide Light Mode, 96 DPI)..." -ForegroundColor Yellow
 
 $ms1 = [System.IO.MemoryStream]::new($mainXamlBytes)
 $win1 = [System.Windows.Markup.XamlReader]::Load($ms1)
@@ -632,12 +647,12 @@ $txtSeq1 = $win1.FindName("TxtTelemDelta")
 if ($txtSeq1) { $txtSeq1.Text = "Seq #0042 | Dyn: 14 (+0/-0)" }
 
 $frame1 = New-ModernWindowFrame $win1.Content "PSRPM - PowerShell Remote Process Manager [SRV-PROD-01.contoso.corp (WINRM-SSL)]" 1520 840
-Export-ElementToPng $frame1 "01_process_tree_light.png" 1520 840 192.0
+Export-ElementToPng $frame1 "01_process_tree_light.png" 1520 840 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 2: Ancestor-Preserving Search Filter (Wide 1520x840 @ 2x DPI)
+# SCREENSHOT 2: Ancestor-Preserving Search Filter (Wide 1520x840 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 2] Capturing Ancestor-Preserving Search Filter (192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 2] Capturing Ancestor-Preserving Search Filter (96 DPI)..." -ForegroundColor Yellow
 
 $ms2 = [System.IO.MemoryStream]::new($mainXamlBytes)
 $win2 = [System.Windows.Markup.XamlReader]::Load($ms2)
@@ -675,12 +690,12 @@ $txtWire2 = $win2.FindName("TxtTelemPayload")
 if ($txtWire2) { $txtWire2.Text = "Wire: 1.18 KB" }
 
 $frame2 = New-ModernWindowFrame $win2.Content "PSRPM - PowerShell Remote Process Manager [SRV-PROD-01.contoso.corp] - Filter: 'powershell'" 1520 840
-Export-ElementToPng $frame2 "02_ancestor_search_filter.png" 1520 840 192.0
+Export-ElementToPng $frame2 "02_ancestor_search_filter.png" 1520 840 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 3: System Information Dashboard - Summary Tab (920x700 @ 2x DPI)
+# SCREENSHOT 3: System Information Dashboard - Summary Tab (920x700 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 3] Capturing System Information (Summary Tab, 192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 3] Capturing System Information (Summary Tab, 96 DPI)..." -ForegroundColor Yellow
 
 $sumVm.SetPerCpuMode($false)
 $sysBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "SystemInfoWindow.xaml"))
@@ -695,12 +710,12 @@ if ($tcSys) { $tcSys.SelectedIndex = 0 } # Summary Tab
 
 $frame3 = New-ModernWindowFrame $winSys.Content "System Information [SRV-PROD-01.contoso.corp]" 920 700
 $frame3.DataContext = $sumVm
-Export-ElementToPng $frame3 "03_system_information_dashboard.png" 920 700 192.0
+Export-ElementToPng $frame3 "03_system_information_dashboard.png" 920 700 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 4: System Information - Multi-Core CPU Tab (920x700 @ 2x DPI)
+# SCREENSHOT 4: System Information - Multi-Core CPU Tab (920x700 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 4] Capturing System Information (Multi-Core CPU Tab, 192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 4] Capturing System Information (Multi-Core CPU Tab, 96 DPI)..." -ForegroundColor Yellow
 
 $sumVm.SetPerCpuMode($true)
 $msSys2 = [System.IO.MemoryStream]::new($sysBytes)
@@ -717,12 +732,12 @@ if ($chkPerCpu) { $chkPerCpu.IsChecked = $true }
 
 $frame4 = New-ModernWindowFrame $winSys2.Content "System Information [SRV-PROD-01.contoso.corp] - Multi-Core CPU (16 Cores)" 920 700
 $frame4.DataContext = $sumVm
-Export-ElementToPng $frame4 "04_system_information_cpu.png" 920 700 192.0
+Export-ElementToPng $frame4 "04_system_information_cpu.png" 920 700 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 5: Process Properties Inspector - Image Tab (860x680 @ 2x DPI)
+# SCREENSHOT 5: Process Properties Inspector - Image Tab (860x680 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 5] Capturing Process Properties (Image Tab, 192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 5] Capturing Process Properties (Image Tab, 96 DPI)..." -ForegroundColor Yellow
 
 $propBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "PropertiesWindow.xaml"))
 $msProp = [System.IO.MemoryStream]::new($propBytes)
@@ -746,13 +761,13 @@ $winProp.FindName("PropArch").Text         = "64-bit (x64)"
 $winProp.FindName("PropSignature").Text    = "Verified: Microsoft Windows (Authenticode Valid)"
 $winProp.FindName("PropIcon").Source       = $iconFrame
 
-$frame5 = New-ModernWindowFrame $winProp.Content "powershell.exe:12260 Properties [SRV-PROD-01.contoso.corp]" 860 680
-Export-ElementToPng $frame5 "05_process_properties_image.png" 860 680 192.0
+$frame5 = New-ModernWindowFrame $winProp.Content "powershell.exe:12260 Properties [SRV-PROD-01.contoso.corp]" 980 680
+Export-ElementToPng $frame5 "05_process_properties_image.png" 980 680 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 6: Process Properties Inspector - Performance & Ancestry (860x680 @ 2x DPI)
+# SCREENSHOT 6: Process Properties Inspector - Performance & Ancestry (860x680 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 6] Capturing Process Properties (Performance & Ancestry, 192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 6] Capturing Process Properties (Performance & Ancestry, 96 DPI)..." -ForegroundColor Yellow
 
 $msPropPerf = [System.IO.MemoryStream]::new($propBytes)
 $winPropPerf = [System.Windows.Markup.XamlReader]::Load($msPropPerf)
@@ -830,13 +845,13 @@ $propTree.Add($parentTreeItem)
 $tvProp = $winPropPerf.FindName("PropProcessTree")
 if ($tvProp) { $tvProp.ItemsSource = $propTree }
 
-$frame6 = New-ModernWindowFrame $winPropPerf.Content "powershell.exe:12260 Properties [SRV-PROD-01.contoso.corp] - Performance & Tree" 860 680
-Export-ElementToPng $frame6 "06_process_properties_performance.png" 860 680 192.0
+$frame6 = New-ModernWindowFrame $winPropPerf.Content "powershell.exe:12260 Properties [SRV-PROD-01.contoso.corp] - Performance & Tree" 980 680
+Export-ElementToPng $frame6 "06_process_properties_performance.png" 980 680 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 7: Process Properties Inspector - Loaded DLLs (860x680 @ 2x DPI)
+# SCREENSHOT 7: Process Properties Inspector - Loaded DLLs (860x680 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 7] Capturing Process Properties (DLLs Tab, 192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 7] Capturing Process Properties (DLLs Tab, 96 DPI)..." -ForegroundColor Yellow
 
 $msProp2 = [System.IO.MemoryStream]::new($propBytes)
 $winProp2 = [System.Windows.Markup.XamlReader]::Load($msProp2)
@@ -868,13 +883,13 @@ if ($gridDlls) {
     $gridDlls.ItemsSource = $dllList
 }
 
-$frame7 = New-ModernWindowFrame $winProp2.Content "powershell.exe:12260 Properties [SRV-PROD-01.contoso.corp] - Loaded DLLs" 860 680
-Export-ElementToPng $frame7 "07_process_properties_modules.png" 860 680 192.0
+$frame7 = New-ModernWindowFrame $winProp2.Content "powershell.exe:12260 Properties [SRV-PROD-01.contoso.corp] - Loaded DLLs" 980 680
+Export-ElementToPng $frame7 "07_process_properties_modules.png" 980 680 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 8: Live Audit & Network Telemetry Console (1520x880 @ 2x DPI)
+# SCREENSHOT 8: Live Audit & Network Telemetry Console (1520x880 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 8] Capturing Live Audit & Telemetry Console (192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 8] Capturing Live Audit & Telemetry Console (96 DPI)..." -ForegroundColor Yellow
 
 $ms7 = [System.IO.MemoryStream]::new($mainXamlBytes)
 $win7 = [System.Windows.Markup.XamlReader]::Load($ms7)
@@ -913,17 +928,21 @@ if ($statText7) {
     $statText7.Text = "CPU Usage: 4.82% (K: 1.35%) | Commit Charge: 18.2% 14.8/81.2 GB | Wire: 1.18 KB (5 ms) | Log: Active"
 }
 $txtTelem7 = $win7.FindName("TxtTelemTransport")
-if ($txtTelem7) { $txtTelem7.Text = "WINRM-SSL | RTT: 5ms" }
+if ($txtTelem7) { $txtTelem7.Text = "WINRM-SSL | RTT: 5ms (avg 5.2ms)" }
 $txtWire7 = $win7.FindName("TxtTelemPayload")
 if ($txtWire7) { $txtWire7.Text = "Wire: 1.18 KB (87% GZIP)" }
+$txtBw7 = $win7.FindName("TxtTelemNetwork")
+if ($txtBw7) { $txtBw7.Text = "BW: 0.26 KB/s | RX: 25.4 KB" }
+$txtSeq7 = $win7.FindName("TxtTelemDelta")
+if ($txtSeq7) { $txtSeq7.Text = "Seq #0044 | Dyn: 9 (+0/-0)" }
 
 $frame8 = New-ModernWindowFrame $win7.Content "PSRPM - PowerShell Remote Process Manager [SRV-PROD-01.contoso.corp] - Live Telemetry Console" 1520 880
-Export-ElementToPng $frame8 "08_live_telemetry_audit_console.png" 1520 880 192.0
+Export-ElementToPng $frame8 "08_live_telemetry_audit_console.png" 1520 880 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 9: Connect to Target System Dialog (520x400 @ 2x DPI)
+# SCREENSHOT 9: Connect to Target System Dialog (520x400 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 9] Capturing Connect to Target Dialog (192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 9] Capturing Connect to Target Dialog (96 DPI)..." -ForegroundColor Yellow
 
 $connBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "ConnectDialog.xaml"))
 $msConn = [System.IO.MemoryStream]::new($connBytes)
@@ -937,14 +956,15 @@ $winConn.FindName("TxtCredStatus").Text        = "CONTOSO\svc-monitor (Saved Pro
 $winConn.FindName("ChkOpenInNewTab").IsChecked = $true
 
 $frame9 = New-ModernWindowFrame $winConn.Content "Connect to Target System" 520 400
-Export-ElementToPng $frame9 "09_connect_remote_winrm.png" 520 400 192.0
+Export-ElementToPng $frame9 "09_connect_remote_winrm.png" 520 400 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 10: Services Manager Tab (1520x840 @ 2x DPI)
+# SCREENSHOT 10: Services Manager Tab (1520x840 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 10] Capturing Services Manager Tab (192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 10] Capturing Services Manager Tab (96 DPI)..." -ForegroundColor Yellow
 
 $winSvcMain = [System.Windows.Markup.XamlReader]::Load([System.IO.MemoryStream]::new([System.IO.File]::ReadAllBytes((Join-Path $uiDir "MainWindow.xaml"))))
+Apply-WindowThemeLight $winSvcMain
 $tabsMain = $winSvcMain.FindName("MainTabControl")
 if ($tabsMain) { $tabsMain.SelectedIndex = 1 }
 
@@ -981,12 +1001,12 @@ $winSvcMain.FindName("TxtSvcSummary").Text = "14 Services (12 Running, 2 Stopped
 $gridSvc.SelectedIndex = 3 # Spooler selected
 
 $frame10 = New-ModernWindowFrame $winSvcMain.Content "PSRPM - PowerShell Remote Process Manager [SRV-PROD-01.contoso.corp] - Services Manager" 1520 840
-Export-ElementToPng $frame10 "10_services_manager_light.png" 1520 840 192.0
+Export-ElementToPng $frame10 "10_services_manager_light.png" 1520 840 96.0
 
 # ------------------------------------------------------------------
-# SCREENSHOT 11: Service Details & Dependencies Inspector (620x540 @ 2x DPI)
+# SCREENSHOT 11: Service Details & Dependencies Inspector (620x540 @ 96 DPI)
 # ------------------------------------------------------------------
-Write-Host "`n[SCREENSHOT 11] Capturing Service Details & Dependencies Dialog (192 DPI)..." -ForegroundColor Yellow
+Write-Host "`n[SCREENSHOT 11] Capturing Service Details & Dependencies Dialog (96 DPI)..." -ForegroundColor Yellow
 
 $svcDlgBytes = [System.IO.File]::ReadAllBytes((Join-Path $uiDir "ServiceDetailWindow.xaml"))
 $msSvcDlg = [System.IO.MemoryStream]::new($svcDlgBytes)
@@ -1016,7 +1036,130 @@ $winSvcDlg.FindName("GridDlgPrereqs").ItemsSource = $prereqItems
 $winSvcDlg.FindName("GridDlgDependents").ItemsSource = $dependentItems
 
 $frame11 = New-ModernWindowFrame $winSvcDlg.Content "Print Spooler (Spooler) Details & Dependencies [SRV-PROD-01.contoso.corp]" 620 540
-Export-ElementToPng $frame11 "11_service_dependencies_inspector.png" 620 540 192.0
+Export-ElementToPng $frame11 "11_service_dependencies_inspector.png" 620 540 96.0
+
+# ------------------------------------------------------------------
+# SCREENSHOT 12: Network Activity (TCPView Sockets + Opt-In Net ETW)
+# ------------------------------------------------------------------
+Write-Host "`n[SCREENSHOT 12] Capturing Network Activity & Opt-In ETW Tab (96 DPI)..." -ForegroundColor Yellow
+
+$ms12 = [System.IO.MemoryStream]::new($mainXamlBytes)
+$win12 = [System.Windows.Markup.XamlReader]::Load($ms12)
+$ms12.Close()
+
+Apply-WindowThemeLight $win12
+$sumBar12 = $win12.FindName("SummaryBar")
+if ($sumBar12) { $sumBar12.DataContext = $sumVm }
+$tabs12 = $win12.FindName("HostTabsList")
+if ($tabs12) { $tabs12.ItemsSource = $hostTabs }
+$mainTabCtrl12 = $win12.FindName("MainTabControl")
+if ($mainTabCtrl12) { $mainTabCtrl12.SelectedIndex = 2 }
+
+$ellNet12 = $win12.FindName("EllNetEtwDot")
+if ($ellNet12) { $ellNet12.Fill = Get-Brush "#16A34A" }
+$txtNetBtn12 = $win12.FindName("TxtNetEtwBtn")
+if ($txtNetBtn12) { $txtNetBtn12.Text = "Net ETW: ON" }
+$brdNetRate12 = $win12.FindName("BorderTelemNetRate")
+if ($brdNetRate12) { $brdNetRate12.Visibility = [System.Windows.Visibility]::Visible }
+$txtNetRate12 = $win12.FindName("TxtTelemNetRate")
+if ($txtNetRate12) { $txtNetRate12.Text = "NET: 1.84 MB/s" }
+$txtDiskRate12 = $win12.FindName("TxtTelemDiskRate")
+if ($txtDiskRate12) { $txtDiskRate12.Text = "DISK: 4.62 MB/s" }
+$txtTelem12 = $win12.FindName("TxtTelemTransport")
+if ($txtTelem12) { $txtTelem12.Text = "WINRM-SSL | RTT: 4ms (avg 4.1ms) | Net ETW: ON" }
+$txtWire12 = $win12.FindName("TxtTelemPayload")
+if ($txtWire12) { $txtWire12.Text = "Wire: 1.12 KB (89% GZIP)" }
+$txtBw12 = $win12.FindName("TxtTelemNetwork")
+if ($txtBw12) { $txtBw12.Text = "BW: 1.12 KB/s | RX: 48.2 KB" }
+$txtSeq12 = $win12.FindName("TxtTelemDelta")
+if ($txtSeq12) { $txtSeq12.Text = "Seq #0108 | Dyn: 19 (+1/-0)" }
+$stat12 = $win12.FindName("StatusText")
+if ($stat12) {
+    $stat12.Text = "CPU Usage: 48.2% (K: 12.5%) | Commit Charge: 38.0% 30.8/81.2 GB | Net ETW: Active (1,420 ev/s) | Active Sockets: 14"
+}
+
+$pal12Br = ([PSRPMThemeRegistry]::GetPalette("Light")).Brushes
+$pMap12 = Build-ProcessMapLight
+$procIconLookup = @{}
+foreach ($pItem in $pMap12.Values) {
+    if ($pItem.Name -and $pItem.IconSource -and -not $procIconLookup.ContainsKey($pItem.Name)) {
+        $procIconLookup[$pItem.Name] = $pItem.IconSource
+    }
+}
+
+$sampleSockets = @(
+    @{ lc = "";    pid = 3680;  proc = "sqlservr.exe";   proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "1433";  ra = "10.20.4.22";      rp = "52418"; ct = "2026-11-14 08:12:04"; mod = "sqlservr.exe"; sp = 842150L; rpkt = 1284920L; sb = 198420480L; rb = 412890112L }
+    @{ lc = "New"; pid = 5410;  proc = "w3wp.exe";       proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "443";   ra = "172.16.10.48";    rp = "61042"; ct = "2026-11-15 08:03:58"; mod = "webengine4.dll"; sp = 14820L;  rpkt = 19410L;   sb = 18420120L;  rb = 4812040L }
+    @{ lc = "Mod"; pid = 5410;  proc = "w3wp.exe";       proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "58104"; ra = "10.20.4.15";      rp = "1433";  ct = "2026-11-15 07:40:12"; mod = "System.Data.dll"; sp = 94120L; rpkt = 88420L; sb = 42190400L; rb = 164820900L }
+    @{ lc = "";    pid = 1620;  proc = "svchost.exe";    proto = "TCP v4"; st = "Listen";      la = "0.0.0.0";         lp = "5986";  ra = "0.0.0.0";         rp = "*";     ct = "2026-11-13 00:04:19"; mod = "WsmSvc.dll";   sp = 0L;      rpkt = 0L;       sb = 0L;         rb = 0L }
+    @{ lc = "";    pid = 12260; proc = "powershell.exe"; proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "5986";  ra = "10.20.1.90";      rp = "54892"; ct = "2026-11-15 07:55:02"; mod = "WsmSvc.dll";   sp = 4120L;   rpkt = 3840L;    sb = 942180L;    rb = 418920L }
+    @{ lc = "";    pid = 4;     proc = "System";         proto = "TCP v4"; st = "Listen";      la = "0.0.0.0";         lp = "445";   ra = "0.0.0.0";         rp = "*";     ct = "2026-11-13 00:01:02"; mod = "srv2.sys";     sp = 0L;      rpkt = 0L;       sb = 0L;         rb = 0L }
+    @{ lc = "";    pid = 4;     proc = "System";         proto = "TCP v6"; st = "Listen";      la = "::";              lp = "445";   ra = "::";              rp = "*";     ct = "2026-11-13 00:01:02"; mod = "srv2.sys";     sp = 0L;      rpkt = 0L;       sb = 0L;         rb = 0L }
+    @{ lc = "";    pid = 1024;  proc = "svchost.exe";    proto = "TCP v4"; st = "Listen";      la = "0.0.0.0";         lp = "135";   ra = "0.0.0.0";         rp = "*";     ct = "2026-11-13 00:01:14"; mod = "RpcRtRemote.dll"; sp = 0L;   rpkt = 0L;       sb = 0L;         rb = 0L }
+    @{ lc = "";    pid = 848;   proc = "lsass.exe";      proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "49672"; ra = "10.20.2.10";      rp = "389";   ct = "2026-11-15 06:18:45"; mod = "Wldap32.dll";  sp = 28410L;  rpkt = 31900L;   sb = 6412080L;   rb = 9821440L }
+    @{ lc = "Mod"; pid = 6812;  proc = "msedge.exe";     proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "61280"; ra = "140.82.113.4";    rp = "443";   ct = "2026-11-15 08:01:19"; mod = "msedge.dll";   sp = 1842L;   rpkt = 4210L;    sb = 512400L;    rb = 6842190L }
+    @{ lc = "";    pid = 9450;  proc = "Code.exe";       proto = "TCP v4"; st = "Established"; la = "10.20.4.15";      lp = "61410"; ra = "13.107.42.16";    rp = "443";   ct = "2026-11-15 07:12:30"; mod = "Code.exe";     sp = 940L;    rpkt = 1620L;    sb = 248910L;    rb = 1940220L }
+    @{ lc = "";    pid = 1488;  proc = "svchost.exe";    proto = "UDP v4"; st = "Listen";      la = "0.0.0.0";         lp = "5353";  ra = "*";               rp = "*";     ct = "2026-11-13 00:02:11"; mod = "dnsapi.dll";   sp = 4820L;   rpkt = 9120L;    sb = 482000L;    rb = 1284000L }
+    @{ lc = "";    pid = 5410;  proc = "w3wp.exe";       proto = "TCP v4"; st = "Time Wait";   la = "10.20.4.15";      lp = "443";   ra = "172.16.10.91";    rp = "59210"; ct = "2026-11-15 08:03:41"; mod = "webengine4.dll"; sp = 42L;    rpkt = 54L;      sb = 64200L;     rb = 18420L }
+    @{ lc = "";    pid = 2840;  proc = "MsMpEng.exe";    proto = "TCP v4"; st = "Close Wait";  la = "10.20.4.15";      lp = "60914"; ra = "20.190.159.2";    rp = "443";   ct = "2026-11-15 07:59:11"; mod = "MpSvc.dll";    sp = 118L;    rpkt = 142L;     sb = 34800L;     rb = 248910L }
+)
+
+$sockCol12 = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+foreach ($sk in $sampleSockets) {
+    $isUdp = ($sk.proto -like "UDP*")
+    $pBg = if ($isUdp) { [string]$pal12Br['BrushBadgeUdpBg'] } else { [string]$pal12Br['BrushBadgeTcpBg'] }
+    $pFg = if ($isUdp) { [string]$pal12Br['BrushBadgeUdpFg'] } else { [string]$pal12Br['BrushBadgeTcpFg'] }
+    if ($sk.st -eq "Established") {
+        $sBg = [string]$pal12Br['BrushStateEstBg']; $sFg = [string]$pal12Br['BrushStateEstFg']
+    } elseif ($sk.st -eq "Listen") {
+        $sBg = [string]$pal12Br['BrushStateListenBg']; $sFg = [string]$pal12Br['BrushStateListenFg']
+    } else {
+        $sBg = [string]$pal12Br['BrushStateTimeWaitBg']; $sFg = [string]$pal12Br['BrushStateTimeWaitFg']
+    }
+    $ico = if ($procIconLookup.ContainsKey($sk.proc)) { $procIconLookup[$sk.proc] } else { $null }
+    $sockCol12.Add([PSCustomObject]@{
+        LifecycleState       = $sk.lc
+        PID                  = $sk.pid
+        PIDDisplay           = "$($sk.pid)"
+        ProcessName          = $sk.proc
+        IconSource           = $ico
+        Protocol             = $sk.proto
+        ProtocolBg           = $pBg
+        ProtocolFg           = $pFg
+        State                = $sk.st
+        StateBg              = $sBg
+        StateFg              = $sFg
+        LocalAddress         = $sk.la
+        LocalPortDisplay     = $sk.lp
+        RemoteAddress        = $sk.ra
+        RemotePortDisplay    = $sk.rp
+        CreateTime           = $sk.ct
+        ModuleName           = $sk.mod
+        SentPacketsFormatted = if ($sk.sp -gt 0L) { $sk.sp.ToString("N0") } else { "" }
+        RecvPacketsFormatted = if ($sk.rpkt -gt 0L) { $sk.rpkt.ToString("N0") } else { "" }
+        SentBytesFormatted   = if ($sk.sb -gt 0L) { $sk.sb.ToString("N0") } else { "" }
+        RecvBytesFormatted   = if ($sk.rb -gt 0L) { $sk.rb.ToString("N0") } else { "" }
+    })
+}
+
+$gridNet12 = $win12.FindName("GridNetworkSockets")
+if ($gridNet12) {
+    $gridNet12.ItemsSource = $sockCol12
+    $gridNet12.SelectedIndex = 0
+}
+$btnCloseConn12 = $win12.FindName("BtnNetCloseConn")
+if ($btnCloseConn12) { $btnCloseConn12.IsEnabled = $true }
+$txtNetCounts12 = $win12.FindName("TxtNetStatusCounts")
+if ($txtNetCounts12) {
+    $txtNetCounts12.Text = "Endpoints: 12  |  Established: 6  |  Listening: 4  |  Time Wait: 1  |  Close Wait: 1"
+}
+$txtNetSum12 = $win12.FindName("TxtNetActivitySummary")
+if ($txtNetSum12) {
+    $txtNetSum12.Text = "Showing 12 / 12 endpoints  (Auto 2s | Net ETW: ON)"
+}
+
+$frame12 = New-ModernWindowFrame $win12.Content "PSRPM - PowerShell Remote Process Manager [SRV-PROD-01.contoso.corp (WINRM-SSL)] - Network Activity" 1520 840
+Export-ElementToPng $frame12 "12_network_activity_sockets_etw_light.png" 1520 840 96.0
 
 # ------------------------------------------------------------------
 # Generate Gallery Markdown Index
@@ -1024,11 +1167,11 @@ Export-ElementToPng $frame11 "11_service_dependencies_inspector.png" 620 540 192
 Write-Host "`n[STEP 2] Generating Screenshots Catalog & Review Document..." -ForegroundColor Yellow
 
 $readmeContent = @'
-# PSRPM Ultra-HD (2x Scaling) Screenshots - Clean Light Mode
+# PSRPM Crisp Native-DPI Screenshots - Clean Light Mode
 
-This gallery contains ultra-high-resolution marketing and documentation screenshots for **PSRPM (PowerShell Remote Process Manager)** in **Clean Light Mode** (Sysinternals Refined).
+This gallery contains native-resolution documentation screenshots for **PSRPM (PowerShell Remote Process Manager)** in **Clean Light Mode** (Sysinternals Refined).
 
-- **Render Scale**: `192 DPI` (Double scaling / 2x Retina) for razor-sharp vector lines, text, and icons.
+- **Render Scale**: `96 DPI` (`1:1` pixel-aligned `Display` text formatting) for razor-sharp typography, vector grid lines, and icons.
 - **Aspect & Width**: Expanded 1520px wide layout showing full process paths, users, descriptions, and companies without horizontal clipping.
 - **Target Context**: Pure enterprise sample server (`SRV-PROD-01.contoso.corp`, `CONTOSO\svc-monitor`) with zero local workstation or personal user info.
 
@@ -1037,7 +1180,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ## Screenshot Gallery
 
 ### 1. Main Window - Sysinternals Refined Light Mode (Hero Shot)
-**File**: [`01_process_tree_light.png`](01_process_tree_light.png) (3040 x 1680 @ 2x DPI)
+**File**: [`01_process_tree_light.png`](01_process_tree_light.png) (1520 x 840 @ 96 DPI)
 - Full hierarchical Tree-Grid with pixel-snapped vector guide connectors
 - Multi-host tabs (`SRV-PROD-01 [WINRM-SSL]`, `SRV-DB-02 [WINRM-SSL]`, `SRV-APP-03 [WINRM]`)
 - Populated toolbar sparklines (CPU with kernel time line, Commit charge, I/O, Network)
@@ -1049,7 +1192,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 2. Ancestor-Preserving Search Filter
-**File**: [`02_ancestor_search_filter.png`](02_ancestor_search_filter.png) (3040 x 1680 @ 2x DPI)
+**File**: [`02_ancestor_search_filter.png`](02_ancestor_search_filter.png) (1520 x 840 @ 96 DPI)
 - Instant search filter preserving the entire parent-child process tree lineage
 - Matching `powershell` processes highlighted at 100% opacity; ancestor nodes (`explorer.exe`, `userinit.exe`, `winlogon.exe`, `System`) remain visible with dimmed opacity (`0.62`)
 - Sysadmins never lose context of which process or parent spawned the target
@@ -1059,7 +1202,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 3. System Information Dashboard - Summary & Hardware
-**File**: [`03_system_information_dashboard.png`](03_system_information_dashboard.png) (1840 x 1400 @ 2x DPI)
+**File**: [`03_system_information_dashboard.png`](03_system_information_dashboard.png) (920 x 700 @ 96 DPI)
 - Hardware metadata: `Dell PowerEdge R750 Enterprise Cloud Node` (16 Cores, 32 Threads, 64 GB RAM)
 - 240-sample real-time CPU chart with kernel time red overlay and green grid
 - Memory commit charge gauge, physical memory meters, and I/O delta charts
@@ -1070,7 +1213,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 4. System Information - CPU & Kernel Telemetry
-**File**: [`04_system_information_cpu.png`](04_system_information_cpu.png) (1840 x 1400 @ 2x DPI)
+**File**: [`04_system_information_cpu.png`](04_system_information_cpu.png) (920 x 700 @ 96 DPI)
 - Dedicated CPU telemetry dashboard with aggregate and per-core processor charts
 - Kernel time vs. user time breakdown
 - Real-time interrupt and context switch rate gauges
@@ -1080,7 +1223,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 5. Process Properties Inspector - Image & Security
-**File**: [`05_process_properties_image.png`](05_process_properties_image.png) (1720 x 1360 @ 2x DPI)
+**File**: [`05_process_properties_image.png`](05_process_properties_image.png) (980 x 680 @ 96 DPI)
 - Complete process metadata extracted from remote PEB and token
 - Executable path, command line, working directory, parent process link, user SID, elevation level
 - Verified exploit mitigations: DEP (Permanent), ASLR (High Entropy 64-bit), CFG (Control Flow Guard)
@@ -1090,7 +1233,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 6. Process Properties Inspector - Performance & Process Tree
-**File**: [`06_process_properties_performance.png`](06_process_properties_performance.png) (1720 x 1360 @ 2x DPI)
+**File**: [`06_process_properties_performance.png`](06_process_properties_performance.png) (980 x 680 @ 96 DPI)
 - Real-time CPU usage, total processor time, kernel/user time split, and cycle counts
 - Handles, threads, working set memory, and private bytes meters
 - Interactive focused parent-child process tree
@@ -1100,7 +1243,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 7. Process Properties Inspector - Loaded DLLs & Modules
-**File**: [`07_process_properties_modules.png`](07_process_properties_modules.png) (1720 x 1360 @ 2x DPI)
+**File**: [`07_process_properties_modules.png`](07_process_properties_modules.png) (980 x 680 @ 96 DPI)
 - Lazy-loaded on-demand module inspection (< 46 ms)
 - 64-bit base addresses, binary sizes, verified digital signatures, versions, disk paths
 
@@ -1109,7 +1252,7 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 8. Live Audit & Network Telemetry Console (Ctrl+L)
-**File**: [`08_live_telemetry_audit_console.png`](08_live_telemetry_audit_console.png) (3040 x 1760 @ 2x DPI)
+**File**: [`08_live_telemetry_audit_console.png`](08_live_telemetry_audit_console.png) (1520 x 880 @ 96 DPI)
 - Expanded bottom telemetry drawer showing real-time WinRM differential packet logs
 - Proof of ultra-low network impact: ~1.18 KB initial sync, ~0.28 KB delta ticks, < 5 ms RTT, 87% GZIP savings
 - Real-time audit of process spawn/exit lifecycles and administrative actions
@@ -1119,25 +1262,32 @@ This gallery contains ultra-high-resolution marketing and documentation screensh
 ---
 
 ### 9. Connect to Target System Dialog (WinRM)
-**File**: [`09_connect_remote_winrm.png`](09_connect_remote_winrm.png) (1040 x 800 @ 2x DPI)
+**File**: [`09_connect_remote_winrm.png`](09_connect_remote_winrm.png) (520 x 400 @ 96 DPI)
 - Enterprise remote connection dialog over WinRM HTTPS (Port 5986)
 - Saved credentials profile and multi-session host tab selection
 
 ![Connect Dialog](09_connect_remote_winrm.png)
 
 ### 10. Services Manager Tab & Action Toolbar
-**File**: [`10_services_manager_light.png`](10_services_manager_light.png) (3040 x 1680 @ 2x DPI)
+**File**: [`10_services_manager_light.png`](10_services_manager_light.png) (1520 x 840 @ 96 DPI)
 - Full services catalog with live status badges, startup types, log on accounts, and dependencies column
 - Dedicated action toolbar for instant Start, Stop, Restart, Properties, and Process navigation
 
 ![Services Manager](10_services_manager_light.png)
 
 ### 11. Service Details & Two-Way Dependencies Inspector
-**File**: [`11_service_dependencies_inspector.png`](11_service_dependencies_inspector.png) (1240 x 1080 @ 2x DPI)
+**File**: [`11_service_dependencies_inspector.png`](11_service_dependencies_inspector.png) (620 x 540 @ 96 DPI)
 - Two-tab modal inspector with General details and interactive two-way Dependencies (Prerequisites and Dependents)
 - Full Service Control actions (Start, Stop, Restart) directly within the modal inspector
 
 ![Service Details & Dependencies](11_service_dependencies_inspector.png)
+
+### 12. TCPView-Style Network Activity & Opt-In Kernel ETW (`Ctrl+Shift+N`)
+**File**: [`12_network_activity_sockets_etw_light.png`](12_network_activity_sockets_etw_light.png) (1520 x 840 @ 96 DPI)
+- System-wide IPv4/IPv6 TCP & UDP Active Sockets table with EStats sent/recv packets & bytes, protocol/state badges, and TCPView-style green/yellow live delta highlights
+- Toolbar quick filter chips (`TCP v4/v6`, `UDP v4/v6`, `Established`, `Listening`, `Syn Sent`, `Time/Close Wait`), bottom endpoint summary strip, and active opt-in Kernel ETW rate telemetry (`Net ETW: ON`)
+
+![Network Activity Active Sockets and Opt-In Kernel ETW](12_network_activity_sockets_etw_light.png)
 
 ---
 
@@ -1153,7 +1303,7 @@ Set-Content -Path (Join-Path $outDir "README.md") -Value $readmeContent -Encodin
 Set-Content -Path (Join-Path $docsOut "README.md") -Value $readmeContent -Encoding ASCII
 
 Write-Host "`n================================================================" -ForegroundColor Cyan
-Write-Host " ALL 11 LIGHT MODE ULTRA-HD SCREENSHOTS GENERATED SUCCESSFULLY!" -ForegroundColor Green
+Write-Host " ALL 12 LIGHT MODE SCREENSHOTS GENERATED SUCCESSFULLY!" -ForegroundColor Green
 Write-Host " Location: $outDir" -ForegroundColor Cyan
-Write-Host " Scale: 192 DPI (2x Retina)" -ForegroundColor Cyan
+Write-Host " Scale: 96 DPI (1:1 Native Crisp)" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
