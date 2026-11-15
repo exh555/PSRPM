@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-11-15
+
+### Changed
+- **Render Resize Nudge Timing (`PSRPM.psm1`)**:
+  - Reduced the post-`ContentRendered` `+1 px` / `-1 px` swapchain nudge delay in `$attachRenderResizeNudge` from `1000 ms` to `600 ms`.
+
+### Fixed
+- **Single-Target & Local Hostname Truncation (`PSRPM.psm1`)**:
+  - Wrapped `$resolvedTargets` assignment in `@(...)` in `Start-PSRPM` so PowerShell does not unwrap a single-element target array into a scalar `[string]` (which caused `$resolvedTargets[0]` to return only the first character of the hostname, e.g., `'S'` instead of `'SRV-01'`).
+
 ## [1.15.0] - 2026-11-15
 
 ### Added

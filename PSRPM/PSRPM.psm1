@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.15.0"
+$script:AppVersion = "1.15.1"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -590,11 +590,11 @@ function Start-PSRPM {
         }
     }
 
-    $resolvedTargets = if ($isLocalMode) {
-        @([string]$env:COMPUTERNAME)
+    $resolvedTargets = @(if ($isLocalMode) {
+        [string]$env:COMPUTERNAME
     } else {
         (Resolve-PSRPMComputerTargets -ComputerName $ComputerName -MaxCount 10).Targets
-    }
+    })
     $primaryTarget = [string]$resolvedTargets[0]
     $dormantHosts  = if ($resolvedTargets.Count -gt 1) { @($resolvedTargets[1..($resolvedTargets.Count - 1)]) } else { @() }
     $targetLabel   = $primaryTarget
@@ -1286,7 +1286,7 @@ function Start-PSRPM {
                     [System.Windows.Threading.DispatcherPriority]::Background,
                     $nudgeState.Win.Dispatcher
                 )
-                $t.Interval = [TimeSpan]::FromMilliseconds(1000)
+                $t.Interval = [TimeSpan]::FromMilliseconds(600)
                 $t.add_Tick($onNudgeTick)
                 $nudgeState.Timer = $t
                 $t.Start()

@@ -2339,7 +2339,7 @@ $script:PSRPMCollectorScriptBlock = {
     $metaPendCnt  = $script:PendingMetaMap.Count
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.15.0","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.15.1","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"colMs":').Append($colMs)
     [void]$sb.Append(',"svcMs":').Append($svcMs)

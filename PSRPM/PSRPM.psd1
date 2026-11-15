@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.15.0'
+    ModuleVersion     = '1.15.1'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop')
@@ -78,8 +78,8 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Multi-host -ComputerName session bar support with dormant/connecting/offline lifecycle, deduplication, and ConnectDialog enhancements.
-- Post-launch 1px render-resize nudge mitigation (+1px after 1000ms, -1px after 5ms) across MainWindow and all 7 modal/modeless dialogs to prevent WPF D3D9 blank-window stalls.
+- Fixed Start-PSRPM local/single-target hostname truncation caused by PowerShell unwrapping single-element array into a string.
+- Reduced post-ContentRendered render resize nudge delay from 1000 ms to 600 ms.
 '@
         }
     }
