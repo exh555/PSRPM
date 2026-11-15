@@ -1,0 +1,50 @@
+{
+  // Sample VS Code Color Theme (JSONC with comments, trailing commas, and #RRGGBBAA alpha hex)
+  "name": "Catppuccin Mocha (Sample)",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#1e1e2e",
+    "editor.foreground": "#cdd6f4",
+    "sideBar.background": "#181825",
+    "sideBar.foreground": "#bac2de",
+    "titleBar.activeBackground": "#11111b",
+    "tab.activeBackground": "#1e1e2e",
+    "tab.activeForeground": "#cdd6f4",
+    "tab.activeBorderTop": "#89b4fa",
+    "tab.inactiveBackground": "#181825",
+    "tab.inactiveForeground": "#6c7086",
+    "panel.border": "#313244",
+    "descriptionForeground": "#a6adc8",
+    "focusBorder": "#89b4fa",
+    "list.activeSelectionBackground": "#45475a",
+    "list.activeSelectionForeground": "#cdd6f4",
+    "list.hoverBackground": "#89b4fa22", /* CSS #RRGGBBAA alpha hex */
+    "badge.background": "#89b4fa",
+    "badge.foreground": "#11111b",
+    "menu.background": "#181825",
+    "menu.border": "#313244",
+    "menu.selectionBackground": "#313244",
+    "terminal.background": "#11111b",
+    "terminal.foreground": "#cdd6f4",
+    "terminal.ansiRed": "#f38ba8",
+    "terminal.ansiGreen": "#a6e3a1",
+    "terminal.ansiYellow": "#f9e2af",
+    "terminal.ansiBlue": "#89b4fa",
+    "terminal.ansiMagenta": "#cba6f7",
+    "terminal.ansiCyan": "#94e2d5",
+  },
+  "tokenColors": [
+    {
+      "scope": ["comment", "punctuation.definition.comment"],
+      "settings": { "foreground": "#6c7086" }
+    },
+    {
+      "scope": "string",
+      "settings": { "foreground": "#a6e3a1" }
+    },
+    {
+      "scope": "keyword",
+      "settings": { "foreground": "#cba6f7" }
+    },
+  ],
+}

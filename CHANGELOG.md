@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-11-15
+
+### Added
+- **Custom Theme Registry & Sandbox (`ViewModelClasses.ps1`, `tools/Theme-Sandbox.ps1`, `tools/sample-theme.json`, `tools/sample-vscode-theme.json`)**:
+  - Added `[PSRPMThemeRegistry]::RegisterPalette`, `ClearCustomPalettes`, `GetBuiltInNames`, deep palette cloning/section merging, and `_CustomPalettes` lookup support.
+  - Added offline `tools/Theme-Sandbox.ps1` interactive theme previewer, JSON importer, and WCAG contrast auditor along with sample theme JSON presets.
+
+### Changed
+- **Fast Cached Theme Switching (`PSRPM.psm1`, `ViewModelClasses.ps1`)**:
+  - Replaced per-key `$window.Resources[$key] = $b` brush updates in `$applyTheme` and `$syncDialogThemeBrushes` with frozen-brush caching (`$getFrozenBrush`) and cached per-theme `ResourceDictionary` swapping via `MergedDictionaries[0]` (`$getThemeResourceDict`), stripping initial direct `Brush*`/`ColTint_*` resource keys once on startup.
+  - Optimized `ProcessItemViewModel.SetThemeMode` to fetch the resolved palette once and pass it directly to `RefreshRowColors([hashtable]$palette)`, skipped duplicate active-tab `ProcessMap` and network collection passes in `$applyTheme` / `$script:RefreshNetworkThemeBrushes`, and converted `PSRPMThemeRegistry::NormalizeMode` to a `switch`.
+- **`FindHandles` System Scan Allocation & Loop Optimization (`DeepInspector.ps1`)**:
+  - Hoisted module enumeration buffers (`$modBuf`, `$sbModPath`) outside the per-process loop in `FindHandles` and kept bulk handle inspection inline without per-handle scriptblock invocation overhead.
+
+### Fixed
+- **Hover Tooltip `MethodNotFound` Error on Theme Switch (`PSRPM.psm1`)**:
+  - Fixed `$applyTheme` passing `$hoverSt.ResourceWindow` (`[System.Windows.Window]`) instead of `$hoverSt.ResourceWindow.Resources` (`[System.Windows.ResourceDictionary]`) to `$syncHoverTipBrushes`, eliminating `[System.Windows.Window] does not contain a method named 'Contains'` errors during theme changes, and hardened `$syncHoverTipBrushes` to unwrap `.Resources` if a `Window` is passed and verify `[System.Collections.IDictionary]`.
+- **`GetFileType` Kernel Deadlock on `SYNCHRONIZE`-Only `File` Handles (`DeepInspector.ps1`)**:
+  - Gated `GetFileType` and `GetFinalPathNameByHandleW` in both `FindHandles` and `Handles` modes with `($acc -band 0x0001FFFFL) -ne 0L` to skip `SYNCHRONIZE`/standard-rights-only `File` handles (e.g., `0x00100000` driver control handles such as `WebClient` `svchost`) that can block indefinitely in `GetFileType`.
+
 ## [1.14.0] - 2026-11-15
 
 ### Changed

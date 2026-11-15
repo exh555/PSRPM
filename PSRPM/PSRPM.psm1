@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.14.0"
+$script:AppVersion = "1.14.1"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -781,13 +781,6 @@ function Start-PSRPM {
     $txtThemeToggle           = $window.FindName("TxtThemeToggle")
     $brushConv                = [System.Windows.Media.BrushConverter]::new()
 
-    $setResourceBrush = {
-        param([string]$key, [string]$hex)
-        $b = $brushConv.ConvertFromString($hex)
-        if ($b.CanFreeze) { $b.Freeze() }
-        $window.Resources[$key] = $b
-    }
-
     $frozenBrushCache = @{}
     $getFrozenBrush = {
         param([string]$hex)
@@ -798,9 +791,49 @@ function Start-PSRPM {
         return $b
     }
 
+    $themeDictCache = @{}
+    $getThemeResourceDict = {
+        param([string]$resolvedMode, [hashtable]$palette)
+        if ($themeDictCache.ContainsKey($resolvedMode)) {
+            return $themeDictCache[$resolvedMode]
+        }
+        $rd = [System.Windows.ResourceDictionary]::new()
+        foreach ($kv in $palette.Brushes.GetEnumerator()) {
+            $rd[[string]$kv.Key] = (&$getFrozenBrush ([string]$kv.Value))
+        }
+        $themeDictCache[$resolvedMode] = $rd
+        return $rd
+    }
+
+    $stripDirectThemeBrushes = {
+        param([System.Windows.ResourceDictionary]$resDict)
+        if (-not $resDict) { return }
+        $toRemove = [System.Collections.Generic.List[string]]::new()
+        foreach ($k in $resDict.Keys) {
+            if ($k -is [string] -and ($k.StartsWith("Brush") -or $k.StartsWith("ColTint_"))) {
+                [void]$toRemove.Add($k)
+            }
+        }
+        foreach ($rk in $toRemove) {
+            $resDict.Remove($rk)
+        }
+    }
+
+    &$stripDirectThemeBrushes $window.Resources
+
     $syncDialogThemeBrushes = {
         param($targetWin)
-        if (-not $targetWin) { return }
+        if (-not $targetWin -or -not $targetWin.Resources) { return }
+        $activeRd = $stateContainer.ThemeResourceDict
+        if ($activeRd) {
+            if ($targetWin.Resources.MergedDictionaries.Count -eq 0) {
+                &$stripDirectThemeBrushes $targetWin.Resources
+                [void]$targetWin.Resources.MergedDictionaries.Add($activeRd)
+            } elseif (-not [Object]::ReferenceEquals($targetWin.Resources.MergedDictionaries[0], $activeRd)) {
+                $targetWin.Resources.MergedDictionaries[0] = $activeRd
+            }
+            return
+        }
         foreach ($key in @($window.Resources.Keys)) {
             if ($key -is [string] -and ($key.StartsWith("Brush") -or $key.StartsWith("ColTint_"))) {
                 $targetWin.Resources[$key] = $window.Resources[$key]
@@ -875,12 +908,16 @@ function Start-PSRPM {
         $resolvedMode = [string]$palette.Name
         $isDark = [bool]$palette.IsDark
 
-        $stateContainer.CurrentTheme = $resolvedMode
-        $stateContainer.IsDarkTheme  = $isDark
-        $stateContainer.ThemePalette = $palette
+        $stateContainer.CurrentTheme      = $resolvedMode
+        $stateContainer.IsDarkTheme       = $isDark
+        $stateContainer.ThemePalette      = $palette
+        $themeRd = &$getThemeResourceDict $resolvedMode $palette
+        $stateContainer.ThemeResourceDict = $themeRd
 
-        foreach ($kv in $palette.Brushes.GetEnumerator()) {
-            &$setResourceBrush $kv.Key $kv.Value
+        if ($window.Resources.MergedDictionaries.Count -eq 0) {
+            [void]$window.Resources.MergedDictionaries.Add($themeRd)
+        } elseif (-not [Object]::ReferenceEquals($window.Resources.MergedDictionaries[0], $themeRd)) {
+            $window.Resources.MergedDictionaries[0] = $themeRd
         }
 
         if ($menuThemeLight)           { $menuThemeLight.IsChecked           = ($resolvedMode -eq "Light") }
@@ -891,11 +928,12 @@ function Start-PSRPM {
         if ($menuThemeHighContrast)    { $menuThemeHighContrast.IsChecked    = ($resolvedMode -eq "HighContrast") }
         if ($txtThemeToggle)           { $txtThemeToggle.Text                = [string]$palette.DisplayName }
 
-        foreach ($vm in $engineHandle.ProcessMap.Values) {
+        $activeProcMap = $engineHandle.ProcessMap
+        foreach ($vm in $activeProcMap.Values) {
             $vm.SetThemeMode($resolvedMode)
         }
         foreach ($tVm in $hostTabsCollection) {
-            if ($tVm -and $tVm.ProcessMap) {
+            if ($tVm -and $tVm.ProcessMap -and -not [Object]::ReferenceEquals($tVm.ProcessMap, $activeProcMap)) {
                 foreach ($cachedVm in $tVm.ProcessMap.Values) {
                     $cachedVm.SetThemeMode($resolvedMode)
                 }
@@ -923,7 +961,7 @@ function Start-PSRPM {
         if ($syncHoverTipBrushes) {
             foreach ($hoverSt in @($mainHoverState, $script:ActiveSysHoverState)) {
                 if ($hoverSt -and $hoverSt.ToolTip -and $hoverSt.ResourceWindow -and $hoverSt.ResourceWindow.IsLoaded) {
-                    &$syncHoverTipBrushes $hoverSt.ToolTip $hoverSt.ResourceWindow
+                    &$syncHoverTipBrushes $hoverSt.ToolTip $hoverSt.ResourceWindow.Resources
                 }
             }
         }
@@ -4972,6 +5010,8 @@ function Start-PSRPM {
     $syncHoverTipBrushes = {
         param($tt, $resSource)
         if (-not $tt -or -not $resSource) { return }
+        if ($resSource -is [System.Windows.Window]) { $resSource = $resSource.Resources }
+        if (-not $resSource -or -not ($resSource -is [System.Collections.IDictionary])) { return }
         if ($resSource.Contains("BrushSurfaceBg"))   { $tt.Background  = $resSource["BrushSurfaceBg"] }
         if ($resSource.Contains("BrushTextPrimary")) { $tt.Foreground  = $resSource["BrushTextPrimary"] }
         if ($resSource.Contains("BrushAccent"))      { $tt.BorderBrush = $resSource["BrushAccent"] }
@@ -6409,12 +6449,16 @@ function Start-PSRPM {
         foreach ($tItem in $netTimelineCollection) { &$applyItemThemeColors $tItem $palMap }
         if ($hostTabsCollection) {
             foreach ($hTab in $hostTabsCollection) {
-                if ($hTab.NetworkSockets)  { foreach ($cs in $hTab.NetworkSockets)  { &$applyItemThemeColors $cs $palMap } }
-                if ($hTab.NetworkTimeline) { foreach ($ct in $hTab.NetworkTimeline) { &$applyItemThemeColors $ct $palMap } }
+                if ($hTab.NetworkSockets -and -not [Object]::ReferenceEquals($hTab.NetworkSockets, $netSocketsCollection)) {
+                    foreach ($cs in $hTab.NetworkSockets) { &$applyItemThemeColors $cs $palMap }
+                }
+                if ($hTab.NetworkTimeline -and -not [Object]::ReferenceEquals($hTab.NetworkTimeline, $netTimelineCollection)) {
+                    foreach ($ct in $hTab.NetworkTimeline) { &$applyItemThemeColors $ct $palMap }
+                }
             }
         }
-        if ($gridNetworkSockets -and $gridNetworkSockets.Items)   { try { $gridNetworkSockets.Items.Refresh() } catch {} }
-        if ($gridNetworkTimeline -and $gridNetworkTimeline.Items) { try { $gridNetworkTimeline.Items.Refresh() } catch {} }
+        if ($netSocketsCollection.Count -gt 0 -and $gridNetworkSockets -and $gridNetworkSockets.Items) { try { $gridNetworkSockets.Items.Refresh() } catch {} }
+        if ($netTimelineCollection.Count -gt 0 -and $gridNetworkTimeline -and $gridNetworkTimeline.Items) { try { $gridNetworkTimeline.Items.Refresh() } catch {} }
     }
 
     $canCloseTcpSocket = {

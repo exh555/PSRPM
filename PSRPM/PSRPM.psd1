@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.14.0'
+    ModuleVersion     = '1.14.1'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop')
@@ -78,10 +78,10 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Replaced GridProcesses left-pull collection reconciler with Exact (M - LIS) minimum-move algorithm, cutting dynamic CPU-sort moves from ~185/tick to ~30/tick
-- Reduced local powershell.exe CPU by 52.3% (22.79% -> 10.88% of 1 core; WPF UI thread 170.6 -> 71.2 ms/s, -58.3%) during live Flat CPU-descending sorting
-- Cached PropertyChangedEventArgs across all 5 ViewModel classes, split per-cell hover tooltips, and removed unbound numeric OnPropertyChanged noise
-- Reduced GridProcesses VirtualizingPanel.CacheLength from 20,20 to 3,3 and bypassed GZIP loopback compression in local mode
+- Fixed [System.Windows.Window] MethodNotFound ('Contains') runtime error when switching themes with active chart hover tooltips by passing ResourceWindow.Resources to $syncHoverTipBrushes
+- Accelerated theme switching with cached per-theme ResourceDictionaries (MergedDictionaries[0] swap), single-lookup SetThemeMode, and duplicate active-tab collection skips
+- Fixed FindHandles/Handles kernel deadlock and 50k-call slowdown on SYNCHRONIZE-only File handles (0x0001FFFFL access mask gate + hoisted module buffer + inline handle loop)
+- Added custom theme JSON registration API and offline tools/Theme-Sandbox.ps1 live theme previewer/contrast auditor
 '@
         }
     }

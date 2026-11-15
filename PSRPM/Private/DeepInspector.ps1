@@ -101,12 +101,16 @@ $script:PSRPMDeepInspectorScriptBlock = {
             $hBufLen  = 262144
             $hBufPtr  = [IntPtr]::Zero
             $objBuf   = [IntPtr]::Zero
+            $modBufSz = 65536
+            $modBuf   = [IntPtr]::Zero
             $sbPath   = [System.Text.StringBuilder]::new(1024)
+            $sbModPath = [System.Text.StringBuilder]::new(1024)
             $skipTypes = @("WaitCompletionPacket", "IRTimer", "TpWorkerFactory", "IoCompletion", "EtwRegistration", "DxgkCompositionObject")
 
             try {
                 $hBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($hBufLen)
                 $objBuf  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4096)
+                $modBuf  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
                 foreach ($p in $allProcs) {
                     $pidVal = $p.Id
                     if ($pidVal -le 4) { continue }
@@ -116,44 +120,33 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     $hProc = [PSRPM.NativeInspectorV3]::OpenProcess(0x0410, 0, $pidVal)
                     if ($hProc -ne [IntPtr]::Zero) {
                         try {
-                            $modBufSz = 8192
-                            $modBuf   = [IntPtr]::Zero
-                            try {
+                            $cbNeeded = 0
+                            $enumOk   = [PSRPM.NativeInspectorV3]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
+                            if ($enumOk -ne 0 -and $cbNeeded -gt $modBufSz -and $cbNeeded -le 262144) {
+                                [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                                $modBuf   = [IntPtr]::Zero
+                                $modBufSz = $cbNeeded
                                 $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
-                                $cbNeeded = 0
                                 $enumOk   = [PSRPM.NativeInspectorV3]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
-                                if ($enumOk -ne 0 -and $cbNeeded -gt $modBufSz -and $cbNeeded -le 262144) {
-                                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
-                                    $modBuf   = [IntPtr]::Zero
-                                    $modBufSz = $cbNeeded
-                                    $modBuf   = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($modBufSz)
-                                    $enumOk   = [PSRPM.NativeInspectorV3]::EnumProcessModulesEx($hProc, $modBuf, $modBufSz, [ref]$cbNeeded, 0x03)
-                                }
-                                if ($enumOk -ne 0 -and $cbNeeded -gt 0) {
-                                    $effBytes  = [Math]::Min($cbNeeded, $modBufSz)
-                                    $numMods   = [int]($effBytes / $ptrSize)
-                                    $sbModPath = [System.Text.StringBuilder]::new(1024)
-                                    for ($mIdx = 0; $mIdx -lt $numMods; $mIdx++) {
-                                        $hMod = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($modBuf, $mIdx * $ptrSize)
-                                        [void]$sbModPath.Clear()
-                                        if ([PSRPM.NativeInspectorV3]::GetModuleFileNameExW($hProc, $hMod, $sbModPath, 1024) -gt 0) {
-                                            $mPath = $sbModPath.ToString()
-                                            if ($mPath.ToLowerInvariant().Replace('/', '\').Contains($qNormalized)) {
-                                                $findResults.Add(@{
-                                                    ProcessName = $pName
-                                                    PID         = $pidVal
-                                                    Type        = "DLL"
-                                                    Handle      = ("0x{0:X8}" -f $hMod.ToInt64())
-                                                    Name        = $mPath
-                                                })
-                                            }
+                            }
+                            if ($enumOk -ne 0 -and $cbNeeded -gt 0) {
+                                $effBytes = [Math]::Min($cbNeeded, $modBufSz)
+                                $numMods  = [int]($effBytes / $ptrSize)
+                                for ($mIdx = 0; $mIdx -lt $numMods; $mIdx++) {
+                                    $hMod = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($modBuf, $mIdx * $ptrSize)
+                                    [void]$sbModPath.Clear()
+                                    if ([PSRPM.NativeInspectorV3]::GetModuleFileNameExW($hProc, $hMod, $sbModPath, 1024) -gt 0) {
+                                        $mPath = $sbModPath.ToString()
+                                        if ($mPath.ToLowerInvariant().Replace('/', '\').Contains($qNormalized)) {
+                                            $findResults.Add(@{
+                                                ProcessName = $pName
+                                                PID         = $pidVal
+                                                Type        = "DLL"
+                                                Handle      = ("0x{0:X8}" -f $hMod.ToInt64())
+                                                Name        = $mPath
+                                            })
                                         }
                                     }
-                                }
-                            } finally {
-                                if ($modBuf -ne [IntPtr]::Zero) {
-                                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
-                                    $modBuf = [IntPtr]::Zero
                                 }
                             }
                         } finally {
@@ -188,8 +181,9 @@ $script:PSRPMDeepInspectorScriptBlock = {
                                     $entryOff = $snapHdrSize + ($hIdx * $snapEntSize)
                                     if (($entryOff + $snapEntSize) -gt $hBufLen) { break }
 
-                                    $hVal = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($hBufPtr, $entryOff)
-                                    $tIdx = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + $offSnapTyp) -band 0xFFFFFFFFL)
+                                    $hVal   = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($hBufPtr, $entryOff)
+                                    $accVal = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + $offSnapAcc) -band 0xFFFFFFFFL)
+                                    $tIdx   = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($hBufPtr, $entryOff + $offSnapTyp) -band 0xFFFFFFFFL)
 
                                     if ($script:HandleTypeCache.ContainsKey($tIdx) -and $script:HandleTypeCache[$tIdx] -in $skipTypes) {
                                         continue
@@ -218,13 +212,15 @@ $script:PSRPMDeepInspectorScriptBlock = {
 
                                             $nStr = ""
                                             if ($tName -eq "File") {
-                                                # Query disk files/folders safely. Non-disk/pipe handles are skipped to prevent synchronous pipe deadlocks.
-                                                $fType = [PSRPM.NativeInspectorV3]::GetFileType($dup)
-                                                if ($fType -eq 1) {
-                                                    [void]$sbPath.Clear()
-                                                    $fLen = [PSRPM.NativeInspectorV3]::GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)
-                                                    if ($fLen -gt 0) {
-                                                        $nStr = $sbPath.ToString() -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''
+                                                # Skip SYNCHRONIZE/standard-rights-only File handles (e.g. 0x00100000 driver control handles) whose GetFileType can block in kernel.
+                                                if (($accVal -band 0x0001FFFFL) -ne 0L) {
+                                                    $fType = [PSRPM.NativeInspectorV3]::GetFileType($dup)
+                                                    if ($fType -eq 1) {
+                                                        [void]$sbPath.Clear()
+                                                        $fLen = [PSRPM.NativeInspectorV3]::GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)
+                                                        if ($fLen -gt 0) {
+                                                            $nStr = $sbPath.ToString() -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''
+                                                        }
                                                     }
                                                 }
                                             } else {
@@ -271,6 +267,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
                 if ($objBuf -ne [IntPtr]::Zero) {
                     [System.Runtime.InteropServices.Marshal]::FreeHGlobal($objBuf)
                     $objBuf = [IntPtr]::Zero
+                }
+                if ($modBuf -ne [IntPtr]::Zero) {
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                    $modBuf = [IntPtr]::Zero
                 }
             }
         }
@@ -1270,13 +1270,14 @@ $script:PSRPMDeepInspectorScriptBlock = {
 
                                     $nStr = ""
                                     if ($tName -eq "File") {
-                                        # Query disk files/folders safely. Non-disk/pipe handles are skipped to prevent synchronous pipe deadlocks.
-                                        $fType = [PSRPM.NativeInspectorV3]::GetFileType($dup)
-                                        if ($fType -eq 1) {
-                                            [void]$sbPath.Clear()
-                                            $fLen = [PSRPM.NativeInspectorV3]::GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)
-                                            if ($fLen -gt 0) {
-                                                $nStr = $sbPath.ToString() -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''
+                                        if (($acc -band 0x0001FFFFL) -ne 0L) {
+                                            $fType = [PSRPM.NativeInspectorV3]::GetFileType($dup)
+                                            if ($fType -eq 1) {
+                                                [void]$sbPath.Clear()
+                                                $fLen = [PSRPM.NativeInspectorV3]::GetFinalPathNameByHandleW($dup, $sbPath, 1024, 0)
+                                                if ($fLen -gt 0) {
+                                                    $nStr = $sbPath.ToString() -replace '^\\\\\?\\UNC\\', '\\' -replace '^\\\\\?\\', ''
+                                                }
                                             }
                                         }
                                     } else {

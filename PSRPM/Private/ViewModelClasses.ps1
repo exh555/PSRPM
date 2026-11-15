@@ -5,6 +5,7 @@
 
 class PSRPMThemeRegistry {
     hidden static [hashtable] $_PaletteCache = @{}
+    hidden static [hashtable] $_CustomPalettes = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
     hidden static [System.Collections.Generic.Dictionary[string, System.ComponentModel.PropertyChangedEventArgs]] $_PropArgsCache = [System.Collections.Generic.Dictionary[string, System.ComponentModel.PropertyChangedEventArgs]]::new([System.StringComparer]::Ordinal)
 
     static [System.ComponentModel.PropertyChangedEventArgs] GetPropArgs([string]$name) {
@@ -18,20 +19,99 @@ class PSRPMThemeRegistry {
     }
 
     static [bool] IsDarkMode([string]$mode) {
-        return ($mode -in @("Dark", "TokyoNight", "HighContrast"))
+        $norm = [PSRPMThemeRegistry]::NormalizeMode($mode)
+        if ([PSRPMThemeRegistry]::_CustomPalettes.ContainsKey($norm)) {
+            return [bool]([PSRPMThemeRegistry]::_CustomPalettes[$norm].IsDark)
+        }
+        return ($norm -in @("Dark", "TokyoNight", "HighContrast"))
     }
 
     static [string] NormalizeMode([string]$mode) {
-        if ($mode -eq "TokyoNight")      { return "TokyoNight" }
-        if ($mode -eq "TokyoNightLight") { return "TokyoNightLight" }
-        if ($mode -eq "Dark")            { return "Dark" }
-        if ($mode -eq "Classic")         { return "Classic" }
-        if ($mode -eq "HighContrast")    { return "HighContrast" }
+        switch ($mode) {
+            "Light"           { return "Light" }
+            "Dark"            { return "Dark" }
+            "TokyoNight"      { return "TokyoNight" }
+            "TokyoNightLight" { return "TokyoNightLight" }
+            "Classic"         { return "Classic" }
+            "HighContrast"    { return "HighContrast" }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($mode) -and [PSRPMThemeRegistry]::_CustomPalettes.ContainsKey($mode)) {
+            return [string]([PSRPMThemeRegistry]::_CustomPalettes[$mode].Name)
+        }
         return "Light"
+    }
+
+    static [string[]] GetBuiltInNames() {
+        return @("Light", "Dark", "TokyoNight", "TokyoNightLight", "Classic", "HighContrast")
     }
 
     static [void] ClearCache() {
         [PSRPMThemeRegistry]::_PaletteCache.Clear()
+    }
+
+    static [void] ClearCustomPalettes() {
+        [PSRPMThemeRegistry]::_CustomPalettes.Clear()
+        [PSRPMThemeRegistry]::_PaletteCache.Clear()
+    }
+
+    hidden static [hashtable] CloneDeep([hashtable]$src) {
+        $copy = @{}
+        foreach ($k in $src.Keys) {
+            $v = $src[$k]
+            if ($v -is [hashtable]) {
+                $copy[$k] = [PSRPMThemeRegistry]::CloneDeep($v)
+            } else {
+                $copy[$k] = $v
+            }
+        }
+        return $copy
+    }
+
+    hidden static [void] MergeSection([hashtable]$target, [hashtable]$overlay) {
+        if ($null -eq $overlay) { return }
+        foreach ($k in $overlay.Keys) {
+            $v = $overlay[$k]
+            if (($v -is [hashtable]) -and ($target[$k] -is [hashtable])) {
+                [PSRPMThemeRegistry]::MergeSection([hashtable]$target[$k], [hashtable]$v)
+            } else {
+                $target[$k] = $v
+            }
+        }
+    }
+
+    static [hashtable] RegisterPalette([hashtable]$customSpec) {
+        if ($null -eq $customSpec -or [string]::IsNullOrWhiteSpace([string]$customSpec.Name)) {
+            throw "Custom theme palette must specify a non-empty 'Name'."
+        }
+        $name = ([string]$customSpec.Name).Trim()
+        $isDark = if ($customSpec.ContainsKey("IsDark")) { [bool]$customSpec.IsDark } else { $false }
+        $baseName = if ($customSpec.ContainsKey("BaseTheme") -and -not [string]::IsNullOrWhiteSpace([string]$customSpec.BaseTheme)) {
+            [string]$customSpec.BaseTheme
+        } elseif ($isDark) {
+            "Dark"
+        } else {
+            "Light"
+        }
+        if ($baseName -ieq $name) {
+            $baseName = if ($isDark) { "Dark" } else { "Light" }
+        }
+        $basePal = [PSRPMThemeRegistry]::GetPalette($baseName)
+        $merged = [PSRPMThemeRegistry]::CloneDeep($basePal)
+        $merged.Name = $name
+        $merged.DisplayName = if ($customSpec.ContainsKey("DisplayName") -and -not [string]::IsNullOrWhiteSpace([string]$customSpec.DisplayName)) {
+            [string]$customSpec.DisplayName
+        } else {
+            $name
+        }
+        $merged.IsDark = $isDark
+        foreach ($sec in @("Brushes", "Rows", "TabColors", "Legend", "Banner")) {
+            if ($customSpec.ContainsKey($sec) -and ($customSpec[$sec] -is [hashtable])) {
+                [PSRPMThemeRegistry]::MergeSection([hashtable]$merged[$sec], [hashtable]$customSpec[$sec])
+            }
+        }
+        [PSRPMThemeRegistry]::_CustomPalettes[$name] = $merged
+        [PSRPMThemeRegistry]::_PaletteCache[$name] = $merged
+        return $merged
     }
 
     static [hashtable] GetPalette([string]$mode) {
@@ -45,6 +125,9 @@ class PSRPMThemeRegistry {
     }
 
     hidden static [hashtable] BuildPalette([string]$mode) {
+        if ([PSRPMThemeRegistry]::_CustomPalettes.ContainsKey($mode)) {
+            return [PSRPMThemeRegistry]::_CustomPalettes[$mode]
+        }
         if ($mode -eq "TokyoNight") {
             return @{
                 Name        = "TokyoNight"
@@ -1718,10 +1801,10 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] SetThemeMode([string]$mode) {
-        $resolved = if ([string]::IsNullOrWhiteSpace($mode)) { "Light" } else { $mode }
-        $this.ThemeMode   = $resolved
-        $this.IsDarkTheme = [PSRPMThemeRegistry]::IsDarkMode($resolved)
-        $this.RefreshRowColors()
+        $palette = [PSRPMThemeRegistry]::GetPalette($mode)
+        $this.ThemeMode   = [string]$palette.Name
+        $this.IsDarkTheme = [bool]$palette.IsDark
+        $this.RefreshRowColors($palette)
         if ($this.HasBaseline) { $this.UpdateBaselineDiffs() }
     }
 
@@ -1744,7 +1827,10 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ([string]::IsNullOrWhiteSpace($mode)) {
             $mode = if ($this.IsDarkTheme) { "Dark" } else { "Light" }
         }
-        $palette = [PSRPMThemeRegistry]::GetPalette($mode)
+        $this.RefreshRowColors([PSRPMThemeRegistry]::GetPalette($mode))
+    }
+
+    [void] RefreshRowColors([hashtable]$palette) {
         $rows = $palette.Rows
 
         $tierKey = "Default"
