@@ -42,6 +42,14 @@
         <SolidColorBrush x:Key="BrushKillTreeBg" Color="#FECACA"/>
         <SolidColorBrush x:Key="BrushKillTreeFg" Color="#7F1D1D"/>
         <SolidColorBrush x:Key="BrushKillTreeBorder" Color="#EF4444"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuStroke" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitStroke" Color="#A16207"/>
+        <SolidColorBrush x:Key="BrushGaugeRamStroke" Color="#EA580C"/>
+        <SolidColorBrush x:Key="BrushSigSignedFg" Color="#15803D"/>
+        <SolidColorBrush x:Key="BrushSigUnsignedFg" Color="#B91C1C"/>
+        <SolidColorBrush x:Key="BrushStatusActiveFg" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushStatusIdleFg" Color="#475569"/>
+        <SolidColorBrush x:Key="BrushStatusExitedFg" Color="#DC2626"/>
 
         <!-- Standard Tabular Text Style -->
         <Style x:Key="RightTabularText" TargetType="TextBlock">
@@ -85,6 +93,26 @@
             <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
             <Setter Property="FontWeight" Value="Normal"/>
             <Setter Property="FontSize" Value="12"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- TextBoxes and Inputs -->
@@ -300,7 +328,7 @@
                     <UniformGrid Grid.Row="0" Columns="2" Margin="0,0,0,10">
                         <GroupBox Header="CPU &amp; Handle Counters" Padding="8" Margin="0,0,6,0">
                             <StackPanel>
-                                <TextBlock x:Name="PropCpu" Text="CPU Usage: 0.0%" FontWeight="SemiBold" FontSize="12.5" Foreground="#16A34A" Margin="0,0,0,4"/>
+                                <TextBlock x:Name="PropCpu" Text="CPU Usage: 0.0%" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource BrushGaugeCpuStroke}" Margin="0,0,0,4"/>
                                 <TextBlock x:Name="PropTotalCpuTime" Text="Total Processor Time: 00:00:00.000" Margin="0,2" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource BrushTextPrimary}"/>
                                 <TextBlock x:Name="PropKernelUserTime" Text="Kernel: 00:00:00 | User: 00:00:00" Margin="0,2" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource BrushTextPrimary}"/>
                                 <TextBlock x:Name="PropCycles" Text="Cycles: 0" Margin="0,2" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource BrushTextPrimary}"/>
@@ -309,8 +337,8 @@
                         </GroupBox>
                         <GroupBox Header="Memory &amp; I/O Counters" Padding="8" Margin="6,0,0,0">
                             <StackPanel>
-                                <TextBlock x:Name="PropPrivateBytes" Text="Private Bytes: 0 K" FontWeight="SemiBold" FontSize="12.5" Foreground="#CA8A04" Margin="0,0,0,4" Typography.NumeralAlignment="Tabular"/>
-                                <TextBlock x:Name="PropRam" Text="Working Set: 0 K (Peak: 0 K)" Foreground="#EA580C" Margin="0,2" Typography.NumeralAlignment="Tabular"/>
+                                <TextBlock x:Name="PropPrivateBytes" Text="Private Bytes: 0 K" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource BrushGaugeCommitStroke}" Margin="0,0,0,4" Typography.NumeralAlignment="Tabular"/>
+                                <TextBlock x:Name="PropRam" Text="Working Set: 0 K (Peak: 0 K)" Foreground="{DynamicResource BrushGaugeRamStroke}" Margin="0,2" Typography.NumeralAlignment="Tabular"/>
                                 <TextBlock x:Name="PropVirtualPageFaults" Text="Virtual Size: 0 MB | Page Faults: 0" Margin="0,2" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource BrushTextPrimary}"/>
                                 <TextBlock x:Name="PropPools" Text="Paged Pool: 0 K | Non-Paged Pool: 0 K" Margin="0,2" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource BrushTextPrimary}"/>
                                 <TextBlock x:Name="PropIoCounters" Text="I/O Reads: 0 K | Writes: 0 K" Margin="0,2" Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource BrushTextPrimary}"/>
@@ -424,9 +452,9 @@
                                                         <ColumnDefinition Width="105"/>
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding PID}" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding CPUFormatted}" Foreground="#16A34A" FontWeight="SemiBold" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
-                                                    <TextBlock Grid.Column="2" Text="{Binding PrivateBytesFormatted}" Foreground="#CA8A04" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
-                                                    <TextBlock Grid.Column="3" Text="{Binding MemoryFormatted}" Foreground="#EA580C" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding CPUFormatted}" Foreground="{DynamicResource BrushGaugeCpuStroke}" FontWeight="SemiBold" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding PrivateBytesFormatted}" Foreground="{DynamicResource BrushGaugeCommitStroke}" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding MemoryFormatted}" Foreground="{DynamicResource BrushGaugeRamStroke}" HorizontalAlignment="Right" Margin="0,0,6,0" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
                                                 </Grid>
 
                                                 <!-- Left: SELECTED Badge + Process Name -->

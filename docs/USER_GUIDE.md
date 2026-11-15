@@ -78,12 +78,13 @@ Double-click any process row (or press **`Enter`**) to open the **Process Proper
 
 ## 4. System Information Graphs (`Ctrl+I` / Double-Click Mini Graphs)
 
-Double-click any of the 3 mini-graphs in the top toolbar (`CPU`, `Commit`, `Phys RAM`) or press **`Ctrl+I`** (**View -> System Information...**) to open the live **System Information** window:
+Double-click toolbar mini-graphs (`CPU`, `Commit`, `Phys RAM`) or Disk/Net telemetry cards, or press **`Ctrl+I`** (**View -> System Information...**), to open the live 5-tab **System Information** window:
 
-- **Summary Tab**: Displays static **System** (`Machine`, `Host`, `Operating System`, `CPU`, `Architecture`, `Cores`) and **Storage** (`Memory`, `Commit Limit`, `Boot Drive`, `Capacity`, `Available`, `File System`, `Type`) metadata alongside a 2x2 grid of live 2-minute history graphs (**CPU Usage**, **System Commit**, **Physical Memory**, and **I/O**). Double-clicking any of the 4 quadrant graphs jumps directly to its dedicated tab.
-- **CPU Tab**: Full-size **Total CPU (Green)** + **Kernel CPU (Red)** history graph with a vertical bar gauge, live **Totals** (`Handles`, `Threads`, `Processes`), **CPU Deltas** (`Context Switch Delta`, `Interrupt Delta`, `System Call Delta`), **Topology** (`Cores`, `Sockets`, `Logical Processors`), and a **`Show one graph per CPU`** checkbox for per-core graphs.
+- **Summary Tab**: Displays static **System** (`Machine`, `Host`, `Operating System`, `CPU`, `Architecture`, `Cores`) and **Storage** (`Memory`, `Commit Limit`, `Boot Drive`, `Capacity`, `Available`, `File System`, `Type`) metadata alongside a 2x2 grid of live 4-minute (`240`-sample) history graphs (**CPU Usage**, **System Commit**, **Physical Memory**, and **I/O**). Double-clicking any quadrant graph (or using toolbar card double-clicks) jumps directly to its dedicated tab (`CPU` -> 1, `Memory` -> 2, `I/O` -> 3, `Network` -> 4).
+- **CPU Tab**: Full-size **Total CPU** + **Kernel CPU** history graph with a vertical bar gauge, live **Totals** (`Handles`, `Threads`, `Processes`), **CPU Deltas** (`Context Switch Delta`, `Interrupt Delta`, `System Call Delta`), **Topology** (`Cores`, `Sockets`, `Logical Processors`), and a **`Show one graph per CPU`** checkbox for per-core graphs.
 - **Memory Tab**: Full-size **System Commit** and **Physical Memory** graphs plus exact kilobyte (`K`) breakdowns for **Commit Charge (K)** (`Current`, `Limit`, `Peak`, `Peak/Limit`, `Current/Limit`), **Physical Memory (K)** (`Total`, `Available`, `In Use`, `System Cache`), **Kernel Memory (K)** (`Paged Pool`, `Nonpaged Pool`, `Total Kernel`), and **Paging** (`Page Fault Delta`, `Page Read Delta`, `Paging File Write Delta`, `Mapped File Write Delta`).
-- **I/O Tab**: Live **I/O Bytes History** graph (Blue: Total Read+Write+Other, Pink: Write+Other) with per-tick transfer deltas and session cumulative I/O.
+- **I/O Tab**: Live **I/O Bytes History** graph (Read+Write+Other vs. Write+Other) with per-tick transfer deltas and session cumulative I/O.
+- **Network Tab**: Live **Network Rx/Tx** throughput curves, active process & host-wide socket inspection (`All Sockets`), and opt-in ETW connection/burst Timeline (buffering up to `2,000` off-tab events in `PendingNetTimeline`).
 
 ---
 
@@ -123,6 +124,6 @@ Start-PSRPM -ComputerName "10.20.30.45" -Credential (Get-Credential)
 Press **`F1`**, select **Help -> Keyboard Shortcuts & Reference...**, use **File -> Help & Shortcuts...**, or click the **`?`** button on the toolbar to open the **Help & Information Reference** modal:
 
 - **Shortcuts Tab**: Complete matrix of keyboard accelerators categorized by Navigation & View Controls, Process Operations, Multi-Host Session Management, and File/Application.
-- **Architecture & Safety Tab**: Architectural reference documenting 100% fileless security, ultra-low remote target overhead (< 0.25% CPU), differential wire streaming (~1.1-1.8 KB/s), zero-leak circular ring buffers, and named-pipe kernel deadlock prevention.
+- **Architecture & Safety Tab**: Architectural reference documenting 100% fileless security, ultra-low remote target overhead (< 0.25% CPU), differential wire streaming (~1.1-1.8 KB/s with raw JSON bypass below 256 bytes), zero-leak circular ring buffers, and `GetFileType`-gated named-pipe kernel deadlock prevention.
 - **Connectivity Tab**: In-app remoting guide explaining WinRM setup, non-domain `TrustedHosts` configuration, zero-privilege `-LocalOnly` local monitoring, and the semantic process row color legend.
-- **About Tab**: Version details (v1.1.1), licensing, and live runtime environment diagnostics (local workstation, operator identity, current target endpoint, transport protocol, PowerShell version, CLR/.NET runtime, and process architecture).
+- **About Tab**: Version details (v1.12.0), licensing, and live runtime environment diagnostics (local workstation, operator identity, current target endpoint, transport protocol, PowerShell version, CLR/.NET runtime, and process architecture).

@@ -20,7 +20,7 @@ This document explains the internal architecture of **PSRPM**'s remote collectio
 
 ## 2. Differential Wire Payload Schema
 
-Every poll returns a compact JSON dictionary (automatically GZIP-compressed and prefixed with `GZIP:` whenever raw JSON exceeds `2,048` bytes):
+Every poll returns a compact JSON dictionary (automatically GZIP-compressed and prefixed with `GZIP:` whenever raw UTF-8 JSON is `256` bytes or larger, while tiny idle ticks `< 256` bytes pass through as raw UTF-8 JSON to avoid GZIP framing expansion):
 
 ```json
 {
@@ -79,7 +79,7 @@ To guarantee that double-clicking a process is instantaneous and never floods th
    - **Performance**: `~30-45 ms` execution time.
 3. **`InspectMode = "Handles"` (Triggered lazily when clicking the `Handles` tab)**:
    - Queries `ntdll.dll!NtQueryInformationProcess(ProcessHandleInformation = 51)` and duplicates handles into the inspector process via `DuplicateHandle`.
-   - **Deadlock Prevention**: Skips synchronous `"File"` / named-pipe IRP queries (which can deadlock in kernel mode when Chromium/`msedgewebview2.exe` worker threads block on synchronous Mojo pipes) and queries non-blocking Object Manager types (`Key`, `Section`, `Mutant`, `Event`, `ALPC Port`, `Directory`, `Semaphore`, `SymbolicLink`, `Job`, `Desktop`, `WindowStation`).
+   - **Deadlock Prevention**: Gates `"File"` handle path lookups on `kernel32!GetFileType -eq 1` (`FILE_TYPE_DISK`) -> `GetFinalPathNameByHandleW`, resolving locked disk files and folders while bypassing synchronous named-pipe, socket, and character-device IRPs (which can deadlock in kernel mode when Chromium/`msedgewebview2.exe` worker threads block on synchronous Mojo pipes), alongside non-blocking Object Manager types (`Key`, `Section`, `Mutant`, `Event`, `ALPC Port`, `Directory`, `Semaphore`, `SymbolicLink`, `Job`, `Desktop`, `WindowStation`).
    - **Performance**: `~20-35 ms` execution time, zero pipe-hang risk.
 
 ---

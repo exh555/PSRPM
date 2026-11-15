@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.7.0"
+$script:AppVersion = "1.12.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -666,7 +666,11 @@ function Start-PSRPM {
         if ($txtLogConsole) {
             $ts = (Get-Date).ToString("HH:mm:ss.fff")
             $lineStr = "[$ts] [$category] $message`r`n"
-            $autoScrollOn = if ($null -ne $stateContainer -and $stateContainer.ContainsKey('LogAutoScroll')) { [bool]$stateContainer.LogAutoScroll } else { ($txtLogConsole.ViewportHeight -le 0) -or (($txtLogConsole.VerticalOffset + $txtLogConsole.ViewportHeight) -ge ($txtLogConsole.ExtentHeight - 4.0)) }
+            $autoScrollOn = if ($null -ne $stateContainer -and $stateContainer.ContainsKey('LogAutoScroll')) {
+                [bool]$stateContainer.LogAutoScroll -and (($txtLogConsole.ViewportHeight -le 0) -or ($txtLogConsole.ExtentHeight -le $txtLogConsole.ViewportHeight) -or (($txtLogConsole.VerticalOffset + $txtLogConsole.ViewportHeight) -ge ($txtLogConsole.ExtentHeight - 24.0)))
+            } else {
+                ($txtLogConsole.ViewportHeight -le 0) -or ($txtLogConsole.ExtentHeight -le $txtLogConsole.ViewportHeight) -or (($txtLogConsole.VerticalOffset + $txtLogConsole.ViewportHeight) -ge ($txtLogConsole.ExtentHeight - 24.0))
+            }
             try {
                 if ($null -ne $stateContainer) { $stateContainer.IsAppendingLog = $true }
                 if ($autoScrollOn) {
@@ -741,26 +745,21 @@ function Start-PSRPM {
         $window.Resources[$key] = $b
     }
 
+    $frozenBrushCache = @{}
+    $getFrozenBrush = {
+        param([string]$hex)
+        if ($frozenBrushCache.ContainsKey($hex)) { return $frozenBrushCache[$hex] }
+        $b = $brushConv.ConvertFromString($hex)
+        if ($b.CanFreeze) { $b.Freeze() }
+        $frozenBrushCache[$hex] = $b
+        return $b
+    }
+
     $syncDialogThemeBrushes = {
         param($targetWin)
         if (-not $targetWin) { return }
-        foreach ($key in @(
-            "BrushWindowBg","BrushToolbarBg","BrushSurfaceBg","BrushHeaderBg","BrushBorderSubtle","BrushTreeLine",
-            "BrushTextPrimary","BrushTextSecondary","BrushTextMuted","BrushRowHover","BrushRowSelectedBg","BrushRowSelectedFg",
-            "BrushSparkBg","BrushSparkBorder","BrushSparkGrid","ColTint_CPU","ColTint_Net","ColTint_PrivateBytes","ColTint_WorkingSet",
-            "BrushMenuBg","BrushMenuBorder","BrushMenuHover","BrushAccent","BrushBadgeBg",
-            "BrushLogBg","BrushLogHeaderBg","BrushLogBorder","BrushLogFg","BrushLogTitleFg","BrushLogBtnBg","BrushLogBtnFg",
-            "BrushLogTelem1","BrushLogTelem2","BrushLogTelem3","BrushLogTelem4","BrushTargetNodeBg",
-            "BrushKillBg","BrushKillFg","BrushKillBorder","BrushKillTreeBg","BrushKillTreeFg","BrushKillTreeBorder",
-            "BrushSwatchSvcBg","BrushSwatchSvcBorder","BrushSwatchSvcFg","BrushSwatchOwnBg","BrushSwatchOwnBorder","BrushSwatchOwnFg",
-            "BrushSwatchPkgBg","BrushSwatchPkgBorder","BrushSwatchPkgFg","BrushSwatchSuspBg","BrushSwatchSuspBorder","BrushSwatchSuspFg",
-            "BrushSwatchNewBg","BrushSwatchNewBorder","BrushSwatchNewFg","BrushSwatchExitBg","BrushSwatchExitBorder","BrushSwatchExitFg",
-            "BrushNetRxStroke","BrushNetRxFill","BrushNetTxStroke","BrushNetTxFill",
-            "BrushDeltaGrowthFg","BrushDeltaShrinkFg","BrushDeltaNewFg",
-            "BrushBadgeTcpBg","BrushBadgeTcpFg","BrushBadgeUdpBg","BrushBadgeUdpFg",
-            "BrushStateEstBg","BrushStateEstFg","BrushStateListenBg","BrushStateListenFg"
-        )) {
-            if ($window.Resources.Contains($key)) {
+        foreach ($key in @($window.Resources.Keys)) {
+            if ($key -is [string] -and ($key.StartsWith("Brush") -or $key.StartsWith("ColTint_"))) {
                 $targetWin.Resources[$key] = $window.Resources[$key]
             }
         }
@@ -1127,7 +1126,6 @@ function Start-PSRPM {
 
     $updateLegendFilterUi = {
         $cur = $stateContainer.CategoryFilter
-        $bc = [System.Windows.Media.BrushConverter]::new()
         $pal = if ($stateContainer.ThemePalette) { $stateContainer.ThemePalette } else { [PSRPMThemeRegistry]::GetPalette($(if ($stateContainer.CurrentTheme) { $stateContainer.CurrentTheme } else { "Light" })) }
         $leg = $pal.Legend
         $svc = $leg.Service
@@ -1137,8 +1135,8 @@ function Start-PSRPM {
         $txtPri = $pal.Brushes.BrushTextPrimary
 
         if ($btnLegendAll) {
-            $btnLegendAll.Background = $bc.ConvertFromString($hdrBg)
-            $btnLegendAll.Foreground = $bc.ConvertFromString($txtPri)
+            $btnLegendAll.Background = &$getFrozenBrush $hdrBg
+            $btnLegendAll.Foreground = &$getFrozenBrush $txtPri
         }
 
         if (-not $cur) {
@@ -1154,34 +1152,34 @@ function Start-PSRPM {
                 $btnLegendAll.Content = "All"
                 $btnLegendAll.FontWeight = [System.Windows.FontWeights]::Bold
                 $btnLegendAll.BorderThickness = [System.Windows.Thickness]::new(2)
-                $btnLegendAll.BorderBrush = $bc.ConvertFromString($leg.AllActiveBorder)
+                $btnLegendAll.BorderBrush = &$getFrozenBrush $leg.AllActiveBorder
                 $btnLegendAll.Opacity = 1.0
             }
             if ($btnLegendService) {
                 $btnLegendService.Content = "Services"
                 $btnLegendService.FontWeight = [System.Windows.FontWeights]::Normal
                 $btnLegendService.BorderThickness = [System.Windows.Thickness]::new(1)
-                $btnLegendService.BorderBrush = $bc.ConvertFromString($svc.Border)
-                $btnLegendService.Background = $bc.ConvertFromString($svc.Bg)
-                $btnLegendService.Foreground = $bc.ConvertFromString($svc.Fg)
+                $btnLegendService.BorderBrush = &$getFrozenBrush $svc.Border
+                $btnLegendService.Background = &$getFrozenBrush $svc.Bg
+                $btnLegendService.Foreground = &$getFrozenBrush $svc.Fg
                 $btnLegendService.Opacity = 0.85
             }
             if ($btnLegendOwn) {
                 $btnLegendOwn.Content = "Own / User"
                 $btnLegendOwn.FontWeight = [System.Windows.FontWeights]::Normal
                 $btnLegendOwn.BorderThickness = [System.Windows.Thickness]::new(1)
-                $btnLegendOwn.BorderBrush = $bc.ConvertFromString($own.Border)
-                $btnLegendOwn.Background = $bc.ConvertFromString($own.Bg)
-                $btnLegendOwn.Foreground = $bc.ConvertFromString($own.Fg)
+                $btnLegendOwn.BorderBrush = &$getFrozenBrush $own.Border
+                $btnLegendOwn.Background = &$getFrozenBrush $own.Bg
+                $btnLegendOwn.Foreground = &$getFrozenBrush $own.Fg
                 $btnLegendOwn.Opacity = 0.85
             }
             if ($btnLegendPackaged) {
                 $btnLegendPackaged.Content = "Packaged / WebView"
                 $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Normal
                 $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(1)
-                $btnLegendPackaged.BorderBrush = $bc.ConvertFromString($pkg.Border)
-                $btnLegendPackaged.Background = $bc.ConvertFromString($pkg.Bg)
-                $btnLegendPackaged.Foreground = $bc.ConvertFromString($pkg.Fg)
+                $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.Border
+                $btnLegendPackaged.Background = &$getFrozenBrush $pkg.Bg
+                $btnLegendPackaged.Foreground = &$getFrozenBrush $pkg.Fg
                 $btnLegendPackaged.Opacity = 0.85
             }
         } else {
@@ -1191,7 +1189,7 @@ function Start-PSRPM {
                 $btnLegendAll.Content = "All"
                 $btnLegendAll.FontWeight = [System.Windows.FontWeights]::Normal
                 $btnLegendAll.BorderThickness = [System.Windows.Thickness]::new(1)
-                $btnLegendAll.BorderBrush = $bc.ConvertFromString($leg.AllIdleBorder)
+                $btnLegendAll.BorderBrush = &$getFrozenBrush $leg.AllIdleBorder
                 $btnLegendAll.Opacity = 0.45
             }
 
@@ -1199,99 +1197,99 @@ function Start-PSRPM {
                 if ($txtFilterLegendLabel) {
                     $txtFilterLegendLabel.Text = "ACTIVE FILTER:"
                     $txtFilterLegendLabel.FontWeight = [System.Windows.FontWeights]::Bold
-                    $txtFilterLegendLabel.Foreground = $bc.ConvertFromString($svc.ActiveText)
+                    $txtFilterLegendLabel.Foreground = &$getFrozenBrush $svc.ActiveText
                 }
                 if ($btnLegendService) {
                     $btnLegendService.Content = "[ Services ]"
                     $btnLegendService.FontWeight = [System.Windows.FontWeights]::Bold
                     $btnLegendService.BorderThickness = [System.Windows.Thickness]::new(2)
-                    $btnLegendService.BorderBrush = $bc.ConvertFromString($svc.ActiveBorder)
-                    $btnLegendService.Background = $bc.ConvertFromString($svc.ActiveBg)
-                    $btnLegendService.Foreground = $bc.ConvertFromString($svc.Fg)
+                    $btnLegendService.BorderBrush = &$getFrozenBrush $svc.ActiveBorder
+                    $btnLegendService.Background = &$getFrozenBrush $svc.ActiveBg
+                    $btnLegendService.Foreground = &$getFrozenBrush $svc.Fg
                     $btnLegendService.Opacity = 1.0
                 }
                 if ($btnLegendOwn) {
                     $btnLegendOwn.Content = "Own / User"
                     $btnLegendOwn.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendOwn.BorderThickness = [System.Windows.Thickness]::new(1)
-                    $btnLegendOwn.BorderBrush = $bc.ConvertFromString($own.Border)
-                    $btnLegendOwn.Background = $bc.ConvertFromString($own.Bg)
-                    $btnLegendOwn.Foreground = $bc.ConvertFromString($own.Fg)
+                    $btnLegendOwn.BorderBrush = &$getFrozenBrush $own.Border
+                    $btnLegendOwn.Background = &$getFrozenBrush $own.Bg
+                    $btnLegendOwn.Foreground = &$getFrozenBrush $own.Fg
                     $btnLegendOwn.Opacity = 0.45
                 }
                 if ($btnLegendPackaged) {
                     $btnLegendPackaged.Content = "Packaged / WebView"
                     $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(1)
-                    $btnLegendPackaged.BorderBrush = $bc.ConvertFromString($pkg.Border)
-                    $btnLegendPackaged.Background = $bc.ConvertFromString($pkg.Bg)
-                    $btnLegendPackaged.Foreground = $bc.ConvertFromString($pkg.Fg)
+                    $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.Border
+                    $btnLegendPackaged.Background = &$getFrozenBrush $pkg.Bg
+                    $btnLegendPackaged.Foreground = &$getFrozenBrush $pkg.Fg
                     $btnLegendPackaged.Opacity = 0.45
                 }
             } elseif ($cur -eq "Own") {
                 if ($txtFilterLegendLabel) {
                     $txtFilterLegendLabel.Text = "ACTIVE FILTER:"
                     $txtFilterLegendLabel.FontWeight = [System.Windows.FontWeights]::Bold
-                    $txtFilterLegendLabel.Foreground = $bc.ConvertFromString($own.ActiveText)
+                    $txtFilterLegendLabel.Foreground = &$getFrozenBrush $own.ActiveText
                 }
                 if ($btnLegendService) {
                     $btnLegendService.Content = "Services"
                     $btnLegendService.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendService.BorderThickness = [System.Windows.Thickness]::new(1)
-                    $btnLegendService.BorderBrush = $bc.ConvertFromString($svc.Border)
-                    $btnLegendService.Background = $bc.ConvertFromString($svc.Bg)
-                    $btnLegendService.Foreground = $bc.ConvertFromString($svc.Fg)
+                    $btnLegendService.BorderBrush = &$getFrozenBrush $svc.Border
+                    $btnLegendService.Background = &$getFrozenBrush $svc.Bg
+                    $btnLegendService.Foreground = &$getFrozenBrush $svc.Fg
                     $btnLegendService.Opacity = 0.45
                 }
                 if ($btnLegendOwn) {
                     $btnLegendOwn.Content = "[ Own / User ]"
                     $btnLegendOwn.FontWeight = [System.Windows.FontWeights]::Bold
                     $btnLegendOwn.BorderThickness = [System.Windows.Thickness]::new(2)
-                    $btnLegendOwn.BorderBrush = $bc.ConvertFromString($own.ActiveBorder)
-                    $btnLegendOwn.Background = $bc.ConvertFromString($own.ActiveBg)
-                    $btnLegendOwn.Foreground = $bc.ConvertFromString($own.Fg)
+                    $btnLegendOwn.BorderBrush = &$getFrozenBrush $own.ActiveBorder
+                    $btnLegendOwn.Background = &$getFrozenBrush $own.ActiveBg
+                    $btnLegendOwn.Foreground = &$getFrozenBrush $own.Fg
                     $btnLegendOwn.Opacity = 1.0
                 }
                 if ($btnLegendPackaged) {
                     $btnLegendPackaged.Content = "Packaged / WebView"
                     $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(1)
-                    $btnLegendPackaged.BorderBrush = $bc.ConvertFromString($pkg.Border)
-                    $btnLegendPackaged.Background = $bc.ConvertFromString($pkg.Bg)
-                    $btnLegendPackaged.Foreground = $bc.ConvertFromString($pkg.Fg)
+                    $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.Border
+                    $btnLegendPackaged.Background = &$getFrozenBrush $pkg.Bg
+                    $btnLegendPackaged.Foreground = &$getFrozenBrush $pkg.Fg
                     $btnLegendPackaged.Opacity = 0.45
                 }
             } elseif ($cur -eq "Packaged") {
                 if ($txtFilterLegendLabel) {
                     $txtFilterLegendLabel.Text = "ACTIVE FILTER:"
                     $txtFilterLegendLabel.FontWeight = [System.Windows.FontWeights]::Bold
-                    $txtFilterLegendLabel.Foreground = $bc.ConvertFromString($pkg.ActiveText)
+                    $txtFilterLegendLabel.Foreground = &$getFrozenBrush $pkg.ActiveText
                 }
                 if ($btnLegendService) {
                     $btnLegendService.Content = "Services"
                     $btnLegendService.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendService.BorderThickness = [System.Windows.Thickness]::new(1)
-                    $btnLegendService.BorderBrush = $bc.ConvertFromString($svc.Border)
-                    $btnLegendService.Background = $bc.ConvertFromString($svc.Bg)
-                    $btnLegendService.Foreground = $bc.ConvertFromString($svc.Fg)
+                    $btnLegendService.BorderBrush = &$getFrozenBrush $svc.Border
+                    $btnLegendService.Background = &$getFrozenBrush $svc.Bg
+                    $btnLegendService.Foreground = &$getFrozenBrush $svc.Fg
                     $btnLegendService.Opacity = 0.45
                 }
                 if ($btnLegendOwn) {
                     $btnLegendOwn.Content = "Own / User"
                     $btnLegendOwn.FontWeight = [System.Windows.FontWeights]::Normal
                     $btnLegendOwn.BorderThickness = [System.Windows.Thickness]::new(1)
-                    $btnLegendOwn.BorderBrush = $bc.ConvertFromString($own.Border)
-                    $btnLegendOwn.Background = $bc.ConvertFromString($own.Bg)
-                    $btnLegendOwn.Foreground = $bc.ConvertFromString($own.Fg)
+                    $btnLegendOwn.BorderBrush = &$getFrozenBrush $own.Border
+                    $btnLegendOwn.Background = &$getFrozenBrush $own.Bg
+                    $btnLegendOwn.Foreground = &$getFrozenBrush $own.Fg
                     $btnLegendOwn.Opacity = 0.45
                 }
                 if ($btnLegendPackaged) {
                     $btnLegendPackaged.Content = "[ Packaged ]"
                     $btnLegendPackaged.FontWeight = [System.Windows.FontWeights]::Bold
                     $btnLegendPackaged.BorderThickness = [System.Windows.Thickness]::new(2)
-                    $btnLegendPackaged.BorderBrush = $bc.ConvertFromString($pkg.ActiveBorder)
-                    $btnLegendPackaged.Background = $bc.ConvertFromString($pkg.ActiveBg)
-                    $btnLegendPackaged.Foreground = $bc.ConvertFromString($pkg.Fg)
+                    $btnLegendPackaged.BorderBrush = &$getFrozenBrush $pkg.ActiveBorder
+                    $btnLegendPackaged.Background = &$getFrozenBrush $pkg.ActiveBg
+                    $btnLegendPackaged.Foreground = &$getFrozenBrush $pkg.Fg
                     $btnLegendPackaged.Opacity = 1.0
                 }
             }
@@ -1709,13 +1707,41 @@ function Start-PSRPM {
             if ($chkLogAutoScroll) { $chkLogAutoScroll.IsChecked = $true }
         })
     }
-    if ($btnCopyLog)       { $btnCopyLog.add_Click({ if ($txtLogConsole -and $txtLogConsole.Text) { [System.Windows.Clipboard]::SetText($txtLogConsole.Text) } }) }
+    $copyToClipboardSafe = {
+        param([string]$text, [string]$auditCategory = "", [string]$auditMessage = "")
+        if ([string]::IsNullOrEmpty($text)) { return $false }
+        $copied = $false
+        $lastErr = $null
+        for ($attempt = 0; $attempt -lt 3; $attempt++) {
+            try {
+                [System.Windows.Clipboard]::SetText($text)
+                $copied = $true
+                break
+            } catch {
+                $lastErr = $_
+                if ($attempt -lt 2) {
+                    [System.Threading.Thread]::Sleep((($attempt + 1) * 15))
+                }
+            }
+        }
+        if ($copied) {
+            if ($auditCategory -and $auditMessage) {
+                &$writeAuditLog $auditCategory $auditMessage
+            }
+            return $true
+        }
+        $errDetail = if ($lastErr -and $lastErr.Exception) { $lastErr.Exception.Message } else { "Clipboard busy" }
+        &$writeAuditLog "WARN" "Clipboard copy failed after retries: $errDetail"
+        return $false
+    }
+    if ($btnCopyLog)       { $btnCopyLog.add_Click({ if ($txtLogConsole -and $txtLogConsole.Text) { [void](&$copyToClipboardSafe $txtLogConsole.Text "" "") } }) }
 
     # 12. Process & Service Operations Dispatcher
     $menuConfirmKill      = $window.FindName("MenuConfirmKill")
     $menuSavePreferences  = $window.FindName("MenuSavePreferences")
     $menuResetPreferences = $window.FindName("MenuResetPreferences")
     $jssAction = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+    $jssAction.MaxJsonLength = 10485760
 
     # 12A. Customizable Process Columns Engine (Visibility, Ordering, Widths, Header Menu & Picker Dialog)
     $colCatalog = Get-PSRPMColumnCatalog
@@ -1990,7 +2016,6 @@ function Start-PSRPM {
                 IsChecked      = $initChecked
                 RowVisibility  = "Visible"
             }
-            $rowObj.PSObject.Properties['IsChecked'] | Out-Null
             $itemByKey[$ck] = $rowObj
             $availItems.Add($rowObj)
         }
@@ -2444,6 +2469,70 @@ function Start-PSRPM {
         return $window
     }
 
+    $showMsgSafe = {
+        param($primaryOwner, $fallbackOwner, [string]$msgText, [string]$msgTitle, $msgBtn, $msgImg)
+        $resolvedOwner = if ($primaryOwner -and $primaryOwner.IsLoaded -and $primaryOwner.IsVisible) {
+            $primaryOwner
+        } elseif ($fallbackOwner -and $fallbackOwner.IsLoaded -and $fallbackOwner.IsVisible) {
+            $fallbackOwner
+        } else {
+            $null
+        }
+        if ($resolvedOwner) {
+            return [System.Windows.MessageBox]::Show($resolvedOwner, $msgText, $msgTitle, $msgBtn, $msgImg)
+        }
+        return [System.Windows.MessageBox]::Show($msgText, $msgTitle, $msgBtn, $msgImg)
+    }
+
+    $jumpToProcessInMainGrid = {
+        param(
+            [int]$pidVal,
+            [bool]$openTcpProps = $false,
+            [string]$procNameHint = "",
+            $msgOwner = $null,
+            [bool]$activateWindow = $false
+        )
+        $resolvedOwner = if ($msgOwner -and $msgOwner.IsLoaded -and $msgOwner.IsVisible) { $msgOwner } else { $window }
+        if ($pidVal -le 0) {
+            &$showMsgSafe $resolvedOwner $window "Kernel/TIME_WAIT endpoint (PID $pidVal) does not belong to an active process." "PSRPM - No Owning Process" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Information) | Out-Null
+            return
+        }
+        if (-not $engineHandle.ProcessMap.ContainsKey($pidVal)) {
+            $procDesc = if ($procNameHint) { "'$procNameHint' (PID $pidVal)" } else { "PID $pidVal" }
+            &$showMsgSafe $resolvedOwner $window "Process $procDesc is no longer running in the process tree." "PSRPM - Process Not Found" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Information) | Out-Null
+            return
+        }
+        $targetVm = $engineHandle.ProcessMap[$pidVal]
+        if (-not $openTcpProps -and $mainTabs -and $mainTabs.SelectedIndex -ne 0) {
+            $mainTabs.SelectedIndex = 0
+        }
+        $currPid = $targetVm.ParentPID
+        $guard = 0
+        while ($currPid -gt 0 -and $engineHandle.ProcessMap.ContainsKey($currPid) -and $guard -lt 30) {
+            $parentVm = $engineHandle.ProcessMap[$currPid]
+            $parentVm.IsExpanded = $true
+            $parentVm.UpdateExpanderGeometry()
+            $currPid = $parentVm.ParentPID
+            $guard++
+        }
+        if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
+        if ($gridProcesses.Items -and -not $gridProcesses.Items.Contains($targetVm)) {
+            if ($txtSearch) { $txtSearch.Text = "" }
+            $stateContainer.FilterText     = ""
+            $stateContainer.CategoryFilter = ""
+            if ($updateLegendFilterUi) { &$updateLegendFilterUi }
+            if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
+        }
+        if ($gridProcesses.SelectedItems.Count -gt 1) { $gridProcesses.SelectedItems.Clear() }
+        $gridProcesses.SelectedItem = $targetVm
+        if (-not $openTcpProps) { $gridProcesses.ScrollIntoView($targetVm) }
+        if ($activateWindow -and $window) { [void]$window.Activate() }
+        if ($openTcpProps -and $gridProcesses.SelectedItem -eq $targetVm) {
+            $script:PendingPropTabIndex = 4
+            &$actionShowProperties
+        }
+    }
+
     $invokeProcessAction = {
         param(
             [string]$actionName,
@@ -2479,13 +2568,11 @@ function Start-PSRPM {
             $tName = [string]$singleVm.Name
 
             if ($tPid -le 4 -and $actionName -in @("KillProcess", "KillTree", "SuspendProcess", "CreateDump")) {
-                [System.Windows.MessageBox]::Show(
-                    $ownerWin,
-                    "Cannot perform '$actionName' on critical Windows kernel process '$tName' (PID $tPid).",
-                    "PSRPM - Protected Kernel Process",
-                    [System.Windows.MessageBoxButton]::OK,
-                    [System.Windows.MessageBoxImage]::Warning
-                ) | Out-Null
+                &$showMsgSafe $ownerWin $window `
+                    "Cannot perform '$actionName' on critical Windows kernel process '$tName' (PID $tPid)." `
+                    "PSRPM - Protected Kernel Process" `
+                    ([System.Windows.MessageBoxButton]::OK) `
+                    ([System.Windows.MessageBoxImage]::Warning) | Out-Null
                 return
             }
 
@@ -2496,13 +2583,11 @@ function Start-PSRPM {
                 } else {
                     "Are you sure you want to terminate '$tName' (PID $tPid) on $($stateContainer.TargetDisplayName)?"
                 }
-                $confirm = [System.Windows.MessageBox]::Show(
-                    $ownerWin,
-                    $promptMsg,
-                    "PSRPM - Confirm Process Termination",
-                    [System.Windows.MessageBoxButton]::YesNo,
-                    [System.Windows.MessageBoxImage]::Warning
-                )
+                $confirm = &$showMsgSafe $ownerWin $window `
+                    $promptMsg `
+                    "PSRPM - Confirm Process Termination" `
+                    ([System.Windows.MessageBoxButton]::YesNo) `
+                    ([System.Windows.MessageBoxImage]::Warning)
                 if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
             }
 
@@ -2520,17 +2605,19 @@ function Start-PSRPM {
                 DumpType           = $dumpType
             }
 
-            $localJss   = $jssAction
-            $localLog   = $writeAuditLog
-            $localState = $stateContainer
-            $localAfter = $afterCallback
-            $localAct   = $actionName
-            $localOwner = $ownerWin
+            $localJss      = $jssAction
+            $localLog      = $writeAuditLog
+            $localState    = $stateContainer
+            $localAfter    = $afterCallback
+            $localAct      = $actionName
+            $localOwner    = $ownerWin
+            $localWindow   = $window
+            $localMsgSafe  = $showMsgSafe
+            $localCopyClip = $copyToClipboardSafe
 
             & $engineHandle.SendCommand $cmdPayload ({
                 param($res)
                 $actSuccess = $false
-                $msgOwner = if ($localOwner -and $localOwner.IsLoaded -and $localOwner.IsVisible) { $localOwner } else { $window }
                 if ($res.Success -and $res.PayloadJson) {
                     $parsed = $localJss.DeserializeObject($res.PayloadJson)
                     if ($parsed['Success']) {
@@ -2538,22 +2625,20 @@ function Start-PSRPM {
                         &$localLog "SUCCESS" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
                         if ($localAct -eq "CreateDump" -and $parsed['DumpPath']) {
                             $dPath = [string]$parsed['DumpPath']
-                            try { [System.Windows.Clipboard]::SetText($dPath) } catch { }
-                            [System.Windows.MessageBox]::Show(
-                                $msgOwner,
-                                "Process memory dump created successfully!`n`nRemote Path:`n$dPath`n`n(The remote file path has been copied to your clipboard).",
-                                "PSRPM - Memory Dump Created",
-                                [System.Windows.MessageBoxButton]::OK,
-                                [System.Windows.MessageBoxImage]::Information
-                            ) | Out-Null
+                            [void](&$localCopyClip $dPath "" "")
+                            &$localMsgSafe $localOwner $localWindow `
+                                "Process memory dump created successfully!`n`nRemote Path:`n$dPath`n`n(The remote file path has been copied to your clipboard)." `
+                                "PSRPM - Memory Dump Created" `
+                                ([System.Windows.MessageBoxButton]::OK) `
+                                ([System.Windows.MessageBoxImage]::Information) | Out-Null
                         }
                     } else {
                         &$localLog "WARN" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
-                        [System.Windows.MessageBox]::Show($msgOwner, $parsed['Message'], "PSRPM - Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                        &$localMsgSafe $localOwner $localWindow ([string]$parsed['Message']) "PSRPM - Operation Warning" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Warning) | Out-Null
                     }
                 } else {
                     &$localLog "ERROR" "$localAct failed: $($res.Error)"
-                    [System.Windows.MessageBox]::Show($msgOwner, "Action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                    &$localMsgSafe $localOwner $localWindow "Action '$localAct' failed:`n$($res.Error)" "PSRPM - Error" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Error) | Out-Null
                 }
                 [void]$localState.WakeEvent.Set()
                 if ($localAfter) { & $localAfter $actSuccess }
@@ -2673,19 +2758,20 @@ function Start-PSRPM {
             DumpType    = $dumpType
         }
 
-        $localJss   = $jssAction
-        $localLog   = $writeAuditLog
-        $localState = $stateContainer
-        $localAfter = $afterCallback
-        $localAct   = $actionName
-        $localTotal = $dispatchTargets.Count
-        $localOwner = $ownerWin
+        $localJss     = $jssAction
+        $localLog     = $writeAuditLog
+        $localState   = $stateContainer
+        $localAfter   = $afterCallback
+        $localAct     = $actionName
+        $localTotal   = $dispatchTargets.Count
+        $localOwner   = $ownerWin
+        $localWindow  = $window
+        $localMsgSafe = $showMsgSafe
 
         & $engineHandle.SendCommand $cmdPayload ({
             param($res)
             $okCount = 0
             $failMsgs = [System.Collections.Generic.List[string]]::new()
-            $msgOwner = if ($localOwner -and $localOwner.IsLoaded -and $localOwner.IsVisible) { $localOwner } else { $window }
             if ($res.Success -and $res.PayloadJson) {
                 $parsedArr = $localJss.DeserializeObject($res.PayloadJson)
                 foreach ($item in $parsedArr) {
@@ -2713,11 +2799,11 @@ function Start-PSRPM {
                         [void]$previewErr.Add("  ...and $($failMsgs.Count - 10) more (see Audit Log).")
                     }
                     $summaryErr = "Batch '$localAct': $okCount succeeded, $($failMsgs.Count) failed:`n`n" + ($previewErr -join "`n")
-                    [System.Windows.MessageBox]::Show($msgOwner, $summaryErr, "PSRPM - Batch Operation Warning", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning) | Out-Null
+                    &$localMsgSafe $localOwner $localWindow $summaryErr "PSRPM - Batch Operation Warning" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Warning) | Out-Null
                 }
             } else {
                 &$localLog "ERROR" "Batch $localAct failed: $($res.Error)"
-                [System.Windows.MessageBox]::Show($msgOwner, "Batch action '$localAct' failed:`n$($res.Error)", "PSRPM - Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                &$localMsgSafe $localOwner $localWindow "Batch action '$localAct' failed:`n$($res.Error)" "PSRPM - Error" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Error) | Out-Null
             }
             [void]$localState.WakeEvent.Set()
             if ($localAfter) { & $localAfter ($okCount -gt 0) }
@@ -2803,15 +2889,13 @@ function Start-PSRPM {
     $actionCopyCmdLine = {
         $sel = $gridProcesses.SelectedItem
         if ($sel -and $sel.CommandLine) {
-            [System.Windows.Clipboard]::SetText($sel.CommandLine)
-            &$writeAuditLog "CLIPBOARD" "Copied command line for $($sel.Name) (PID $($sel.PID))."
+            [void](&$copyToClipboardSafe $sel.CommandLine "CLIPBOARD" "Copied command line for $($sel.Name) (PID $($sel.PID)).")
         }
     }
     $actionCopyPath = {
         $sel = $gridProcesses.SelectedItem
         if ($sel -and $sel.Path) {
-            [System.Windows.Clipboard]::SetText($sel.Path)
-            &$writeAuditLog "CLIPBOARD" "Copied executable path for $($sel.Name) (PID $($sel.PID))."
+            [void](&$copyToClipboardSafe $sel.Path "CLIPBOARD" "Copied executable path for $($sel.Name) (PID $($sel.PID)).")
         }
     }
 
@@ -2912,14 +2996,25 @@ function Start-PSRPM {
                 $localState.ForceFullSync = $true
                 [void]$localState.WakeEvent.Set()
             }
+            $svcSuccess = $false
             if ($res.Success -and $res.PayloadJson) {
                 $parsed = $localJss.DeserializeObject($res.PayloadJson)
-                &$localLog "SERVICE" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
+                if ($parsed -and $parsed['Success']) {
+                    $svcSuccess = $true
+                    &$localLog "SERVICE" "$($parsed['Message']) ($($res.ElapsedMs)ms)"
+                } else {
+                    $errMsg = if ($parsed -and $parsed['Message']) { [string]$parsed['Message'] } else { "Unknown service control failure." }
+                    &$localLog "WARN" "$errMsg ($($res.ElapsedMs)ms)"
+                }
             } else {
                 &$localLog "ERROR" "Service action '$localSvcOp' on '$localSName' failed: $($res.Error)"
             }
             if ($localCb) {
-                try { &$localCb $res } catch {}
+                try {
+                    &$localCb $res $svcSuccess
+                } catch {
+                    try { &$localLog "WARN" "Service UI callback failed: $($_.Exception.Message)" } catch {}
+                }
             }
         }.GetNewClosure())
     }
@@ -2982,22 +3077,8 @@ function Start-PSRPM {
 
     $actionGoToServiceProcess = {
         $selSvc = $gridServices.SelectedItem
-        if ($selSvc -and $selSvc.PID -gt 0 -and $engineHandle.ProcessMap.ContainsKey($selSvc.PID)) {
-            $targetVm = $engineHandle.ProcessMap[$selSvc.PID]
-            $mainTabs = $window.FindName("MainTabControl")
-            if ($mainTabs) { $mainTabs.SelectedIndex = 0 }
-            $currPid = $targetVm.ParentPID
-            $guard = 0
-            while ($currPid -gt 0 -and $engineHandle.ProcessMap.ContainsKey($currPid) -and $guard -lt 30) {
-                $parentVm = $engineHandle.ProcessMap[$currPid]
-                $parentVm.IsExpanded = $true
-                $parentVm.UpdateExpanderGeometry()
-                $currPid = $parentVm.ParentPID
-                $guard++
-            }
-            if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
-            $gridProcesses.SelectedItem = $targetVm
-            $gridProcesses.ScrollIntoView($targetVm)
+        if ($selSvc -and $selSvc.PID -gt 0) {
+            &$jumpToProcessInMainGrid ([int]$selSvc.PID) $false ([string]$selSvc.DisplayName) $window $false
         }
     }
 
@@ -3031,16 +3112,18 @@ function Start-PSRPM {
         $svcWin.FindName("TxtDlgServiceName").Text = $selSvc.Name
         $svcWin.FindName("TxtDlgPid").Text = if ($selSvc.PID -gt 0) { [string]$selSvc.PID } else { "None" }
 
+        $getSvcBadgeKey = {
+            param([string]$st)
+            if ($st -eq "Running") { return "BrushSvcRunningBg" }
+            if ($st -eq "Paused" -or ($st -and $st.EndsWith("..."))) { return "BrushSvcPausedBg" }
+            return "BrushSvcStoppedBg"
+        }
+
         $badgeStatus = $svcWin.FindName("BadgeDlgStatus")
         $txtStatus   = $svcWin.FindName("TxtDlgStatus")
         $txtStatus.Text = $selSvc.Status.ToUpper()
-        $bc = [System.Windows.Media.BrushConverter]::new()
-        if ($selSvc.Status -eq "Running") {
-            $badgeStatus.Background = $bc.ConvertFromString("#16A34A")
-        } elseif ($selSvc.Status -eq "Paused") {
-            $badgeStatus.Background = $bc.ConvertFromString("#D97706")
-        } else {
-            $badgeStatus.Background = $bc.ConvertFromString("#64748B")
+        if ($badgeStatus) {
+            $badgeStatus.SetResourceReference([System.Windows.Controls.Border]::BackgroundProperty, (&$getSvcBadgeKey ([string]$selSvc.Status)))
         }
 
         $txtDesc = $svcWin.FindName("TxtDlgDescription")
@@ -3144,15 +3227,7 @@ function Start-PSRPM {
                 $txtStatus.Text = $curStatus.ToUpper()
             }
             if ($badgeStatus) {
-                if ($curStatus -eq "Running") {
-                    $badgeStatus.Background = $bc.ConvertFromString("#16A34A")
-                } elseif ($curStatus -eq "Paused") {
-                    $badgeStatus.Background = $bc.ConvertFromString("#D97706")
-                } elseif ($curStatus.EndsWith("...")) {
-                    $badgeStatus.Background = $bc.ConvertFromString("#EAB308")
-                } else {
-                    $badgeStatus.Background = $bc.ConvertFromString("#64748B")
-                }
+                $badgeStatus.SetResourceReference([System.Windows.Controls.Border]::BackgroundProperty, (&$getSvcBadgeKey $curStatus))
             }
             if ($txtDlgPid) {
                 $txtDlgPid.Text = if ($curPid -gt 0) { [string]$curPid } else { "None" }
@@ -3180,16 +3255,24 @@ function Start-PSRPM {
             }
             &$updateSvcDialogUi $inFlightText
 
-            &$localInvoke $op $targetSvc ({
-                param($res)
-                if ($engineHandle.ServicesMap.ContainsKey($targetSvc.Name)) {
-                    $live = $engineHandle.ServicesMap[$targetSvc.Name]
-                    &$updateSvcDialogUi $live.Status $live.PID
-                } else {
-                    $exp = if ($op -eq "Start") { "Running" } elseif ($op -eq "Stop") { "Stopped" } else { "Running" }
-                    &$updateSvcDialogUi $exp
-                }
-            })
+            $svcDlgCb = & {
+                param($cEngine, $cSvcName, $cOp, $cUiFn, $cWin)
+                return ({
+                    param($res, [bool]$ok = $false)
+                    if ($cWin -and -not $cWin.IsLoaded) { return }
+                    if ($cEngine.ServicesMap.ContainsKey($cSvcName)) {
+                        $live = $cEngine.ServicesMap[$cSvcName]
+                        &$cUiFn $live.Status $live.PID
+                    } elseif ($ok) {
+                        $exp = if ($cOp -eq "Start") { "Running" } elseif ($cOp -eq "Stop") { "Stopped" } else { "Running" }
+                        &$cUiFn $exp
+                    } else {
+                        &$cUiFn
+                    }
+                }.GetNewClosure())
+            } $engineHandle ([string]$targetSvc.Name) $op $updateSvcDialogUi $localSvcWin
+
+            &$localInvoke $op $targetSvc $svcDlgCb
         }
 
         if ($btnDlgStart) {
@@ -3255,8 +3338,7 @@ function Start-PSRPM {
         $ctxCopyServiceName.add_Click({
             $sel = $gridServices.SelectedItem
             if ($sel -and $sel.Name) {
-                [System.Windows.Clipboard]::SetText($sel.Name)
-                &$writeAuditLog "CLIPBOARD" "Copied service name '$($sel.Name)'."
+                [void](&$copyToClipboardSafe $sel.Name "CLIPBOARD" "Copied service name '$($sel.Name)'.")
             }
         })
     }
@@ -3585,7 +3667,8 @@ function Start-PSRPM {
                             }
                             $sigBlock = $localPropWin.FindName("PropSignature")
                             $sigBlock.Text = $sigTxt
-                            $sigBlock.Foreground = if ($sig['Status'] -eq "Valid") { "#16A34A" } else { "#DC2626" }
+                            $sigResKey = if ($sig['Status'] -eq "Valid") { "BrushSigSignedFg" } else { "BrushSigUnsignedFg" }
+                            $sigBlock.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, $sigResKey)
                         }
 
                         # Convert dictionary arrays to PSCustomObjects for closure-safe DataGrid binding & sorting
@@ -3713,7 +3796,7 @@ function Start-PSRPM {
                 $txtCpu = $propWin.FindName("PropCpu")
                 if ($txtCpu) {
                     $txtCpu.Text = "CPU Usage: Process Exited (PID $targetPid)"
-                    $txtCpu.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#DC2626")
+                    $txtCpu.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, "BrushStatusExitedFg")
                 }
                 return
             }
@@ -3725,11 +3808,8 @@ function Start-PSRPM {
             if ($txtCpu) {
                 $cpuDisplay = if (-not $liveTargetVm.CPUFormatted) { "0.00%" } elseif ($liveTargetVm.CPUFormatted -eq "Suspended") { "Suspended" } else { "$($liveTargetVm.CPUFormatted)%" }
                 $txtCpu.Text = "CPU Usage: $cpuDisplay (Base Priority: $($liveTargetVm.BasePriority))"
-                $txtCpu.Foreground = if ($liveTargetVm.CPU -gt 0) {
-                    [System.Windows.Media.BrushConverter]::new().ConvertFromString("#16A34A")
-                } else {
-                    [System.Windows.Media.BrushConverter]::new().ConvertFromString("#475569")
-                }
+                $cpuFgKey = if ($liveTargetVm.CPU -gt 0) { "BrushStatusActiveFg" } else { "BrushStatusIdleFg" }
+                $txtCpu.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, $cpuFgKey)
             }
 
             # 2. Update Memory Counters (Working Set & Private Bytes)
@@ -3799,10 +3879,10 @@ function Start-PSRPM {
 
         # Wire Modal Buttons
         $propWin.FindName("BtnCopyPath").add_Click({
-            if ($selectedVm.Path) { [System.Windows.Clipboard]::SetText($selectedVm.Path) }
+            if ($selectedVm.Path) { [void](&$copyToClipboardSafe $selectedVm.Path "" "") }
         })
         $propWin.FindName("BtnCopyCmd").add_Click({
-            if ($selectedVm.CommandLine) { [System.Windows.Clipboard]::SetText($selectedVm.CommandLine) }
+            if ($selectedVm.CommandLine) { [void](&$copyToClipboardSafe $selectedVm.CommandLine "" "") }
         })
         $propWin.FindName("BtnVerifySig").add_Click({
             & $runDeepInspect $true "Core"
@@ -3823,13 +3903,17 @@ function Start-PSRPM {
         })
         $btnSuspendResume.add_Click({
             $act = if ($selectedVm.Status -eq "Suspended") { "ResumeProcess" } else { "SuspendProcess" }
-            $localBtn = $btnSuspendResume
-            $localVm  = $selectedVm
-            $localRun = $runDeepInspect
-            &$invokeProcessAction $act $selectedVm "Normal" ({
-                $localBtn.Content = if ($localVm.Status -eq "Suspended") { "Suspend" } else { "Resume" }
-                & $localRun $false "Core"
-            })
+            $cb = & {
+                param($cBtn, $cAct, $cRun, $cWin)
+                return ({
+                    param([bool]$ok = $false)
+                    if (-not $ok) { return }
+                    if ($cWin -and -not $cWin.IsLoaded) { return }
+                    $cBtn.Content = if ($cAct -eq "SuspendProcess") { "Resume" } else { "Suspend" }
+                    & $cRun $false "Core"
+                }.GetNewClosure())
+            } $btnSuspendResume $act $runDeepInspect $propWin
+            &$invokeProcessAction $act $selectedVm "Normal" $cb
         })
         $btnPropCreateDump = $propWin.FindName("BtnPropCreateDump")
         if ($btnPropCreateDump) {
@@ -3918,7 +4002,7 @@ function Start-PSRPM {
 
         $copyPropHandleName = {
             if ($gridPropHandles.SelectedItem -and $gridPropHandles.SelectedItem.Name) {
-                [System.Windows.Clipboard]::SetText([string]$gridPropHandles.SelectedItem.Name)
+                [void](&$copyToClipboardSafe ([string]$gridPropHandles.SelectedItem.Name) "" "")
             }
         }
 
@@ -3931,7 +4015,7 @@ function Start-PSRPM {
         if ($ctxPropCopyVal) {
             $ctxPropCopyVal.add_Click({
                 if ($gridPropHandles.SelectedItem -and $gridPropHandles.SelectedItem.Handle) {
-                    [System.Windows.Clipboard]::SetText([string]$gridPropHandles.SelectedItem.Handle)
+                    [void](&$copyToClipboardSafe ([string]$gridPropHandles.SelectedItem.Handle) "" "")
                 }
             })
         }
@@ -3950,13 +4034,21 @@ function Start-PSRPM {
             })
         }
 
+        $mkCloseOnOkCb = {
+            param($cWin)
+            return ({
+                param([bool]$ok = $false)
+                if (-not $ok) { return }
+                if ($cWin -and $cWin.IsLoaded) { $cWin.Close() }
+            }.GetNewClosure())
+        }
         $propWin.FindName("BtnPropEndProcess").add_Click({
-            $localPropWin = $propWin
-            &$invokeProcessAction "KillProcess" $selectedVm "Normal" ({ $localPropWin.Close() })
+            $cb = &$mkCloseOnOkCb $propWin
+            &$invokeProcessAction "KillProcess" $selectedVm "Normal" $cb
         })
         $propWin.FindName("BtnPropEndTree").add_Click({
-            $localPropWin = $propWin
-            &$invokeProcessAction "KillTree" $selectedVm "Normal" ({ $localPropWin.Close() })
+            $cb = &$mkCloseOnOkCb $propWin
+            &$invokeProcessAction "KillTree" $selectedVm "Normal" $cb
         })
         $propWin.FindName("BtnCloseProp").add_Click({ $propWin.Close() })
 
@@ -4210,6 +4302,33 @@ function Start-PSRPM {
         })
     }
 
+    $syncTargetSwitchUi = {
+        param($tabObj)
+        $stateContainer.EnableNetEtw = $false
+        $stateContainer.NetEtwCap = 0
+        $stateContainer.NetEtwEventsPerSec = 0
+        if ($updateNetEtwUi) { & $updateNetEtwUi 0 0 }
+        if ($tabObj) {
+            $tabObj.ComputerName = $stateContainer.TargetDisplayName
+            $tabObj.Title        = $stateContainer.TargetDisplayName
+            $tabObj.Transport    = $stateContainer.TransportBadge
+            $tabObj.IsLocal      = ($stateContainer.ConnectionState -eq "LocalMode")
+            $tabObj.ConnState    = [string]$stateContainer.ConnectionState
+            if ($tabObj.TelemStats) {
+                $tabObj.TelemStats.TotalWireBytes  = 0L
+                $tabObj.TelemStats.TotalRawBytes   = 0L
+                $tabObj.TelemStats.TotalTicks      = 0L
+                $tabObj.TelemStats.TotalRttMs      = 0L
+                $tabObj.TelemStats.LastReceivedSeq = 0
+            }
+            $canClose = ($hostTabsCollection.Count -gt 1)
+            $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
+            $tabObj.UpdateVisualState($true, $curThemeMode, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
+        }
+        $window.Title = "PSRPM - PowerShell Remote Process Manager [$($stateContainer.TargetDisplayName)]"
+        if ($script:ResetActiveTabFeatureState) { &$script:ResetActiveTabFeatureState $tabObj }
+    }
+
     # Helper: Instantiate HostTabItemViewModel in Module Scope (Prevents DynamicModule class resolution errors)
     $fnCreateHostTabVm = {
         param([string]$tabId, [string]$compName, [string]$title, [string]$transport, [bool]$isLocal)
@@ -4356,48 +4475,22 @@ function Start-PSRPM {
                     UseSSL       = $useSslVal
                 }
 
-                $localConnWin = $connWin
-                $localWin     = $window
-                $localState   = $stateContainer
-                $localLog     = $writeAuditLog
-                $localComp    = $compName
-                $localTabsCol = $hostTabsCollection
-                $curTab       = $script:ActiveHostTab
-                $localUpdNet  = $updateNetEtwUi
-                $localResetTabFeat = { param($t) if ($script:ResetActiveTabFeatureState) { &$script:ResetActiveTabFeatureState $t } }
+                $localConnWin      = $connWin
+                $localLog          = $writeAuditLog
+                $localComp         = $compName
+                $curTab            = $script:ActiveHostTab
+                $localSyncTargetUi = $syncTargetSwitchUi
 
                 & $engineHandle.SendCommand $switchCmd ({
                     param($res)
                     try {
                         $localConnWin.IsEnabled = $true
                         if ($res.Success) {
-                            $localState.EnableNetEtw = $false
-                            $localState.NetEtwCap = 0
-                            $localState.NetEtwEventsPerSec = 0
-                            if ($localUpdNet) { & $localUpdNet 0 0 }
-                            if ($curTab) {
-                                $curTab.ComputerName = $localState.TargetDisplayName
-                                $curTab.Title        = $localState.TargetDisplayName
-                                $curTab.Transport    = $localState.TransportBadge
-                                $curTab.IsLocal      = ($localState.ConnectionState -eq "LocalMode")
-                                $curTab.ConnState    = [string]$localState.ConnectionState
-                                if ($curTab.TelemStats) {
-                                    $curTab.TelemStats.TotalWireBytes  = 0L
-                                    $curTab.TelemStats.TotalRawBytes   = 0L
-                                    $curTab.TelemStats.TotalTicks      = 0L
-                                    $curTab.TelemStats.TotalRttMs      = 0L
-                                    $curTab.TelemStats.LastReceivedSeq = 0
-                                }
-                                $canClose = ($localTabsCol.Count -gt 1)
-                                $curThemeMode = if ($localState.CurrentTheme) { [string]$localState.CurrentTheme } elseif ([bool]$localState.IsDarkTheme) { "Dark" } else { "Light" }
-                                $curTab.UpdateVisualState($true, $curThemeMode, $canClose, $localState.ConnectionState, [bool]$localState.IsPaused, $localState.PollLatencyMs)
-                            }
-                            $localWin.Title = "PSRPM - PowerShell Remote Process Manager [$($localState.TargetDisplayName)]"
-                            & $localResetTabFeat $curTab
+                            & $localSyncTargetUi $curTab
                             &$localLog "CONNECT" $res.Message
                             $localConnWin.Close()
                         } else {
-                            &$localLog "ERROR" "Failed to switch target: $($res.Error)"
+                            &$localLog "ERROR" "Failed to connect to '$localComp': $($res.Error)"
                             [System.Windows.MessageBox]::Show(
                                 $localConnWin,
                                 "Failed to connect to '$localComp':`n`n$($res.Error)`n`nTip: If WinRM remoting is not configured on this computer, choose 'Local Host Only' to monitor processes without WinRM.",
@@ -4446,25 +4539,13 @@ function Start-PSRPM {
             Port         = 0
             UseSSL       = $false
         }
-        $localWin     = $window
-        $localState   = $stateContainer
-        $localLog     = $writeAuditLog
-        $localTabsCol = $hostTabsCollection
-        $curTab       = $script:ActiveHostTab
-        $localResetTabFeat = { param($t) if ($script:ResetActiveTabFeatureState) { &$script:ResetActiveTabFeatureState $t } }
+        $localLog          = $writeAuditLog
+        $curTab            = $script:ActiveHostTab
+        $localSyncTargetUi = $syncTargetSwitchUi
         & $engineHandle.SendCommand $switchLocalCmd ({
             param($res)
             if ($res.Success) {
-                if ($curTab) {
-                    $curTab.ComputerName = $localState.TargetDisplayName
-                    $curTab.Title        = $localState.TargetDisplayName
-                    $curTab.Transport    = "LOCAL"
-                    $curTab.IsLocal      = $true
-                    $curThemeMode = if ($localState.CurrentTheme) { [string]$localState.CurrentTheme } elseif ([bool]$localState.IsDarkTheme) { "Dark" } else { "Light" }
-                    $curTab.UpdateVisualState($true, $curThemeMode, ($localTabsCol.Count -gt 1), "LocalMode", [bool]$localState.IsPaused, $localState.PollLatencyMs)
-                }
-                $localWin.Title = "PSRPM - PowerShell Remote Process Manager [$($localState.TargetDisplayName)]"
-                & $localResetTabFeat $curTab
+                & $localSyncTargetUi $curTab
                 &$localLog "CONNECT" $res.Message
             }
         }.GetNewClosure())
@@ -4992,8 +5073,7 @@ function Start-PSRPM {
         $cardMiniCpu.add_MouseLeftButtonDown({
             param($s, $e)
             if ($e.ClickCount -eq 2) {
-                $tabIdx = if ($script:ActiveSysInfoWin -and $script:ActiveSysInfoWin.IsLoaded) { 1 } else { 0 }
-                &$actionShowSystemInfo $tabIdx
+                &$actionShowSystemInfo 1
                 $e.Handled = $true
             }
         })
@@ -5002,8 +5082,7 @@ function Start-PSRPM {
         $cardMiniCommit.add_MouseLeftButtonDown({
             param($s, $e)
             if ($e.ClickCount -eq 2) {
-                $tabIdx = if ($script:ActiveSysInfoWin -and $script:ActiveSysInfoWin.IsLoaded) { 2 } else { 0 }
-                &$actionShowSystemInfo $tabIdx
+                &$actionShowSystemInfo 2
                 $e.Handled = $true
             }
         })
@@ -5013,6 +5092,16 @@ function Start-PSRPM {
             param($s, $e)
             if ($e.ClickCount -eq 2) {
                 &$actionShowSystemInfo 2
+                $e.Handled = $true
+            }
+        })
+    }
+    $txtTelemDiskRate = $window.FindName("TxtTelemDiskRate")
+    if ($txtTelemDiskRate) {
+        $txtTelemDiskRate.add_MouseLeftButtonDown({
+            param($s, $e)
+            if ($e.ClickCount -eq 2) {
+                &$actionShowSystemInfo 3
                 $e.Handled = $true
             }
         })
@@ -5263,33 +5352,9 @@ function Start-PSRPM {
     $goToProcessInTree = {
         $gridHandles = $script:FindHandleControls['GridHandleResults']
         if (-not $gridHandles -or -not $gridHandles.SelectedItem) { return }
-        $sel    = $gridHandles.SelectedItem
-        $pidVal = [int]$sel.PID
-
-        $mainTabs = $window.FindName("MainTabControl")
-        if ($mainTabs -and $mainTabs.SelectedIndex -ne 0) {
-            $mainTabs.SelectedIndex = 0
-        }
-
-        if ($engineHandle.ProcessMap.ContainsKey($pidVal)) {
-            $targetVm = $engineHandle.ProcessMap[$pidVal]
-            $currPid = $targetVm.ParentPID
-            $guard = 0
-            while ($currPid -gt 0 -and $engineHandle.ProcessMap.ContainsKey($currPid) -and $guard -lt 30) {
-                $parentVm = $engineHandle.ProcessMap[$currPid]
-                $parentVm.IsExpanded = $true
-                $parentVm.UpdateExpanderGeometry()
-                $currPid = $parentVm.ParentPID
-                $guard++
-            }
-            if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
-            $gridProcesses.SelectedItem = $targetVm
-            $gridProcesses.ScrollIntoView($targetVm)
-            $window.Activate()
-        } else {
-            $findOwner = if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsVisible) { $script:ActiveFindHandleWin } else { $window }
-            [System.Windows.MessageBox]::Show($findOwner, "Process '$($sel.ProcessName)' (PID $pidVal) is no longer active in the process tree.", "PSRPM - Process Not Found", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information) | Out-Null
-        }
+        $sel = $gridHandles.SelectedItem
+        $findOwner = if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsVisible) { $script:ActiveFindHandleWin } else { $window }
+        &$jumpToProcessInMainGrid ([int]$sel.PID) $false ([string]$sel.ProcessName) $findOwner $true
     }
 
     $copySelectedPath = {
@@ -5297,8 +5362,7 @@ function Start-PSRPM {
         if ($gridHandles -and $gridHandles.SelectedItem) {
             $sel = $gridHandles.SelectedItem
             if ($sel.Name) {
-                [System.Windows.Clipboard]::SetText([string]$sel.Name)
-                &$writeAuditLog "CLIPBOARD" "Copied object path '$($sel.Name)'."
+                [void](&$copyToClipboardSafe ([string]$sel.Name) "CLIPBOARD" "Copied object path '$($sel.Name)'.")
             }
         }
     }
@@ -5455,19 +5519,19 @@ function Start-PSRPM {
         if ($ellNetEtwDot -and $txtNetEtwBtn) {
             switch ($cap) {
                 1 {
-                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#0EA5E9")
+                    $ellNetEtwDot.Fill = &$getFrozenBrush "#0EA5E9"
                     $txtNetEtwBtn.Text = if ($evRate -gt 0) { "Net ETW ($evRate/s)" } else { "Net ETW: ON" }
                 }
                 2 {
-                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F59E0B")
+                    $ellNetEtwDot.Fill = &$getFrozenBrush "#F59E0B"
                     $txtNetEtwBtn.Text = "Net ETW (Paused)"
                 }
                 3 {
-                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+                    $ellNetEtwDot.Fill = &$getFrozenBrush "#64748B"
                     $txtNetEtwBtn.Text = "Net ETW (Admin)"
                 }
                 default {
-                    $ellNetEtwDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
+                    $ellNetEtwDot.Fill = &$getFrozenBrush "#94A3B8"
                     $txtNetEtwBtn.Text = if ($isEnabled) { "Net ETW..." } else { "Net ETW" }
                 }
             }
@@ -5486,52 +5550,51 @@ function Start-PSRPM {
                 if ($script:ActiveHostTab) { $script:ActiveHostTab.NetBannerDismissedCap = 0 }
                 $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Collapsed
             } elseif ($script:NetBannerDismissedCap -ne $cap) {
-                $bcNet = [System.Windows.Media.BrushConverter]::new()
                 $palBanner = if ($stateContainer.ThemePalette) { $stateContainer.ThemePalette } else { [PSRPMThemeRegistry]::GetPalette($(if ($stateContainer.CurrentTheme) { $stateContainer.CurrentTheme } else { "Light" })) }
                 $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Visible
                 if ($cap -eq 2) {
                     $c2 = $palBanner.Banner.Cap2
-                    $netEtwAlertBanner.Background  = $bcNet.ConvertFromString($c2.Bg)
-                    $netEtwAlertBanner.BorderBrush = $bcNet.ConvertFromString($c2.Border)
-                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = $bcNet.ConvertFromString($c2.BadgeBg) }
+                    $netEtwAlertBanner.Background  = &$getFrozenBrush $c2.Bg
+                    $netEtwAlertBanner.BorderBrush = &$getFrozenBrush $c2.Border
+                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = &$getFrozenBrush $c2.BadgeBg }
                     if ($txtNetEtwBannerBadge) { $txtNetEtwBannerBadge.Text = "CIRCUIT BREAKER" }
                     if ($txtNetEtwBannerMsg)   {
                         $txtNetEtwBannerMsg.Text = "Per-process Network ETW auto-paused after exceeding 25,000 events/sec ($evRate/s) to protect host CPU. Click Resume to restart."
-                        $txtNetEtwBannerMsg.Foreground = $bcNet.ConvertFromString($c2.Fg)
+                        $txtNetEtwBannerMsg.Foreground = &$getFrozenBrush $c2.Fg
                     }
                     if ($btnNetEtwResume) {
                         $btnNetEtwResume.Visibility  = [System.Windows.Visibility]::Visible
-                        $btnNetEtwResume.Background  = $bcNet.ConvertFromString($c2.BtnBg)
-                        $btnNetEtwResume.Foreground  = $bcNet.ConvertFromString($c2.BtnFg)
+                        $btnNetEtwResume.Background  = &$getFrozenBrush $c2.BtnBg
+                        $btnNetEtwResume.Foreground  = &$getFrozenBrush $c2.BtnFg
                     }
-                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = $bcNet.ConvertFromString($c2.Fg) }
-                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = $bcNet.ConvertFromString($c2.MutedFg) }
+                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = &$getFrozenBrush $c2.Fg }
+                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = &$getFrozenBrush $c2.MutedFg }
                 } elseif ($cap -eq 3) {
                     $c3 = $palBanner.Banner.Cap3
-                    $netEtwAlertBanner.Background  = $bcNet.ConvertFromString($c3.Bg)
-                    $netEtwAlertBanner.BorderBrush = $bcNet.ConvertFromString($c3.Border)
-                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = $bcNet.ConvertFromString($c3.BadgeBg) }
+                    $netEtwAlertBanner.Background  = &$getFrozenBrush $c3.Bg
+                    $netEtwAlertBanner.BorderBrush = &$getFrozenBrush $c3.Border
+                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = &$getFrozenBrush $c3.BadgeBg }
                     if ($txtNetEtwBannerBadge) { $txtNetEtwBannerBadge.Text = "TIER 1 FALLBACK" }
                     if ($txtNetEtwBannerMsg)   {
                         $txtNetEtwBannerMsg.Text = "Kernel Network ETW requires Administrators or Performance Log Users on target host. System-wide NET rate remains active."
-                        $txtNetEtwBannerMsg.Foreground = $bcNet.ConvertFromString($c3.Fg)
+                        $txtNetEtwBannerMsg.Foreground = &$getFrozenBrush $c3.Fg
                     }
                     if ($btnNetEtwResume)  { $btnNetEtwResume.Visibility  = [System.Windows.Visibility]::Collapsed }
-                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = $bcNet.ConvertFromString($c3.Fg) }
-                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = $bcNet.ConvertFromString($c3.MutedFg) }
+                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = &$getFrozenBrush $c3.Fg }
+                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = &$getFrozenBrush $c3.MutedFg }
                 } else {
                     $ce = $palBanner.Banner.CapErr
-                    $netEtwAlertBanner.Background  = $bcNet.ConvertFromString($ce.Bg)
-                    $netEtwAlertBanner.BorderBrush = $bcNet.ConvertFromString($ce.Border)
-                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = $bcNet.ConvertFromString($ce.BadgeBg) }
+                    $netEtwAlertBanner.Background  = &$getFrozenBrush $ce.Bg
+                    $netEtwAlertBanner.BorderBrush = &$getFrozenBrush $ce.Border
+                    if ($bdNetEtwBannerBadge)  { $bdNetEtwBannerBadge.Background = &$getFrozenBrush $ce.BadgeBg }
                     if ($txtNetEtwBannerBadge) { $txtNetEtwBannerBadge.Text = "ETW UNAVAILABLE" }
                     if ($txtNetEtwBannerMsg)   {
                         $txtNetEtwBannerMsg.Text = "Unable to start Microsoft-Windows-Kernel-Network ETW session on target host."
-                        $txtNetEtwBannerMsg.Foreground = $bcNet.ConvertFromString($ce.Fg)
+                        $txtNetEtwBannerMsg.Foreground = &$getFrozenBrush $ce.Fg
                     }
                     if ($btnNetEtwResume)  { $btnNetEtwResume.Visibility  = [System.Windows.Visibility]::Collapsed }
-                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = $bcNet.ConvertFromString($ce.Fg) }
-                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = $bcNet.ConvertFromString($ce.MutedFg) }
+                    if ($btnNetEtwTurnOff) { $btnNetEtwTurnOff.Foreground = &$getFrozenBrush $ce.Fg }
+                    if ($btnNetEtwDismiss) { $btnNetEtwDismiss.Foreground = &$getFrozenBrush $ce.MutedFg }
                 }
             } else {
                 $netEtwAlertBanner.Visibility = [System.Windows.Visibility]::Collapsed
@@ -5888,7 +5951,7 @@ function Start-PSRPM {
 
     $canCloseTcpSocket = {
         param($item)
-        return ($null -ne $item -and $item.LifecycleState -ne "Del" -and $item.Protocol -eq "TCP" -and $item.State -ne "Listen" -and $item.State -ne "Time Wait")
+        return ($null -ne $item -and [int]$item.PID -gt 4 -and $item.LifecycleState -ne "Del" -and $item.Protocol -eq "TCP" -and $item.State -ne "Listen" -and $item.State -ne "Time Wait")
     }
 
     $updateNetCloseBtnState = {
@@ -5997,41 +6060,97 @@ function Start-PSRPM {
     }
     $script:OnNetEtwStateUpdated = $updateNetEmptyAndSummary
 
+    $getSocketRowKey = {
+        param($rowItem)
+        if (-not $rowItem) { return "" }
+        if ($rowItem.PSObject.Properties['SocketKey'] -and $rowItem.SocketKey) {
+            return [string]$rowItem.SocketKey
+        }
+        return "$($rowItem.PID)|$($rowItem.Protocol)|$($rowItem.LocalEndpoint)|$($rowItem.RemoteEndpoint)"
+    }
+
     $applySocketSnapshotList = {
         param([System.Collections.Generic.List[Object]]$desired)
         if (-not $desired) { $desired = [System.Collections.Generic.List[Object]]::new() }
         $selKey = ""
         if ($gridNetworkSockets -and $gridNetworkSockets.SelectedItem) {
-            $selCur = $gridNetworkSockets.SelectedItem
-            $selKey = if ($selCur.PSObject.Properties['SocketKey'] -and $selCur.SocketKey) {
-                [string]$selCur.SocketKey
-            } else {
-                "$($selCur.PID)|$($selCur.Protocol)|$($selCur.LocalEndpoint)|$($selCur.RemoteEndpoint)"
+            $selKey = &$getSocketRowKey $gridNetworkSockets.SelectedItem
+        }
+
+        $desiredKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        $uniqueDesired = [System.Collections.Generic.List[Object]]::new($desired.Count)
+        foreach ($dItem in $desired) {
+            $dk = &$getSocketRowKey $dItem
+            if ($desiredKeys.Add($dk)) {
+                $uniqueDesired.Add($dItem)
             }
         }
-        $nNew = $desired.Count
-        $nOld = $netSocketsCollection.Count
-        $nMin = [Math]::Min($nNew, $nOld)
-        for ($si = 0; $si -lt $nMin; $si++) {
-            $netSocketsCollection[$si] = $desired[$si]
+
+        $collectionMutated = $false
+        $existingByKey = @{}
+        for ($ri = $netSocketsCollection.Count - 1; $ri -ge 0; $ri--) {
+            $oldItem = $netSocketsCollection[$ri]
+            $ok = &$getSocketRowKey $oldItem
+            if (-not $desiredKeys.Contains($ok) -or $existingByKey.ContainsKey($ok)) {
+                $netSocketsCollection.RemoveAt($ri)
+                $collectionMutated = $true
+            } else {
+                $existingByKey[$ok] = $oldItem
+            }
         }
-        for ($si = $nMin; $si -lt $nNew; $si++) {
-            $netSocketsCollection.Add($desired[$si])
-        }
-        for ($si = $nOld - 1; $si -ge $nNew; $si--) {
-            $netSocketsCollection.RemoveAt($si)
-        }
-        if ($netSocketsView) { try { $netSocketsView.Refresh() } catch {} }
-        if ($selKey -and $gridNetworkSockets) {
-            foreach ($cand in $netSocketsCollection) {
-                $candKey = if ($cand.PSObject.Properties['SocketKey'] -and $cand.SocketKey) {
-                    [string]$cand.SocketKey
-                } else {
-                    "$($cand.PID)|$($cand.Protocol)|$($cand.LocalEndpoint)|$($cand.RemoteEndpoint)"
+
+        $syncProps = @(
+            'SocketKey', 'LifecycleState', 'PID', 'PIDDisplay', 'ProcessName', 'IconSource',
+            'Protocol', 'ProtocolBg', 'ProtocolFg', 'State', 'StateBg', 'StateFg',
+            'LocalAddress', 'LocalPort', 'LocalPortDisplay', 'RemoteAddress', 'RemotePort', 'RemotePortDisplay',
+            'LocalEndpoint', 'RemoteEndpoint', 'CreateTimestamp', 'CreateTime', 'ModuleName',
+            'SentPackets', 'RecvPackets', 'SentBytes', 'RecvBytes',
+            'SentPacketsFormatted', 'RecvPacketsFormatted', 'SentBytesFormatted', 'RecvBytesFormatted'
+        )
+        $nNew = $uniqueDesired.Count
+        for ($di = 0; $di -lt $nNew; $di++) {
+            $want = $uniqueDesired[$di]
+            $wk = &$getSocketRowKey $want
+            if ($existingByKey.ContainsKey($wk)) {
+                $curObj = $existingByKey[$wk]
+                foreach ($pName in $syncProps) {
+                    $newVal = $want.$pName
+                    if ($curObj.$pName -ne $newVal) {
+                        $curObj.$pName = $newVal
+                        $collectionMutated = $true
+                    }
                 }
-                if ($candKey -eq $selKey) {
-                    $gridNetworkSockets.SelectedItem = $cand
-                    break
+                if ($di -lt $netSocketsCollection.Count) {
+                    if ((&$getSocketRowKey $netSocketsCollection[$di]) -ne $wk) {
+                        $oldIdx = $netSocketsCollection.IndexOf($curObj)
+                        if ($oldIdx -ge 0 -and $oldIdx -ne $di) {
+                            $netSocketsCollection.Move($oldIdx, $di)
+                            $collectionMutated = $true
+                        }
+                    }
+                }
+            } else {
+                $netSocketsCollection.Insert($di, $want)
+                $existingByKey[$wk] = $want
+                $collectionMutated = $true
+            }
+        }
+        for ($ri = $netSocketsCollection.Count - 1; $ri -ge $nNew; $ri--) {
+            $netSocketsCollection.RemoveAt($ri)
+            $collectionMutated = $true
+        }
+
+        if ($collectionMutated -and $netSocketsView) {
+            try { $netSocketsView.Refresh() } catch {}
+        }
+        if ($selKey -and $gridNetworkSockets) {
+            $curSelKey = if ($gridNetworkSockets.SelectedItem) { &$getSocketRowKey $gridNetworkSockets.SelectedItem } else { "" }
+            if ($curSelKey -ne $selKey) {
+                foreach ($cand in $netSocketsCollection) {
+                    if ((&$getSocketRowKey $cand) -eq $selKey) {
+                        $gridNetworkSockets.SelectedItem = $cand
+                        break
+                    }
                 }
             }
         }
@@ -6327,6 +6446,51 @@ function Start-PSRPM {
     }
     $script:SyncNetworkAutoTimer = $syncNetworkAutoTimer
 
+    $materializeNetBurstRow = {
+        param([hashtable]$rec, [hashtable]$palMap)
+        $isRx = [bool]$rec.IsRecv
+        $isTx = [bool]$rec.IsSend
+        $opName = if ($isRx -and $isTx) { "Recv + Send" } elseif ($isRx) { "Recv" } else { "Send" }
+        $sessTot = [long]$rec.SessionBytes
+        $evObj = [PSCustomObject]@{
+            TimestampTicks        = [long]$rec.TimestampTicks
+            TimeText              = [string]$rec.TimeText
+            PID                   = [int]$rec.PID
+            ProcessName           = [string]$rec.ProcessName
+            IconSource            = $rec.IconSource
+            Operation             = $opName
+            OperationBg           = ""
+            OperationFg           = ""
+            IsRecv                = $isRx
+            IsSend                = $isTx
+            Detail                = ("Rx: {0} | Tx: {1}" -f [string]$rec.RxFmt, [string]$rec.TxFmt)
+            RateBps               = [double]$rec.RateBps
+            RateFormatted         = [string]$rec.RateFmt
+            TreeRateBps           = [double]$rec.TreeRateBps
+            TreeRateFormatted     = [string]$rec.TreeRateFmt
+            SessionBytes          = $sessTot
+            SessionTotalFormatted = if ($sessTot -gt 0L) { [SystemSummaryViewModel]::FormatBytesStatic([double]$sessTot) } else { "0 B" }
+            Category              = [string]$rec.Category
+            User                  = [string]$rec.User
+        }
+        &$applyItemThemeColors $evObj $palMap
+        return $evObj
+    }
+
+    $flushPendingNetTimeline = {
+        param($tabObj)
+        if (-not $tabObj -or -not $tabObj.PendingNetTimeline -or $tabObj.PendingNetTimeline.Count -eq 0) { return }
+        $palMap = &$resolveNetBrushes
+        while ($tabObj.PendingNetTimeline.Count -gt 0) {
+            $rec = $tabObj.PendingNetTimeline.Dequeue()
+            $evObj = &$materializeNetBurstRow $rec $palMap
+            $netTimelineCollection.Add($evObj)
+        }
+        while ($netTimelineCollection.Count -gt 2000) {
+            $netTimelineCollection.RemoveAt(0)
+        }
+    }
+
     $setNetworkSubMode = {
         param([string]$mode)
         if ($mode -ne "Timeline") { $mode = "Sockets" }
@@ -6348,6 +6512,8 @@ function Start-PSRPM {
         &$syncNetworkAutoTimer
         if ($isSock -and $mainTabs -and $mainTabs.SelectedIndex -eq 2 -and $script:ActiveHostTab -and -not $script:ActiveHostTab.HasLoadedSockets) {
             &$refreshSocketsNow
+        } elseif (-not $isSock -and $mainTabs -and $mainTabs.SelectedIndex -eq 2 -and $script:ActiveHostTab) {
+            &$flushPendingNetTimeline $script:ActiveHostTab
         }
         &$refreshNetFiltersView
     }
@@ -6401,8 +6567,9 @@ function Start-PSRPM {
             for ($ri = $netTimelineCollection.Count - 1; $ri -ge 0; $ri--) {
                 $netTimelineCollection.RemoveAt($ri)
             }
-            if ($script:ActiveHostTab -and $script:ActiveHostTab.NetworkTimeline) {
-                $script:ActiveHostTab.NetworkTimeline.Clear()
+            if ($script:ActiveHostTab) {
+                if ($script:ActiveHostTab.NetworkTimeline) { $script:ActiveHostTab.NetworkTimeline.Clear() }
+                if ($script:ActiveHostTab.PendingNetTimeline) { $script:ActiveHostTab.PendingNetTimeline.Clear() }
             }
             &$updateNetEmptyAndSummary
         })
@@ -6455,10 +6622,10 @@ function Start-PSRPM {
                             })
                         }
                     }
-                    $exportList | Export-Csv -Path $dlgNet.FileName -NoTypeInformation -Encoding UTF8
+                    $exportList | Export-Csv -LiteralPath $dlgNet.FileName -NoTypeInformation -Encoding UTF8
                     &$writeAuditLog "EXPORT" "Exported $($exportList.Count) Network Activity rows to '$($dlgNet.FileName)'."
                 } catch {
-                    [System.Windows.MessageBox]::Show($window, "Failed to export CSV: $($_.Exception.Message)", "PSRPM - Export Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                    &$showMsgSafe $window $null "Failed to export CSV: $($_.Exception.Message)" "PSRPM - Export Error" ([System.Windows.MessageBoxButton]::OK) ([System.Windows.MessageBoxImage]::Error) | Out-Null
                 }
             }
         })
@@ -6467,40 +6634,7 @@ function Start-PSRPM {
     # Network Activity Context Menu Actions (Filter, Go To Process, Open Properties -> TCP/IP Tab)
     $selectProcessInMainGrid = {
         param([int]$pidVal, [bool]$openTcpProps = $false)
-        if ($pidVal -le 0) {
-            [System.Windows.MessageBox]::Show($window, "Kernel/TIME_WAIT endpoint (PID $pidVal) does not belong to an active process.", "PSRPM - No Owning Process", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information) | Out-Null
-            return
-        }
-        if (-not $engineHandle.ProcessMap.ContainsKey($pidVal)) {
-            [System.Windows.MessageBox]::Show($window, "Process PID $pidVal is no longer running in the process tree.", "PSRPM - Process Not Found", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information) | Out-Null
-            return
-        }
-        $targetVm = $engineHandle.ProcessMap[$pidVal]
-        if (-not $openTcpProps -and $mainTabs) { $mainTabs.SelectedIndex = 0 }
-        $currPid = $targetVm.ParentPID
-        $guard = 0
-        while ($currPid -gt 0 -and $engineHandle.ProcessMap.ContainsKey($currPid) -and $guard -lt 30) {
-            $parentVm = $engineHandle.ProcessMap[$currPid]
-            $parentVm.IsExpanded = $true
-            $parentVm.UpdateExpanderGeometry()
-            $currPid = $parentVm.ParentPID
-            $guard++
-        }
-        if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
-        if ($gridProcesses.Items -and -not $gridProcesses.Items.Contains($targetVm)) {
-            if ($txtSearch) { $txtSearch.Text = "" }
-            $stateContainer.FilterText     = ""
-            $stateContainer.CategoryFilter = ""
-            if ($updateLegendFilterUi) { &$updateLegendFilterUi }
-            if ($engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
-        }
-        if ($gridProcesses.SelectedItems.Count -gt 1) { $gridProcesses.SelectedItems.Clear() }
-        $gridProcesses.SelectedItem = $targetVm
-        if (-not $openTcpProps) { $gridProcesses.ScrollIntoView($targetVm) }
-        if ($openTcpProps -and $gridProcesses.SelectedItem -eq $targetVm) {
-            $script:PendingPropTabIndex = 4
-            &$actionShowProperties
-        }
+        &$jumpToProcessInMainGrid $pidVal $openTcpProps "" $window $false
     }
 
     $closeSelectedTcpConn = {
@@ -6584,7 +6718,7 @@ function Start-PSRPM {
         $mCtrl = $window.FindName($ctxMap.Name)
         if ($mCtrl) {
             & {
-                param($targetMenuCtrl, $localGridRef, $localMode, $localSearch, $localSelFn)
+                param($targetMenuCtrl, $localGridRef, $localMode, $localSearch, $localSelFn, $localCopyClip)
                 $targetMenuCtrl.add_Click({
                     if (-not $localGridRef -or -not $localGridRef.SelectedItem) { return }
                     $row = $localGridRef.SelectedItem
@@ -6619,7 +6753,7 @@ function Start-PSRPM {
                                     "Sent Bytes:     $($row.SentBytesFormatted)"
                                     "Recv Bytes:     $($row.RecvBytesFormatted)"
                                 )
-                                [System.Windows.Clipboard]::SetText(($detailLines -join "`r`n"))
+                                [void](&$localCopyClip ($detailLines -join "`r`n") "" "")
                             } else {
                                 $detailLines = @(
                                     "Time:          $($row.TimeText)"
@@ -6633,14 +6767,14 @@ function Start-PSRPM {
                                     "Category:      $($row.Category)"
                                     "User:          $($row.User)"
                                 )
-                                [System.Windows.Clipboard]::SetText(($detailLines -join "`r`n"))
+                                [void](&$localCopyClip ($detailLines -join "`r`n") "" "")
                             }
                         }
-                        "CopyLocal" { if ($row.LocalEndpoint)  { [System.Windows.Clipboard]::SetText([string]$row.LocalEndpoint) } }
-                        "CopyRemote"{ if ($row.RemoteEndpoint) { [System.Windows.Clipboard]::SetText([string]$row.RemoteEndpoint) } }
+                        "CopyLocal" { if ($row.LocalEndpoint)  { [void](&$localCopyClip ([string]$row.LocalEndpoint) "" "") } }
+                        "CopyRemote"{ if ($row.RemoteEndpoint) { [void](&$localCopyClip ([string]$row.RemoteEndpoint) "" "") } }
                     }
                 }.GetNewClosure())
-            } $mCtrl $ctxMap.Grid $ctxMap.Mode $txtSearchNetwork $selectProcessInMainGrid
+            } $mCtrl $ctxMap.Grid $ctxMap.Mode $txtSearchNetwork $selectProcessInMainGrid $copyToClipboardSafe
         }
     }
 
@@ -6651,6 +6785,8 @@ function Start-PSRPM {
             if ($mainTabs.SelectedIndex -eq 2) {
                 if ($netUiState.SubMode -eq "Sockets" -and $script:ActiveHostTab -and -not $script:ActiveHostTab.HasLoadedSockets) {
                     &$refreshSocketsNow
+                } elseif ($netUiState.SubMode -eq "Timeline" -and $script:ActiveHostTab) {
+                    &$flushPendingNetTimeline $script:ActiveHostTab
                 }
                 &$syncNetworkAutoTimer
                 &$updateNetEmptyAndSummary
@@ -6676,46 +6812,71 @@ function Start-PSRPM {
         $nowDt = [DateTime]::Now
         $nowTimeText = $nowDt.ToString("HH:mm:ss.f")
         $nowTicks = [long]$nowDt.Ticks
-        $palMap = &$resolveNetBrushes
-        $addedAny = $false
         $onNetTimeline = ($mainTabs -and $mainTabs.SelectedIndex -eq 2 -and $netUiState.SubMode -eq "Timeline")
+        $pendingQueue = if (-not $onNetTimeline -and $script:ActiveHostTab -and $script:ActiveHostTab.PendingNetTimeline) { $script:ActiveHostTab.PendingNetTimeline } else { $null }
 
-        foreach ($vm in $engineHandle.ProcessMap.Values) {
-            if ($vm.NetRxBps -le 0.0 -and $vm.NetTxBps -le 0.0) { continue }
-            $isRx = ($vm.NetRxBps -gt 0.0)
-            $isTx = ($vm.NetTxBps -gt 0.0)
-            $opName = if ($isRx -and $isTx) { "Recv + Send" } elseif ($isRx) { "Recv" } else { "Send" }
-            $sessTot = [long]($vm.SessionNetRxBytes + $vm.SessionNetTxBytes)
-            $evObj = [PSCustomObject]@{
-                TimestampTicks        = $nowTicks
-                TimeText              = $nowTimeText
-                PID                   = [int]$vm.PID
-                ProcessName           = [string]$vm.Name
-                IconSource            = $vm.IconSource
-                Operation             = $opName
-                OperationBg           = ""
-                OperationFg           = ""
-                IsRecv                = $isRx
-                IsSend                = $isTx
-                Detail                = ("Rx: {0} | Tx: {1}" -f $vm.NetRxFormatted, $vm.NetTxFormatted)
-                RateBps               = [double]$vm.NetTotalBps
-                RateFormatted         = [string]$vm.NetTotalFormatted
-                TreeRateBps           = [double]$vm.TreeNetTotalBps
-                TreeRateFormatted     = [string]$vm.TreeNetTotalFormatted
-                SessionBytes          = $sessTot
-                SessionTotalFormatted = if ($sessTot -gt 0L) { [SystemSummaryViewModel]::FormatBytesStatic([double]$sessTot) } else { "0 B" }
-                Category              = [string]$vm.Category
-                User                  = [string]$vm.User
+        if ($onNetTimeline) {
+            if ($script:ActiveHostTab) {
+                &$flushPendingNetTimeline $script:ActiveHostTab
             }
-            &$applyItemThemeColors $evObj $palMap
-            $netTimelineCollection.Add($evObj)
-            $addedAny = $true
-        }
-        while ($netTimelineCollection.Count -gt 2000) {
-            $netTimelineCollection.RemoveAt(0)
-        }
-        if ($addedAny -and $onNetTimeline) {
-            &$updateNetEmptyAndSummary
+            $palMap = &$resolveNetBrushes
+            $addedAny = $false
+            foreach ($vm in $engineHandle.ProcessMap.Values) {
+                if ($vm.NetRxBps -le 0.0 -and $vm.NetTxBps -le 0.0) { continue }
+                $sessTot = [long]($vm.SessionNetRxBytes + $vm.SessionNetTxBytes)
+                $evObj = &$materializeNetBurstRow @{
+                    TimestampTicks = $nowTicks
+                    TimeText       = $nowTimeText
+                    PID            = [int]$vm.PID
+                    ProcessName    = [string]$vm.Name
+                    IconSource     = $vm.IconSource
+                    IsRecv         = ($vm.NetRxBps -gt 0.0)
+                    IsSend         = ($vm.NetTxBps -gt 0.0)
+                    RxFmt          = [string]$vm.NetRxFormatted
+                    TxFmt          = [string]$vm.NetTxFormatted
+                    RateBps        = [double]$vm.NetTotalBps
+                    RateFmt        = [string]$vm.NetTotalFormatted
+                    TreeRateBps    = [double]$vm.TreeNetTotalBps
+                    TreeRateFmt    = [string]$vm.TreeNetTotalFormatted
+                    SessionBytes   = $sessTot
+                    Category       = [string]$vm.Category
+                    User           = [string]$vm.User
+                } $palMap
+                $netTimelineCollection.Add($evObj)
+                $addedAny = $true
+            }
+            while ($netTimelineCollection.Count -gt 2000) {
+                $netTimelineCollection.RemoveAt(0)
+            }
+            if ($addedAny) {
+                &$updateNetEmptyAndSummary
+            }
+        } elseif ($pendingQueue) {
+            foreach ($vm in $engineHandle.ProcessMap.Values) {
+                if ($vm.NetRxBps -le 0.0 -and $vm.NetTxBps -le 0.0) { continue }
+                $sessTot = [long]($vm.SessionNetRxBytes + $vm.SessionNetTxBytes)
+                $pendingQueue.Enqueue(@{
+                    TimestampTicks = $nowTicks
+                    TimeText       = $nowTimeText
+                    PID            = [int]$vm.PID
+                    ProcessName    = [string]$vm.Name
+                    IconSource     = $vm.IconSource
+                    IsRecv         = ($vm.NetRxBps -gt 0.0)
+                    IsSend         = ($vm.NetTxBps -gt 0.0)
+                    RxFmt          = [string]$vm.NetRxFormatted
+                    TxFmt          = [string]$vm.NetTxFormatted
+                    RateBps        = [double]$vm.NetTotalBps
+                    RateFmt        = [string]$vm.NetTotalFormatted
+                    TreeRateBps    = [double]$vm.TreeNetTotalBps
+                    TreeRateFmt    = [string]$vm.TreeNetTotalFormatted
+                    SessionBytes   = $sessTot
+                    Category       = [string]$vm.Category
+                    User           = [string]$vm.User
+                })
+                while ($pendingQueue.Count -gt 2000) {
+                    [void]$pendingQueue.Dequeue()
+                }
+            }
         }
     }
 
@@ -6762,8 +6923,9 @@ function Start-PSRPM {
             $tabObj.NetworkStatusCountsText = "Endpoints: 0  |  Established: 0  |  Listening: 0  |  Time Wait: 0  |  Close Wait: 0"
             $tabObj.NetworkPrevSnapshot = @{}
             $tabObj.AutoRefreshSockets = $true
-            if ($tabObj.NetworkSockets)  { $tabObj.NetworkSockets.Clear() }
-            if ($tabObj.NetworkTimeline) { $tabObj.NetworkTimeline.Clear() }
+            if ($tabObj.NetworkSockets)     { $tabObj.NetworkSockets.Clear() }
+            if ($tabObj.NetworkTimeline)    { $tabObj.NetworkTimeline.Clear() }
+            if ($tabObj.PendingNetTimeline) { $tabObj.PendingNetTimeline.Clear() }
             if ($tabObj.SummaryVm) { $tabObj.SummaryVm.ResetNetAccumTimestamp() }
         }
         $stateContainer.HasBaseline = $false

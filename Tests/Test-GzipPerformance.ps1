@@ -286,15 +286,17 @@ function Invoke-CollectorPhase {
             $wire = Invoke-TargetTick -Ctx $ctx -ForceFull $false
             $swRtt.Stop()
 
-            if ($ExpectGzip -and -not $wire.StartsWith("GZIP:")) {
-                throw "[$Label] Expected 'GZIP:' prefix on steady tick $i."
+            $isGzipWire = $wire.StartsWith("GZIP:")
+            $wireByteLen = [System.Text.Encoding]::UTF8.GetByteCount($wire)
+            if ($ExpectGzip -and -not $isGzipWire -and $wireByteLen -ge 256) {
+                throw "[$Label] Expected 'GZIP:' prefix on steady tick $i for payload >= 256 bytes ($wireByteLen B)."
             }
-            if (-not $ExpectGzip -and $wire.StartsWith("GZIP:")) {
+            if (-not $ExpectGzip -and $isGzipWire) {
                 throw "[$Label] Expected raw JSON on steady tick $i."
             }
 
             $swDec = [System.Diagnostics.Stopwatch]::StartNew()
-            $json = if ($ExpectGzip) { Expand-GzipPayload -Payload $wire } else { $wire }
+            $json = if ($isGzipWire) { Expand-GzipPayload -Payload $wire } else { $wire }
             $swDec.Stop()
 
             $swParse = [System.Diagnostics.Stopwatch]::StartNew()
@@ -370,7 +372,7 @@ function Invoke-CollectorPhase {
 . $collectorPath
 $gzipCollectorCode = $script:PSRPMCollectorScriptBlock.ToString()
 
-$gzipTailPattern = '(?s)\$rawBytes\s*=\s*\[System\.Text\.Encoding\]::UTF8\.GetBytes\(\$sb\.ToString\(\)\).*?return\s+"GZIP:"\s*\+\s*\[Convert\]::ToBase64String\(\$ms\.ToArray\(\)\)\s*$'
+$gzipTailPattern = '(?s)\$jsonOut\s*=\s*\$sb\.ToString\(\).*?return\s+"GZIP:"\s*\+\s*\[Convert\]::ToBase64String\(\$ms\.ToArray\(\)\)\s*$'
 if ($gzipCollectorCode -notmatch $gzipTailPattern) {
     throw "DataCollector.ps1 tail format changed; unable to construct GZIP-OFF baseline scriptblock."
 }

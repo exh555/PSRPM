@@ -21,7 +21,7 @@ Every design decision is governed by four pillars, in strict priority order:
    - Steady-state network payloads must remain **`~1.1 - 1.8 KB/s`** by transmitting only differential changes compressed with GZIP.
    - Local workstation memory for historical graphs must remain strictly bounded (`< 20 KB` via fixed-size circular ring buffers).
 3. **UX & Visual Fidelity (Process Explorer Ergonomics)**:
-   - Single-surface hierarchical **Tree-Grid** with pixel-snapped vector connectors (`|`, `+-`, `\-`), semantic row colors, instant ancestor-preserving search, auto-flat column sorting, a lazy-loaded **7-tab Process Properties Inspector**, a live **4-tab System Information** window, and a real-time **Audit & Network Telemetry Console**.
+   - Single-surface hierarchical **Tree-Grid** with pixel-snapped vector connectors (`|`, `+-`, `\-`), semantic row colors across **6 themes**, instant ancestor-preserving search, auto-flat column sorting, a lazy-loaded **7-tab Process Properties Inspector**, a live **5-tab System Information** window (`Summary`, `CPU`, `Memory`, `I/O`, `Network`), and a real-time **Audit & Network Telemetry Console**.
 4. **100% Fileless In-Memory Architecture**:
    - **Zero `csc.exe` invocations** and **zero temporary `.dll` or `.cs` files** dropped to disk on either the local workstation or the remote target.
    - *EDR Transparency Notice*: In-memory Win32 and NTAPI operations remain fully observable and transparent to endpoint telemetry (ETW, Sysmon, EDR).
@@ -133,17 +133,17 @@ Every rule below was learned from real-world failure modes during PSRPM's develo
 PSRPM is designed for multi-day uninterrupted operations. Any persistent monitoring tool must guarantee zero memory growth over time. Contributors must adhere to these five memory rules:
 
 ### A. Remote Host Memory Boundaries
-1. **Unmanaged Heap Pre-allocation**: Fixed buffers (`512 KB` for process enumeration and `8 KB` for scratch memory) are allocated once at session start (`[Marshal]::AllocHGlobal`). Never allocate unmanaged memory inside the per-tick collector loop.
+1. **Unmanaged Heap Pre-allocation**: Initial buffers (`512 KB` for process enumeration, `256 KB` for services, and `8 KB` for scratch memory scaling dynamically up to `CoreCount * 48` / `128 KB` max for Class 8) are allocated at session start (`[Marshal]::AllocHGlobal`) and freed cleanly on cleanup with `[IntPtr]::Zero` reset. Never allocate unmanaged memory inside the steady-state per-tick collector loop.
 2. **Synchronous Dead-Process Eviction**: At the end of every tick, any PID or `${PID}_${CreateTime}` key that no longer exists in `currKeys` must be pruned immediately via `.Remove()` from `$script:ProcCpuCache`, `$script:ProcMetaCache`, `$script:LastDynState`, and `$script:ActivePidToKey`.
 3. **Static Metadata Suppression**: Process strings (`Path`, `CommandLine`, `Description`, `CompanyName`, `User`, `Architecture`) are serialized to the wire **only once per process lifetime**. Once recorded in `$script:SentMetaKeys`, they are never re-serialized.
 4. **0.00% Remote CPU & 0 KB/s Wire in Standby**: Inactive tabs in the Multi-Host Session Bar are skipped by the polling coordinator. Standby sessions maintain an idle TCP connection without executing any remote collector code.
 
 ### B. Local Workstation Memory Boundaries
-1. **Fixed Ring Buffers**: Metric histories (CPU, Kernel, Commit, RAM, I/O rates, per-core CPU) are backed by `Queue[double]` ring buffers strictly capped at **30 samples** (toolbar sparklines) and **240 samples** (4 minutes for System Information). Total historical telemetry memory is hard-capped at **< 20 KB per host session**.
+1. **Fixed Ring Buffers**: Metric histories (CPU, Kernel, Commit, RAM, I/O rates, Network rates, per-core CPU) are backed by `Queue[double]` ring buffers strictly capped at **30 samples** (toolbar sparklines) and **240 samples** (4 minutes for System Information), plus a `2,000`-event `PendingNetTimeline` ring queue for off-tab ETW bursts. Total historical telemetry memory is hard-capped at **< 20 KB per host session**.
 2. **Lazy UI Rendering**: Vector path strings and geometry calculations (`SysCpuPoints`, `SysCommitPoints`, per-core charts) are evaluated only when the System Information modal is open (`$summaryVm.IsSysInfoOpen -eq $true`).
 3. **In-Place Diff Reconciliation**: Never call `.Clear()` on live `ObservableCollection` bindings. Update existing nodes in-place via dirty-checked `INotifyPropertyChanged`.
 4. **Two-Stage Process Node Reaping**: Exited processes flash red for 1 tick (`LifecycleState = 2`) and are purged from `ProcessMap` and the UI `ObservableCollection` on the subsequent tick, freeing them for immediate Garbage Collection.
-5. **Bounded Log Buffers**: Activity log text boxes are capped at 24,000 characters, discarding the oldest 8,000 characters when full.
+5. **Bounded Log Buffers**: Activity log text boxes are capped at 72,000 characters, trimming back to the latest 48,000 characters when full.
 6. **WPF Freezable Protection**: All brushes, pens, and icons call `.Freeze()` to detach from WPF dependency property change-tracking graphs.
 
 ---
@@ -154,11 +154,11 @@ PSRPM is designed for multi-day uninterrupted operations. Any persistent monitor
    - Once a `Reflection.Emit` type (e.g., `PSRPM.NativeCollectorV2` or `PSRPM.NativeInspectorV2`) is loaded into an `AppDomain`, it cannot be unloaded without restarting PowerShell. If you add a new P/Invoke method during development, increment the suffix (`V3`) so `Import-Module -Force` compiles the updated signature immediately in existing sessions.
 2. **Maintain Backward Compatibility in the Differential Wire Array**:
    - Keep existing index positions in `"sys":[...]` and `"dyn":[...]` stable; always append new metrics to the end of the array and check `$sysArr.Count` before reading extended indices.
-3. **Run the Automated 11-Suite Verification Script Before Every Commit**:
+3. **Run the Automated 12-Suite Verification Script Before Every Commit**:
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-PSRPMEngine.ps1
    ```
-   All 11 test suites (Fileless EDR Audit, Manifest Exports, Collector Delta Benchmark & Statistical Gates, DeepInspector Lazy Modes, ProcessActions, XAML Template Integrity, End-to-End RunspaceEngine Reconciliation, PID-Reuse Prevention, Fault-Injection Resilience, Protected Process Traps, and Multi-Session Lifecycle & Visual States) must pass with `exit 0`.
+   All 12 test suites (Fileless EDR Audit, Manifest Exports, Collector Delta Benchmark & Statistical Gates, DeepInspector Lazy Modes, ProcessActions, XAML Template Integrity, End-to-End RunspaceEngine Reconciliation, PID-Reuse Prevention, Fault-Injection Resilience, Protected Process Traps, Multi-Session Lifecycle & Visual States, and Network ETW / 6-Theme Parity / Hardening Regressions) plus the 44-check extended QA suite (`Tests/Test-PSRPMExtendedQA.ps1`) must pass with `exit 0`.
 
 4. **Adhere to the 2-Tier Least Privilege Access Model (RBAC)**:
    - **Tier 1 (Read-Only Monitoring / Non-Admin)**: Standard User member of `Remote Management Users` (No Local Administrator required). Real-time CPU/RAM/IOPS graphs, differential process tree, running services, loaded DLLs for owned processes. Non-owned processes report sanitized access-denied status without throwing exceptions.
@@ -190,7 +190,7 @@ The authoritative source of truth for the active release version is **`PSRPM/PSR
 3. **Changelog Record**: Move staged changes under `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - YYYY-MM-DD`.
 4. **README Version Badge**: Update the version badge in `README.md` (`img.shields.io/badge/version-X.Y.Z-0284c7.svg`).
 5. **AppUserModelID / Assembly Suffix**: If P/Invoke signatures changed, bump dynamic type suffixes (e.g., `V2` -> `V3`) and update the `AppUserModelID` in `PSRPM.psm1`.
-6. **Automated Verification**: Run `Test-ModuleManifest` and `Tests/Test-PSRPMEngine.ps1` to ensure all 7 verification suites pass with zero errors.
+6. **Automated Verification**: Run `Test-ModuleManifest`, `Tests/Test-PSRPMEngine.ps1` (12 suites), `Tests/Test-PSRPMExtendedQA.ps1 -WriteTrackedReport` (44 checks), and `Tests/Test-ReleaseReadiness.ps1` to verify zero errors.
 
 ### C. Publishing to the PowerShell Gallery
 Automated CI/CD via GitHub Actions (`.github/workflows/publish.yml`) automatically executes tests and gates publication on every push to `main`:

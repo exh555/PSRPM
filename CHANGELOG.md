@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-14
+
+### Added
+- **Documentation Overhaul & Regression Coverage (`README.md`, `Test-PSRPMEngine.ps1`)**:
+  - Restructured `README.md` with hero Tree-Grid preview, **10-Second Quickstart**, **Why PSRPM?** engineering problem/benchmark breakdown, full TCPView-style **Network Activity** + opt-in Kernel ETW documentation, 5-tab System Information, 6-theme showcase, 30-column catalog, and complete parameter/shortcut/RBAC reference.
+  - Added Test `12O` in `Tests/Test-PSRPMEngine.ps1` covering coordinator shutdown disposal, local collector unmanaged cleanup, same-tick PID-reuse eviction, `CloseTcpConnection` / `KillTree` guards, clipboard wrappers, 6-theme parity, `< 256 B` GZIP bypass, and `PendingNetTimeline`.
+
+### Changed
+- **Performance, Memory & 6-Theme Consistency (`DataCollector.ps1`, `ViewModelClasses.ps1`, `PSRPM.psm1`, `UI/*.xaml`)**:
+  - Added dynamic Class 8 scratch buffer scaling in `DataCollector.ps1` (`8 KB` up to `CoreCount * 48` / `128 KB`) to support systems with `> 170` logical processors.
+  - Added `< 256`-byte raw UTF-8 JSON wire bypass in `DataCollector.ps1` (`Test-GzipPerformance.ps1`) to eliminate compression expansion on tiny idle payloads.
+  - Cached frozen `PSRPMThemeRegistry` palettes (`_PaletteCache`), cached frozen UI indicator brushes, switched `GridNetworkSockets` to keyed in-place diff reconciliation, added `2,000`-event off-tab `PendingNetTimeline` queueing, unified `$appendLogSafe` with sticky-bottom auto-scroll, and normalized mini-card double-clicks across tabs `1`–`4`.
+  - Migrated hardcoded light-mode brushes and DataGrid selection styles across `ServiceDetailWindow.xaml`, `SystemInfoWindow.xaml`, `PropertiesWindow.xaml`, and `MainWindow.xaml` to `DynamicResource` tokens, and updated `HelpWindow.xaml`, `DESIGN.md`, `PRODUCT.md`, `ENGINEERING_PLAYBOOK.md`, `TELEMETRY_AND_PROTOCOL.md`, and `USER_GUIDE.md`.
+- **Extended QA Suite Reliability (`Test-PSRPMExtendedQA.ps1`, `Test-ReleaseReadiness.ps1`)**:
+  - Eliminated Windows `Start-Sleep` timer flake in `Suite 8.2`, synchronized `Suite 8.4`–`8.6` UI settle checks, expanded XAML/theme/log-cap assertions to 8 dialogs / 6 themes / `72,000` chars, added `-WriteTrackedReport` opt-in reporting, and updated `[CHECK 6]` banner to `12-Suite Verification`.
+
+### Fixed
+- **Async Closures, Shutdown Teardown & Action Hardening (`PSRPM.psm1`, `RunspaceEngine.ps1`, `DataCollector.ps1`, `ProcessActions.ps1`, `DeepInspector.ps1`)**:
+  - Fixed `ServiceDetailWindow` `$bc.ConvertFromString` `InvokeMethodOnNull` crash via `DynamicResource` badge style resolution.
+  - Captured async `.GetNewClosure()` variables and gated completion updates on `$ok` across `PropertiesWindow` (`Suspend/Resume`, `KillProcess`, `KillTree`) and `ServiceDetailWindow`, and captured `$localWindow` with ownerless `MessageBox` fallback in `$invokeProcessAction`.
+  - Fixed coordinator worker shutdown (`CoordLocalWorker.WakeEvent`) and added `DataCollector` `"Dispose"` unmanaged `AllocHGlobal` cleanup on tab close, target switch, and shutdown.
+  - Hardened same-tick PID reuse eviction (`RunspaceEngine.ps1`), `CloseTcpConnection` `PID > 4` & socket-owner checks plus `KillTree` root-open refusal (`ProcessActions.ps1`), bounded PEB Unicode reads and dynamic up-to-`262,144`-byte module enumeration (`DeepInspector.ps1`), `try/catch` clipboard helpers (`$copyToClipboardSafe`), `MenuSwitchLocal` reset parity, `-LiteralPath` CSV export, filter-aware `$jumpToProcessInMainGrid`, and `10 MB` `$jssAction.MaxJsonLength`.
+
 ## [1.11.0] - 2026-11-14
 
 ### Added

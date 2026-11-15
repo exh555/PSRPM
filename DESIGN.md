@@ -3,7 +3,7 @@
 ## 1. Visual Authority & Design Philosophy
 
 - **Surface Mode**: `Operate`
-- **Visual Anchor**: Sysinternals Process Explorer (`procexp64.exe`), elevated with high-DPI WPF vector geometry, modern typographic hierarchy, and WCAG AA (`>= 4.5:1`) contrast across both **Clean Light** and **Precision Dark** themes.
+- **Visual Anchor**: Sysinternals Process Explorer (`procexp64.exe`), elevated with high-DPI WPF vector geometry, modern typographic hierarchy, and WCAG AA (`>= 4.5:1`) contrast across **6 themes** (**Clean Light**, **Precision Dark**, **Tokyo Night**, **Tokyo Night Light**, **Classic**, and **High-Contrast**).
 - **Operate Mode Principles**:
   - **Density & Scanability**: High information density without visual noise. Tabular numeric columns, right alignment, and immediate visual hierarchy outrank decorative expression.
   - **Vector Geometry Over Text Glyphs**: Tree hierarchy lines, expander arrows, status indicators, and chart curves are rendered with crisp, pixel-snapped WPF `<Path>` and `<Polygon>` vectors--never Unicode text characters (`+`, `-`, `|`, `\`) that misalign across fonts and DPI scaling.
@@ -51,6 +51,8 @@
 | `BrushMenuBorder` | `#CBD5E1` | `#334155` | `#292E42` | `#C1C2C7` | Menu popup 1px perimeter border |
 | `BrushMenuHover` | `#F1F5F9` | `#26354D` | `#202330` | `#E1E2E8` | Menu and context item interactive hover background |
 | `BrushLogBg` | `#0F172A` | `#090D16` | `#16161E` | `#E6E7ED` | Audit & Network Telemetry console background |
+
+> **Full 6-Theme Registry**: In addition to the four palettes tabulated above, `[PSRPMThemeRegistry]` provides **Classic** (`#ECE9D8` chrome / `#FFFFFF` grid) and **High-Contrast** (`#000000` black canvas), and propagates `31` semantic `BrushGauge*`, `BrushMini*`, `BrushSig*`, `BrushStatus*`, and `BrushSvc*` tokens to every dialog and custom control via `DynamicResource`.
 
 ### B. Process Explorer Semantic Row Categories
 Semantic row coloring matches Sysinternals Process Explorer conventions, ordered by strict precedence:
@@ -133,15 +135,15 @@ PSPRM rejects Unicode box-drawing characters in favor of resolution-independent 
 
 ---
 
-## 6. Live System Information Modal Specifications (`Ctrl+I`)
+## 6. Live 5-Tab System Information Modal Specifications (`Ctrl+I`)
 
-The System Information window faithfully reproduces Sysinternals Process Explorer's visual monitoring suite:
+The System Information window faithfully reproduces Sysinternals Process Explorer's visual monitoring suite (plus remote Network telemetry & ETW timeline):
 
 ```text
 +-----------------------------------------------------------------------------------------+
 | System Information [SRV-PROD-01]                                              -  [ ]  X   |
 +-----------------------------------------------------------------------------------------+
-| [Summary]  [CPU]  [Memory]  [I/O]                                                       |
+| [Summary]  [CPU]  [Memory]  [I/O]  [Network]                                            |
 |                                                                                         |
 | +--- CPU Usage -------------------------+  +--- System Commit ------------------------+ |
 | | [Bar] | [360x120 Area Chart: Total+K] |  | [Bar] | [360x120 Area Chart: Commit]     | |
@@ -155,11 +157,12 @@ The System Information window faithfully reproduces Sysinternals Process Explore
 ### Chart Coordinate System & Curves
 - **Canvas Size**: Standardized `360 x 120` coordinate space (`Viewbox`).
 - **History Depth**: Exactly `240` points (4 minutes of 1-second telemetry ticks).
-- **Dual-Layer Area Curves**:
-  - **CPU Graph**: Green total line (`#22C55E`, fill `#3322C55E`) overlaying Red kernel line (`#EF4444`, fill `#44EF4444`).
-  - **Commit Graph**: Olive/gold total line (`#84CC16`, fill `#3384CC16`).
-  - **Physical Memory Graph**: Amber/orange total line (`#F97316`, fill `#33F97316`).
-  - **I/O Graph**: Cobalt blue total rate (`#3B82F6`, fill `#333B82F6`) overlaying Violet write rate (`#8B5CF6`, fill `#448B5CF6`).
+- **Theme-Bound Area Curves (`{DynamicResource BrushGauge*}`)**:
+  - **CPU Graph**: Total stroke/fill (`BrushGaugeCpuStroke` / `BrushGaugeCpuFill`, Light `#16A34A` / `#3316A34A`) overlaying Kernel stroke/fill (`BrushGaugeKernelStroke` / `BrushGaugeKernelFill`, Light `#DC2626` / `#44DC2626`).
+  - **Commit Graph**: Olive/gold commit stroke/fill (`BrushGaugeCommitStroke` / `BrushGaugeCommitFill`).
+  - **Physical Memory Graph**: Amber/orange RAM stroke/fill (`BrushGaugeRamStroke` / `BrushGaugeRamFill`).
+  - **I/O Graph**: Read/Total rate (`BrushGaugeIoReadStroke` / `BrushGaugeIoReadFill`) overlaying Write rate (`BrushGaugeIoWriteStroke` / `BrushGaugeIoWriteFill`).
+  - **Network Tab**: Receive/Transmit rate series (`BrushGaugeNetRx*` / `BrushGaugeNetTx*`), active/all TCP & UDP socket view, and off-tab ETW burst timeline (`PendingNetTimeline`, cap `2,000`).
 - **Vertical Gauges**: Dynamic bar heights mapped from `0` to `120px` with formatted readouts underneath (`12.4%`, `4.8 GB`, `2.1 MB/s`).
 - **Per-Core CPU Grid**: When `Show one graph per CPU` is toggled, switches to a dynamic `UniformGrid` displaying individual core curves (`CPU 0`, `CPU 1`, etc.).
 
@@ -188,4 +191,4 @@ The System Information window faithfully reproduces Sysinternals Process Explore
   - `Network`: Throughput (`KB/s`) and cumulative data received (`RX`).
   - `Delta`: Sequence number, dynamic change count (`Dyn`), spawned (`+Meta`), and exited (`-Exit`).
 - **Console Stream**: Monospace `Consolas 11px` log with event category tags: `[INIT]`, `[SYNC]`, `[TELEM]`, `[PROC+]`, `[PROC-]`, `[INSPECT]`, `[ACTION]`, `[SERVICE]`, and `[CLIPBOARD]`.
-- **Memory Cap**: Rolling text buffer capped at 24,000 characters, automatically trimming oldest 8,000 characters when full.
+- **Memory Cap**: Rolling text buffer capped at 72,000 characters, automatically trimming back to the latest 48,000 characters when full.

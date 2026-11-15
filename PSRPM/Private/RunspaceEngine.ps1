@@ -356,7 +356,7 @@ function Start-PSRPMEngine {
             IsLocal              = $isLocalMode
             Target               = $stateContainer.TargetDisplayName
             Badge                = $initBadge
-            CollectorSb          = &$newLocalCollectorSb
+            CollectorSb          = if ($isLocalMode) { &$newLocalCollectorSb } else { $null }
             CollectorInitialized = $false
             InspectorInitialized = $false
             ActionInitialized    = $false
@@ -399,6 +399,25 @@ function Start-PSRPMEngine {
                 }
             } catch {}
             $sessObj.NetEtwStarted = $false
+        }
+
+        $disposeLocalSession = {
+            param($sessObj)
+            if (-not $sessObj) { return }
+            if ($sessObj.IsLocal -and $sessObj.CollectorSb) {
+                try {
+                    if ($sessObj.CollectorInitialized) {
+                        & $sessObj.CollectorSb $false $false "Dispose" | Out-Null
+                    }
+                } catch {}
+                try {
+                    if ($sessObj.CollectorSb.Module) {
+                        Remove-Module -ModuleInfo $sessObj.CollectorSb.Module -Force -ErrorAction SilentlyContinue
+                    }
+                } catch {}
+            }
+            $sessObj.CollectorSb = $null
+            $sessObj.CollectorInitialized = $false
         }
 
         $setFullSync = {
@@ -664,7 +683,7 @@ function Start-PSRPMEngine {
                                 IsLocal              = $newLocal
                                 Target               = $targetName
                                 Badge                = $badge
-                                CollectorSb          = &$newLocalCollectorSb
+                                CollectorSb          = if ($newLocal) { &$newLocalCollectorSb } else { $null }
                                 CollectorInitialized = $false
                                 InspectorInitialized = $false
                                 ActionInitialized    = $false
@@ -792,6 +811,7 @@ function Start-PSRPMEngine {
                                 &$failSessionPendingJobs $sessToClose "Tab session closed."
                                 &$stopRemoteWorker $sessToClose
                                 &$stopSessionNetEtw $sessToClose
+                                &$disposeLocalSession $sessToClose
                                 if ($sessToClose.Session) {
                                     Remove-PSSession -Session $sessToClose.Session -ErrorAction SilentlyContinue
                                 }
@@ -831,6 +851,7 @@ function Start-PSRPMEngine {
                                 &$failSessionPendingJobs $sessions[$activeTabId] "Target switched."
                                 &$stopRemoteWorker $sessions[$activeTabId]
                                 &$stopSessionNetEtw $sessions[$activeTabId]
+                                &$disposeLocalSession $sessions[$activeTabId]
                             }
                             $oldSess = if ($sessions.ContainsKey($activeTabId)) { $sessions[$activeTabId].Session } else { $null }
                             if ($oldSess) {
@@ -868,7 +889,7 @@ function Start-PSRPMEngine {
                                 IsLocal              = $newLocal
                                 Target               = $targetName
                                 Badge                = $badge
-                                CollectorSb          = &$newLocalCollectorSb
+                                CollectorSb          = if ($newLocal) { &$newLocalCollectorSb } else { $null }
                                 CollectorInitialized = $false
                                 InspectorInitialized = $false
                                 ActionInitialized    = $false
@@ -954,7 +975,9 @@ function Start-PSRPMEngine {
                     if ($effEnableNetEtw) { $activeSessObj.NetEtwStarted = $true }
 
                     $rawResult = if ($activeSessObj.IsLocal) {
-                        & $activeSessObj.CollectorSb $forceFull $effEnableNetEtw $netEtwAction
+                        $resLocal = & $activeSessObj.CollectorSb $forceFull $effEnableNetEtw $netEtwAction
+                        $activeSessObj.CollectorInitialized = $true
+                        $resLocal
                     } else {
                         $sRef = $activeSessObj.Session
                         if (-not $sRef -or $sRef.State -ne 'Opened') {
@@ -1124,18 +1147,28 @@ function Start-PSRPMEngine {
         }
         } finally {
             if ($script:CoordLocalWorker) {
+                $lw = $script:CoordLocalWorker
+                $script:CoordLocalWorker = $null
+                try { if ($lw.State) { $lw.State.IsStopping = $true } } catch {}
+                try { if ($lw.WakeEvent) { [void]$lw.WakeEvent.Set() } } catch {}
                 try {
-                    $script:CoordLocalWorker.State.IsStopping = $true
-                    [void]$script:CoordLocalWorker.State.WakeEvent.Set()
-                    $script:CoordLocalWorker.PowerShell.Dispose()
-                    $script:CoordLocalWorker.Runspace.Close()
-                    $script:CoordLocalWorker.Runspace.Dispose()
+                    if ($lw.Handle -and $lw.Handle.AsyncWaitHandle) {
+                        [void]$lw.Handle.AsyncWaitHandle.WaitOne(500)
+                    }
+                    if ($lw.PowerShell -and $lw.Handle -and $lw.Handle.IsCompleted) {
+                        [void]$lw.PowerShell.EndInvoke($lw.Handle)
+                    }
                 } catch {}
+                try { if ($lw.PowerShell) { $lw.PowerShell.Dispose() } } catch {}
+                try { if ($lw.Runspace) { $lw.Runspace.Close() } } catch {}
+                try { if ($lw.Runspace) { $lw.Runspace.Dispose() } } catch {}
+                try { if ($lw.WakeEvent) { $lw.WakeEvent.Dispose() } } catch {}
             }
             foreach ($sItem in $sessions.Values) {
                 &$failSessionPendingJobs $sItem "Engine stopped."
                 &$stopRemoteWorker $sItem
                 &$stopSessionNetEtw $sItem
+                &$disposeLocalSession $sItem
                 if ($sItem.Session) {
                     Remove-PSSession -Session $sItem.Session -ErrorAction SilentlyContinue
                 }
@@ -1176,10 +1209,11 @@ function Start-PSRPMEngine {
 
     $logPaneCtrl = if ($Window) { $Window.FindName("LogPane") } else { $null }
 
-    $appendLogSafe = {
-        param([string]$text)
+    $writeLogTextToConsole = {
+        param([string]$text, [bool]$isWinMinimized = $false)
         if ($LogConsole -and -not [string]::IsNullOrEmpty($text)) {
-            $isPinned = [bool]$stateContainer.LogAutoScroll -and (($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0)) -or [bool]$stateContainer.LogAutoScroll)
+            $atBottom = ($LogConsole.ViewportHeight -le 0) -or ($LogConsole.ExtentHeight -le $LogConsole.ViewportHeight) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 24.0))
+            $isPinned = [bool]$stateContainer.LogAutoScroll -and $atBottom
             try {
                 $stateContainer.IsAppendingLog = $true
                 if ($isPinned) {
@@ -1187,7 +1221,7 @@ function Start-PSRPMEngine {
                         $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
                     }
                     $LogConsole.AppendText($text)
-                    if (($null -eq $Window -or $Window.WindowState -ne [System.Windows.WindowState]::Minimized) -and ($null -eq $logPaneCtrl -or $logPaneCtrl.Visibility -eq [System.Windows.Visibility]::Visible)) {
+                    if ((-not $isWinMinimized) -and ($null -eq $logPaneCtrl -or $logPaneCtrl.Visibility -eq [System.Windows.Visibility]::Visible)) {
                         $LogConsole.ScrollToEnd()
                     }
                 } else {
@@ -1202,6 +1236,12 @@ function Start-PSRPMEngine {
                 $stateContainer.IsAppendingLog = $false
             }
         }
+    }.GetNewClosure()
+
+    $appendLogSafe = {
+        param([string]$text)
+        $minFlag = ($null -ne $Window -and $Window.WindowState -eq [System.Windows.WindowState]::Minimized)
+        &$writeLogTextToConsole $text $minFlag
     }.GetNewClosure()
 
     # Helper: Extract 16x16 Associated Process Icon (Cached per Unique Path)
@@ -2217,10 +2257,23 @@ function Start-PSRPMEngine {
                 foreach ($m in $metaArr) {
                     try {
                         $pidVal = [int]$m['id']
+                        $newCt  = [long]$m['ct']
                         $vm = $null
                         $isBrandNew = $false
                         if ($processMap.ContainsKey($pidVal)) {
-                            $vm = $processMap[$pidVal]
+                            $existingVm = $processMap[$pidVal]
+                            if ($existingVm.CreateTime -gt 0L -and $newCt -gt 0L -and [long]$existingVm.CreateTime -ne $newCt) {
+                                if (-not ($deadArr -and ($deadArr -contains $pidVal))) {
+                                    $exitedLogNames.Add("$($existingVm.Name) ($pidVal) [PID Reused]")
+                                }
+                                [void]$processMap.Remove($pidVal)
+                                $vm = & $createProcessVm
+                                $processMap[$pidVal] = $vm
+                                $isBrandNew = $true
+                                $structureChanged = $true
+                            } else {
+                                $vm = $existingVm
+                            }
                         } else {
                             $vm = & $createProcessVm
                             $processMap[$pidVal] = $vm
@@ -2495,28 +2548,7 @@ function Start-PSRPMEngine {
                 }
 
                 if ($sbLog.Length -gt 0) {
-                    $isPinned = [bool]$stateContainer.LogAutoScroll -and (($LogConsole.ViewportHeight -le 0) -or (($LogConsole.VerticalOffset + $LogConsole.ViewportHeight) -ge ($LogConsole.ExtentHeight - 4.0)) -or [bool]$stateContainer.LogAutoScroll)
-                    try {
-                        $stateContainer.IsAppendingLog = $true
-                        if ($isPinned) {
-                            if ($LogConsole.Text.Length -gt 72000) {
-                                $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 48000)
-                            }
-                            $LogConsole.AppendText($sbLog.ToString())
-                            if ((-not $isMinimized) -and ($null -eq $logPaneCtrl -or $logPaneCtrl.Visibility -eq [System.Windows.Visibility]::Visible)) {
-                                $LogConsole.ScrollToEnd()
-                            }
-                        } else {
-                            if ($LogConsole.Text.Length -gt 192000) {
-                                $savedOffset = $LogConsole.VerticalOffset
-                                $LogConsole.Text = $LogConsole.Text.Substring($LogConsole.Text.Length - 144000)
-                                $LogConsole.ScrollToVerticalOffset([Math]::Max(0.0, $savedOffset - 1200.0))
-                            }
-                            $LogConsole.AppendText($sbLog.ToString())
-                        }
-                    } finally {
-                        $stateContainer.IsAppendingLog = $false
-                    }
+                    &$writeLogTextToConsole $sbLog.ToString() $isMinimized
                 }
             }
 

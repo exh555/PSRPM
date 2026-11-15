@@ -86,6 +86,42 @@
         <SolidColorBrush x:Key="BrushStateEstFg" Color="#166534"/>
         <SolidColorBrush x:Key="BrushStateListenBg" Color="#E2E8F0"/>
         <SolidColorBrush x:Key="BrushStateListenFg" Color="#334155"/>
+        <SolidColorBrush x:Key="BrushStateTimeWaitBg" Color="#FFEDD5"/>
+        <SolidColorBrush x:Key="BrushStateTimeWaitFg" Color="#9A3412"/>
+        <SolidColorBrush x:Key="BrushNetRowNewBg" Color="#DCFCE7"/>
+        <SolidColorBrush x:Key="BrushNetRowNewFg" Color="#14532D"/>
+        <SolidColorBrush x:Key="BrushNetRowModBg" Color="#FEF08A"/>
+        <SolidColorBrush x:Key="BrushNetRowModFg" Color="#713F12"/>
+        <SolidColorBrush x:Key="BrushNetRowDelBg" Color="#FEE2E2"/>
+        <SolidColorBrush x:Key="BrushNetRowDelFg" Color="#7F1D1D"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuFill" Color="#86EFAC"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuArea" Color="#8886EFAC"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuStroke" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushGaugeKernelFill" Color="#FCA5A5"/>
+        <SolidColorBrush x:Key="BrushGaugeKernelArea" Color="#AAFCA5A5"/>
+        <SolidColorBrush x:Key="BrushGaugeKernelStroke" Color="#DC2626"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitFill" Color="#D4D47A"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitArea" Color="#AAD4D47A"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitStroke" Color="#A16207"/>
+        <SolidColorBrush x:Key="BrushGaugeRamFill" Color="#FDBA74"/>
+        <SolidColorBrush x:Key="BrushGaugeRamArea" Color="#AAFDBA74"/>
+        <SolidColorBrush x:Key="BrushGaugeRamStroke" Color="#EA580C"/>
+        <SolidColorBrush x:Key="BrushGaugeIoReadFill" Color="#93C5FD"/>
+        <SolidColorBrush x:Key="BrushGaugeIoReadArea" Color="#AA93C5FD"/>
+        <SolidColorBrush x:Key="BrushGaugeIoReadStroke" Color="#3B82F6"/>
+        <SolidColorBrush x:Key="BrushGaugeIoWriteArea" Color="#BBF9A8D4"/>
+        <SolidColorBrush x:Key="BrushGaugeIoWriteStroke" Color="#DB2777"/>
+        <SolidColorBrush x:Key="BrushMiniCpuFill" Color="#3322C55E"/>
+        <SolidColorBrush x:Key="BrushMiniCommitFill" Color="#33EAB308"/>
+        <SolidColorBrush x:Key="BrushMiniRamFill" Color="#33F97316"/>
+        <SolidColorBrush x:Key="BrushSigSignedFg" Color="#15803D"/>
+        <SolidColorBrush x:Key="BrushSigUnsignedFg" Color="#B91C1C"/>
+        <SolidColorBrush x:Key="BrushStatusActiveFg" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushStatusIdleFg" Color="#475569"/>
+        <SolidColorBrush x:Key="BrushStatusExitedFg" Color="#DC2626"/>
+        <SolidColorBrush x:Key="BrushSvcRunningBg" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushSvcPausedBg" Color="#D97706"/>
+        <SolidColorBrush x:Key="BrushSvcStoppedBg" Color="#64748B"/>
 
         <!-- Subtle Column Metric Tints (Process Explorer Classic Column Tints) -->
         <SolidColorBrush x:Key="ColTint_CPU" Color="#2222C55E"/>
@@ -813,8 +849,8 @@
                     <!-- CPU Sparkline Box -->
                     <Border x:Name="CardMiniCpu" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,4,0" Cursor="Hand" ToolTipService.IsEnabled="False">
                         <Grid x:Name="GridMiniCpu" Width="82" Height="26" ClipToBounds="True" Background="Transparent">
-                            <Polygon Points="{Binding CpuFillPoints}" Fill="#3322C55E" IsHitTestVisible="False"/>
-                            <Polyline Points="{Binding CpuPoints}" Stroke="#16A34A" StrokeThickness="1.3" IsHitTestVisible="False"/>
+                            <Polygon Points="{Binding CpuFillPoints}" Fill="{DynamicResource BrushMiniCpuFill}" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding CpuPoints}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="1.3" IsHitTestVisible="False"/>
                             <Line x:Name="CrosshairMiniCpu" X1="0" Y1="0" X2="0" Y2="26" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                             <TextBlock Text="CPU" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False"/>
                             <TextBlock x:Name="TxtCpuSummary" Text="{Binding CpuSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular" IsHitTestVisible="False"/>
@@ -824,8 +860,8 @@
                     <!-- Commit Charge Sparkline Box -->
                     <Border x:Name="CardMiniCommit" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,4,0" Cursor="Hand" ToolTipService.IsEnabled="False">
                         <Grid x:Name="GridMiniCommit" Width="86" Height="26" ClipToBounds="True" Background="Transparent">
-                            <Polygon Points="{Binding CommitFillPoints}" Fill="#33EAB308" IsHitTestVisible="False"/>
-                            <Polyline Points="{Binding CommitPoints}" Stroke="#CA8A04" StrokeThickness="1.3" IsHitTestVisible="False"/>
+                            <Polygon Points="{Binding CommitFillPoints}" Fill="{DynamicResource BrushMiniCommitFill}" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding CommitPoints}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="1.3" IsHitTestVisible="False"/>
                             <Line x:Name="CrosshairMiniCommit" X1="0" Y1="0" X2="0" Y2="26" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                             <TextBlock Text="Commit" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False"/>
                             <TextBlock x:Name="TxtCommitSummary" Text="{Binding CommitSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular" IsHitTestVisible="False"/>
@@ -835,8 +871,8 @@
                     <!-- Physical RAM Sparkline Box -->
                     <Border x:Name="CardMiniRam" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,6,0" Cursor="Hand" ToolTipService.IsEnabled="False">
                         <Grid x:Name="GridMiniRam" Width="92" Height="26" ClipToBounds="True" Background="Transparent">
-                            <Polygon Points="{Binding RamFillPoints}" Fill="#33F97316" IsHitTestVisible="False"/>
-                            <Polyline Points="{Binding RamPoints}" Stroke="#EA580C" StrokeThickness="1.3" IsHitTestVisible="False"/>
+                            <Polygon Points="{Binding RamFillPoints}" Fill="{DynamicResource BrushMiniRamFill}" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding RamPoints}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="1.3" IsHitTestVisible="False"/>
                             <Line x:Name="CrosshairMiniRam" X1="0" Y1="0" X2="0" Y2="26" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                             <TextBlock Text="Phys RAM" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False"/>
                             <TextBlock x:Name="TxtRamSummary" Text="{Binding RamPctFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular" IsHitTestVisible="False"/>
@@ -907,10 +943,10 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="4,2"/>
                         <TextBlock x:Name="TxtFilterLegendLabel" Text="Filter Legend:" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <Button x:Name="BtnLegendAll" Content="All" FontSize="10" FontWeight="SemiBold" Padding="6,1" Margin="0,0,4,0" Background="#E2E8F0" Foreground="#0F172A" BorderBrush="#0284C7" BorderThickness="2" Cursor="Hand" ToolTip="Show All Process Categories"/>
-                        <Button x:Name="BtnLegendService" Content="Services" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#FFE4E6" Foreground="#0F172A" BorderBrush="#FDA4AF" BorderThickness="1" Cursor="Hand" ToolTip="Filter Service Processes (Click to toggle)"/>
-                        <Button x:Name="BtnLegendOwn" Content="Own / User" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#E0E7FF" Foreground="#0F172A" BorderBrush="#A5B4FC" BorderThickness="1" Cursor="Hand" ToolTip="Filter User Session Processes (Click to toggle)"/>
-                        <Button x:Name="BtnLegendPackaged" Content="Packaged / WebView" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#67E8F9" Foreground="#0F172A" BorderBrush="#06B6D4" BorderThickness="1" Cursor="Hand" ToolTip="Filter Packaged / WebView2 Processes (Click to toggle)"/>
+                        <Button x:Name="BtnLegendAll" Content="All" FontSize="10" FontWeight="SemiBold" Padding="6,1" Margin="0,0,4,0" Background="{DynamicResource BrushHeaderBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="2" Cursor="Hand" ToolTip="Show All Process Categories"/>
+                        <Button x:Name="BtnLegendService" Content="Services" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="{DynamicResource BrushSwatchSvcBg}" Foreground="{DynamicResource BrushSwatchSvcFg}" BorderBrush="{DynamicResource BrushSwatchSvcBorder}" BorderThickness="1" Cursor="Hand" ToolTip="Filter Service Processes (Click to toggle)"/>
+                        <Button x:Name="BtnLegendOwn" Content="Own / User" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="{DynamicResource BrushSwatchOwnBg}" Foreground="{DynamicResource BrushSwatchOwnFg}" BorderBrush="{DynamicResource BrushSwatchOwnBorder}" BorderThickness="1" Cursor="Hand" ToolTip="Filter User Session Processes (Click to toggle)"/>
+                        <Button x:Name="BtnLegendPackaged" Content="Packaged / WebView" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="{DynamicResource BrushSwatchPkgBg}" Foreground="{DynamicResource BrushSwatchPkgFg}" BorderBrush="{DynamicResource BrushSwatchPkgBorder}" BorderThickness="1" Cursor="Hand" ToolTip="Filter Packaged / WebView2 Processes (Click to toggle)"/>
                         <Button x:Name="BtnLegendClear" Content="Clear Filter" FontSize="9" FontWeight="Bold" Padding="5,1" Margin="2,0,6,0" Background="{DynamicResource BrushKillBg}" Foreground="{DynamicResource BrushKillFg}" BorderBrush="{DynamicResource BrushKillBorder}" BorderThickness="1" Cursor="Hand" Visibility="Collapsed" ToolTip="Clear active category filter and show all processes"/>
                         <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
                         <TextBlock Text="Lifecycle Badges:" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,5,0" VerticalAlignment="Center"/>
@@ -1014,18 +1050,18 @@
         </Border>
 
         <!-- 4B. Opt-In Network ETW Alert Banner (Circuit Breaker / Tier 1 Non-Admin Fallback) -->
-        <Border x:Name="NetEtwAlertBanner" DockPanel.Dock="Top" Visibility="Collapsed" Background="#FEF3C7" BorderBrush="#F59E0B" BorderThickness="0,0,0,1" Padding="10,5">
+        <Border x:Name="NetEtwAlertBanner" DockPanel.Dock="Top" Visibility="Collapsed" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,0,0,1" Padding="10,5">
             <DockPanel LastChildFill="True">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnNetEtwResume" Content="Resume Monitoring" Padding="8,2" FontSize="11" FontWeight="SemiBold" Margin="0,0,6,0" Background="#FFFFFF" Foreground="#0F172A" BorderBrush="#D97706" BorderThickness="1" Cursor="Hand"/>
-                    <Button x:Name="BtnNetEtwTurnOff" Content="Turn Off" Padding="8,2" FontSize="11" Margin="0,0,6,0" Background="Transparent" Foreground="#0F172A" BorderBrush="#94A3B8" BorderThickness="1" Cursor="Hand"/>
-                    <Button x:Name="BtnNetEtwDismiss" Content="X" Padding="5,2" FontSize="11" FontWeight="Bold" Background="Transparent" Foreground="#475569" BorderThickness="0" Cursor="Hand" ToolTip="Dismiss Notice"/>
+                    <Button x:Name="BtnNetEtwResume" Content="Resume Monitoring" Padding="8,2" FontSize="11" FontWeight="SemiBold" Margin="0,0,6,0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Cursor="Hand"/>
+                    <Button x:Name="BtnNetEtwTurnOff" Content="Turn Off" Padding="8,2" FontSize="11" Margin="0,0,6,0" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Cursor="Hand"/>
+                    <Button x:Name="BtnNetEtwDismiss" Content="X" Padding="5,2" FontSize="11" FontWeight="Bold" Background="Transparent" Foreground="{DynamicResource BrushTextMuted}" BorderThickness="0" Cursor="Hand" ToolTip="Dismiss Notice"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border x:Name="BdNetEtwBannerBadge" Background="#F59E0B" CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="TxtNetEtwBannerBadge" Text="CIRCUIT BREAKER" Foreground="#FFFFFF" FontSize="9.5" FontWeight="Bold"/>
+                    <Border x:Name="BdNetEtwBannerBadge" Background="{DynamicResource BrushBadgeBg}" CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="TxtNetEtwBannerBadge" Text="CIRCUIT BREAKER" Foreground="{DynamicResource BrushRowSelectedFg}" FontSize="9.5" FontWeight="Bold"/>
                     </Border>
-                    <TextBlock x:Name="TxtNetEtwBannerMsg" Text="" Foreground="#0F172A" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtNetEtwBannerMsg" Text="" Foreground="{DynamicResource BrushTextPrimary}" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>

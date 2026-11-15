@@ -98,7 +98,7 @@ $script:PSRPMCollectorScriptBlock = {
         [void]$svcTb.CreateType()
     }
 
-    if (-not $script:CollectorInitialized) {
+    if (-not $script:CollectorInitialized -and $NetEtwAction -ne "Dispose") {
         $script:SeqNumber      = 0
         $script:LastSnapTicks  = [DateTime]::UtcNow.Ticks
         $script:LastIdleCpu    = 0L
@@ -217,7 +217,8 @@ $script:PSRPMCollectorScriptBlock = {
         $script:SysBufPtr      = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:SysBufSize)
         $script:SvcBufSize     = 262144 # 256 KB initial buffer for EnumServicesStatusExW
         $script:SvcBufPtr      = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:SvcBufSize)
-        $script:ScratchBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8192)
+        $script:ScratchBufSize = 8192
+        $script:ScratchBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:ScratchBufSize)
         $script:ExePathSb      = [System.Text.StringBuilder]::new(1024)
 
         # Pre-allocated JSON Serializer (Zero Per-Tick Allocation Churn)
@@ -277,7 +278,7 @@ $script:PSRPMCollectorScriptBlock = {
         $script:CollectorInitialized = $true
     }
 
-    if ($ForceFullSync) {
+    if ($ForceFullSync -and $script:CollectorInitialized) {
         $script:SentMetaKeys.Clear()
         $script:LastDynState.Clear()
         $script:LastSvcState.Clear()
@@ -1021,12 +1022,12 @@ $script:PSRPMCollectorScriptBlock = {
         if (-not ('PSRPM.EtwNetConsumerV1' -as [type])) {
             $script:EtwNetActive = $false
             if ($script:EtwNetCap -eq 1) { $script:EtwNetCap = 0 }
-            $script:EtwNetRates.Clear()
+            if ($script:EtwNetRates) { $script:EtwNetRates.Clear() }
             return
         }
         [PSRPM.EtwNetConsumerV1]::Active = 0
 
-        if ($script:EtwTraceHandle -ne [uint64]::MaxValue -and $script:EtwTraceHandle -ne [uint64]0) {
+        if ($script:EtwTraceHandle -and $script:EtwTraceHandle -ne [uint64]::MaxValue -and $script:EtwTraceHandle -ne [uint64]0) {
             try { [void][PSRPM.EtwNetConsumerV1]::CloseTrace($script:EtwTraceHandle) } catch {}
             $script:EtwTraceHandle = [uint64]::MaxValue
             [PSRPM.EtwNetConsumerV1]::ActiveTraceHandle = [uint64]::MaxValue
@@ -1035,7 +1036,7 @@ $script:PSRPMCollectorScriptBlock = {
         # Stop kernel session by handle and/or session name (EVENT_TRACE_CONTROL_STOP = 1)
         $propBase  = 120
         $propTotal = $propBase + 512
-        if ($script:EtwPropsPtr -eq [IntPtr]::Zero) {
+        if (-not $script:EtwPropsPtr -or $script:EtwPropsPtr -eq [IntPtr]::Zero) {
             $script:EtwPropsPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($propTotal)
         }
         for ($zi = 0; $zi -lt $propTotal; $zi += 8) {
@@ -1045,32 +1046,34 @@ $script:PSRPMCollectorScriptBlock = {
         [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 44, 0x00020000) # WNODE_FLAG_TRACED_GUID
         [System.Runtime.InteropServices.Marshal]::WriteInt32($script:EtwPropsPtr, 108 + [IntPtr]::Size, $propBase)
 
-        if ($script:EtwSessionHandle -ne [uint64]0) {
+        if ($script:EtwSessionHandle -and $script:EtwSessionHandle -ne [uint64]0) {
             try { [void][PSRPM.EtwNetConsumerV1]::ControlTraceW($script:EtwSessionHandle, $null, $script:EtwPropsPtr, [uint32]1) } catch {}
             $script:EtwSessionHandle = [uint64]0
         }
-        try { [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, $script:EtwSessionName, $script:EtwPropsPtr, [uint32]1) } catch {}
+        if ($script:EtwSessionName) {
+            try { [void][PSRPM.EtwNetConsumerV1]::ControlTraceW([uint64]0, $script:EtwSessionName, $script:EtwPropsPtr, [uint32]1) } catch {}
+        }
 
         if ($script:EtwConsumerThread) {
             try { [void]$script:EtwConsumerThread.Join(350) } catch {}
             $script:EtwConsumerThread = $null
         }
-        if ($script:EtwLogFilePtr -ne [IntPtr]::Zero) {
+        if ($script:EtwLogFilePtr -and $script:EtwLogFilePtr -ne [IntPtr]::Zero) {
             try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwLogFilePtr) } catch {}
             $script:EtwLogFilePtr = [IntPtr]::Zero
         }
-        if ($script:EtwLogNamePtr -ne [IntPtr]::Zero) {
+        if ($script:EtwLogNamePtr -and $script:EtwLogNamePtr -ne [IntPtr]::Zero) {
             try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwLogNamePtr) } catch {}
             $script:EtwLogNamePtr = [IntPtr]::Zero
         }
-        if ($script:EtwPropsPtr -ne [IntPtr]::Zero) {
+        if ($script:EtwPropsPtr -and $script:EtwPropsPtr -ne [IntPtr]::Zero) {
             try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwPropsPtr) } catch {}
             $script:EtwPropsPtr = [IntPtr]::Zero
         }
 
         [PSRPM.EtwNetConsumerV1]::ClearSlots()
         [PSRPM.EtwNetConsumerV1]::TotalEvents = 0
-        $script:EtwNetRates.Clear()
+        if ($script:EtwNetRates) { $script:EtwNetRates.Clear() }
         $script:EtwNetActive = $false
         $script:EtwHighRateTicks = 0
         if ($script:EtwNetCap -eq 1) { $script:EtwNetCap = 0 }
@@ -1240,6 +1243,58 @@ $script:PSRPMCollectorScriptBlock = {
             $script:EtwNetCap = if ($tsErr -eq 5) { 3 } else { 4 }
             return
         }
+    }
+
+    if ($NetEtwAction -eq "Dispose") {
+        $script:EtwBreakerTripped = $false
+        if ($script:EtwNetInitialized -or $script:EtwNetActive) {
+            &$stopNetEtw
+        }
+        $script:EtwLastErr = ""
+        $script:EtwNetCap = 0
+        $script:EtwLastSentCap = 0
+        $script:EtwNetInitialized = $false
+        if ($script:EtwLogFilePtr -and $script:EtwLogFilePtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwLogFilePtr) } catch {}
+            $script:EtwLogFilePtr = [IntPtr]::Zero
+        }
+        if ($script:EtwLogNamePtr -and $script:EtwLogNamePtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwLogNamePtr) } catch {}
+            $script:EtwLogNamePtr = [IntPtr]::Zero
+        }
+        if ($script:EtwPropsPtr -and $script:EtwPropsPtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:EtwPropsPtr) } catch {}
+            $script:EtwPropsPtr = [IntPtr]::Zero
+        }
+        if ($script:SysBufPtr -and $script:SysBufPtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:SysBufPtr) } catch {}
+            $script:SysBufPtr = [IntPtr]::Zero
+            $script:SysBufSize = 0
+        }
+        if ($script:SvcBufPtr -and $script:SvcBufPtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:SvcBufPtr) } catch {}
+            $script:SvcBufPtr = [IntPtr]::Zero
+            $script:SvcBufSize = 0
+        }
+        if ($script:ScratchBufPtr -and $script:ScratchBufPtr -ne [IntPtr]::Zero) {
+            try { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:ScratchBufPtr) } catch {}
+            $script:ScratchBufPtr = [IntPtr]::Zero
+            $script:ScratchBufSize = 0
+        }
+        if ($script:ProcCpuCache)   { $script:ProcCpuCache.Clear() }
+        if ($script:ProcCycleCache) { $script:ProcCycleCache.Clear() }
+        if ($script:ProcMetaCache)  { $script:ProcMetaCache.Clear() }
+        if ($script:PendingMetaMap) { $script:PendingMetaMap.Clear() }
+        if ($script:SentMetaKeys)   { $script:SentMetaKeys.Clear() }
+        if ($script:LastDynState)   { $script:LastDynState.Clear() }
+        if ($script:ActivePidToKey) { $script:ActivePidToKey.Clear() }
+        if ($script:LastSvcState)   { $script:LastSvcState.Clear() }
+        if ($script:SvcStaticCache) { $script:SvcStaticCache.Clear() }
+        if ($script:FileMetaCache)  { $script:FileMetaCache.Clear() }
+        if ($script:SidCache)       { $script:SidCache.Clear() }
+        $script:CachedServices = $null
+        $script:CollectorInitialized = $false
+        return "DISPOSED"
     }
 
     if ($NetEtwAction -eq "Stop") {
@@ -2082,8 +2137,16 @@ $script:PSRPMCollectorScriptBlock = {
 
     # A. SystemProcessorPerformanceInformation (Class 8: 48 bytes per logical CPU)
     $sppiLen = $script:CoreCount * 48
+    if ($sppiLen -gt $script:ScratchBufSize -and $sppiLen -le 131072) {
+        if ($script:ScratchBufPtr -ne [IntPtr]::Zero) {
+            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($script:ScratchBufPtr)
+            $script:ScratchBufPtr = [IntPtr]::Zero
+        }
+        $script:ScratchBufSize = [Math]::Min(131072, [Math]::Max($sppiLen + 1024, $script:ScratchBufSize * 2))
+        $script:ScratchBufPtr  = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($script:ScratchBufSize)
+    }
     $sppiRet = 0
-    if ($sppiLen -le 8192 -and [PSRPM.NativeCollectorV3]::NtQuerySystemInformation(8, $script:ScratchBufPtr, $sppiLen, [ref]$sppiRet) -eq 0) {
+    if ($sppiLen -le $script:ScratchBufSize -and [PSRPM.NativeCollectorV3]::NtQuerySystemInformation(8, $script:ScratchBufPtr, $sppiLen, [ref]$sppiRet) -eq 0) {
         $totIdle = 0L
         $totKern = 0L
         $totUser = 0L
@@ -2271,7 +2334,7 @@ $script:PSRPMCollectorScriptBlock = {
     $metaPendCnt  = $script:PendingMetaMap.Count
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.11.0","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.12.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"colMs":').Append($colMs)
     [void]$sb.Append(',"svcMs":').Append($svcMs)
@@ -2293,7 +2356,11 @@ $script:PSRPMCollectorScriptBlock = {
     }
     [void]$sb.Append(',"dyn":[').Append(($dynDeltaList -join ',')).Append(']}')
 
-    $rawBytes = [System.Text.Encoding]::UTF8.GetBytes($sb.ToString())
+    $jsonOut  = $sb.ToString()
+    $rawBytes = [System.Text.Encoding]::UTF8.GetBytes($jsonOut)
+    if ($rawBytes.Length -lt 256) {
+        return $jsonOut
+    }
     $ms = [System.IO.MemoryStream]::new()
     $gs = [System.IO.Compression.GZipStream]::new($ms, [System.IO.Compression.CompressionMode]::Compress)
     $gs.Write($rawBytes, 0, $rawBytes.Length)

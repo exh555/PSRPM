@@ -17,9 +17,13 @@
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
         <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
         <SolidColorBrush x:Key="BrushRowHover" Color="#220284C7"/>
         <SolidColorBrush x:Key="BrushRowSelectedBg" Color="#006CBE"/>
         <SolidColorBrush x:Key="BrushRowSelectedFg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushSvcRunningBg" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushSvcPausedBg" Color="#D97706"/>
+        <SolidColorBrush x:Key="BrushSvcStoppedBg" Color="#64748B"/>
 
         <Style x:Key="EllipsisCellText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -27,6 +31,74 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             <Setter Property="FontWeight" Value="Normal"/>
             <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style TargetType="GroupBox">
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+            <Setter Property="Padding" Value="8"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="Margin" Value="2,0,2,0"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3,3,0,0" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="HeaderContent" ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.FontWeight="SemiBold" TextElement.FontSize="11.5"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="0,0,0,2"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="{DynamicResource BrushHeaderBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,0,0,1" Padding="4,2,4,0">
+                                <TabPanel IsItemsHost="True"/>
+                            </Border>
+                            <Border Grid.Row="1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,0,1,1">
+                                <ContentPresenter ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="DialogButtonStyle" TargetType="Button">
@@ -69,7 +141,7 @@
                         <TextBlock x:Name="TxtDlgPid" Text="0" Foreground="{DynamicResource BrushTextPrimary}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StackPanel>
-                <Border x:Name="BadgeDlgStatus" Grid.Column="1" Background="#16A34A" CornerRadius="3" Padding="10,4" VerticalAlignment="Center">
+                <Border x:Name="BadgeDlgStatus" Grid.Column="1" Background="{DynamicResource BrushSvcRunningBg}" CornerRadius="3" Padding="10,4" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtDlgStatus" Text="RUNNING" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
                 </Border>
             </Grid>
@@ -250,7 +322,7 @@
                 <Button x:Name="BtnDlgStop" Content="Stop Service" Style="{StaticResource DialogButtonStyle}"/>
                 <Button x:Name="BtnDlgRestart" Content="Restart Service" Style="{StaticResource DialogButtonStyle}"/>
             </StackPanel>
-            <Button x:Name="BtnDlgClose" DockPanel.Dock="Right" Content="Close" Width="80" Height="26" IsCancel="True" HorizontalAlignment="Right" Cursor="Hand"/>
+            <Button x:Name="BtnDlgClose" DockPanel.Dock="Right" Content="Close" Width="80" Height="26" IsCancel="True" HorizontalAlignment="Right" Margin="0" Style="{StaticResource DialogButtonStyle}"/>
         </DockPanel>
     </Grid>
 </Window>

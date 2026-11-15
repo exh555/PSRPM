@@ -61,7 +61,7 @@ if ($helpXamlContent -notmatch "x:Name=`"TxtAboutVersion`"\s+Text=`"$modVer`"") 
 Write-Host "  [PASS] HelpWindow.xaml version tags match manifest version $modVer." -ForegroundColor Green
 
 # 6. Run Automated Engine Verification Suite
-Write-Host "[CHECK 6] Running Automated 11-Suite Verification..." -ForegroundColor Yellow
+Write-Host "[CHECK 6] Running Automated 12-Suite Verification..." -ForegroundColor Yellow
 & powershell -NoProfile -ExecutionPolicy Bypass -File $testScript
 if ($LASTEXITCODE -ne 0) {
     throw "Automated verification suite failed with exit code $LASTEXITCODE"

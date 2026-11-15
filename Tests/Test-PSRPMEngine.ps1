@@ -2265,6 +2265,165 @@ if ($tipCore -notlike "*CPU 0:*" -or $tipCore -notlike "*Time:*") {
 }
 Write-Host "  [PASS] 12N: Verified Graph Hover Tooltips, XAML Crosshair elements, 240/30/60 circular alignment & Top-Process attribution." -ForegroundColor Green
 
+# 12O: Phase 1-5 Stabilization, Native Safety, Performance & 6-Theme Parity Regressions
+# H4: Collector Dispose lifecycle + unmanaged pointer nulling + clean re-init
+$null = & $script:PSRPMCollectorScriptBlock $true $false
+if (-not $script:CollectorInitialized -or $script:SysBufPtr -eq [IntPtr]::Zero) {
+    throw "Expected CollectorInitialized=$true and non-zero SysBufPtr before Dispose regression check."
+}
+$dispRes = & $script:PSRPMCollectorScriptBlock $false $false "Dispose"
+if ($dispRes -ne "DISPOSED" -or $script:CollectorInitialized -or $script:SysBufPtr -ne [IntPtr]::Zero -or $script:SvcBufPtr -ne [IntPtr]::Zero -or $script:ScratchBufPtr -ne [IntPtr]::Zero) {
+    throw "DataCollector Dispose failed to zero unmanaged buffers cleanly (Res='$dispRes', Init=$($script:CollectorInitialized))."
+}
+$reInitWire = & $script:PSRPMCollectorScriptBlock $true $false
+$reInitData = $jssAllSock.DeserializeObject((Expand-GzipPayload $reInitWire))
+if (-not $reInitData -or [int]$reInitData['seq'] -lt 1) {
+    throw "DataCollector failed to re-initialize cleanly after Dispose."
+}
+
+# M2: CloseTcpConnection validation (PID <= 4 refusal, GetExtendedTcpTable export, ownership mismatch) & KillTree root abort
+if ($null -eq ([PSRPM.NativeActionsV4].GetMethod('GetExtendedTcpTable'))) {
+    throw "PSRPM.NativeActionsV4 missing GetExtendedTcpTable P/Invoke export."
+}
+$closeSysJson = & $script:PSRPMActionScriptBlock "CloseTcpConnection" 4 "" "" "Normal" "127.0.0.1|80|127.0.0.1|9000"
+$closeSysObj  = $jssAllSock.DeserializeObject($closeSysJson)
+if ([bool]$closeSysObj['Success'] -or $closeSysObj['Status'] -ne "Refused" -or ([string]$closeSysObj['Message'] -notmatch 'PID 4')) {
+    throw "CloseTcpConnection must refuse PID 4 with Status='Refused': $closeSysJson"
+}
+$closeMissJson = & $script:PSRPMActionScriptBlock "CloseTcpConnection" $PID "" "" "Normal" "127.0.0.1|65499|127.0.0.1|65498"
+$closeMissObj  = $jssAllSock.DeserializeObject($closeMissJson)
+if ([bool]$closeMissObj['Success'] -or $closeMissObj['Status'] -ne "Refused" -or ([string]$closeMissObj['Message'] -notmatch 'no longer exists|ownership mismatch|could not be closed')) {
+    throw "CloseTcpConnection must refuse non-existent/unowned tuple with Status='Refused': $closeMissJson"
+}
+$killTreeMissingJson = & $script:PSRPMActionScriptBlock "KillTree" 999999 "nonexistent_psrpm_canary.exe" "" "Normal" ""
+$killTreeMissingObj  = $jssAllSock.DeserializeObject($killTreeMissingJson)
+if ([bool]$killTreeMissingObj['Success']) {
+    throw "KillTree against non-existent PID 999999 should abort and fail cleanly: $killTreeMissingJson"
+}
+
+# M1 & H1: Same-tick PID-reuse CreateTime eviction & CoordLocalWorker clean shutdown in RunspaceEngine
+$pidReuseWin = [System.Windows.Window]::new()
+$pidReuseProcCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$pidReuseSvcCol  = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$pidReuseSumVm   = [SystemSummaryViewModel]::new()
+$mockReuseCol = {
+    param([bool]$ForceFull = $false, [bool]$EnableNetEtw = $false, [string]$NetEtwAction = "")
+    if ($NetEtwAction -eq "Dispose") { return "DISPOSED" }
+    if (-not $script:MockReuseTick) { $script:MockReuseTick = 0 }
+    $script:MockReuseTick++
+    if ($script:MockReuseTick -eq 1) {
+        return '{"ver":1,"seq":1,"full":1,"sys":[1.0,1000,8192,10,100,1000,1000,16384],"cores":[[0,1.0,0.2]],"hw":null,"dead":[],"meta":[{"id":44444,"ct":1000,"n":"alpha_old.exe","desc":"","comp":"","ver":"","cmd":"","path":"","u":"U","sid":1,"arch":"x64","start":"2026-11-14","prio":8,"p":0,"cat":"Own"}],"svc":[],"svcDead":[],"dyn":[[44444,0.5,1048576,1048576,2,10,0]]}'
+    }
+    return '{"ver":1,"seq":2,"full":0,"sys":[1.0,1000,8192,10,100,1000,1000,16384],"cores":[[0,1.0,0.2]],"hw":null,"dead":[],"meta":[{"id":44444,"ct":2000,"n":"beta_new.exe","desc":"","comp":"","ver":"","cmd":"","path":"","u":"U","sid":1,"arch":"x64","start":"2026-11-14","prio":8,"p":0,"cat":"Own"}],"svc":[],"svcDead":[],"dyn":[[44444,1.2,2097152,2097152,3,15,0]]}'
+}
+$pidReuseEng = Start-PSRPMEngine `
+    -PSSession $null -Window $pidReuseWin `
+    -ProcessCollection $pidReuseProcCol -ServicesCollection $pidReuseSvcCol -SummaryViewModel $pidReuseSumVm `
+    -CollectorScript $mockReuseCol -InspectorScript $script:PSRPMDeepInspectorScriptBlock -ActionScript $script:PSRPMActionScriptBlock `
+    -IntervalMs 120 -IsLocal $true -TargetName "PID-REUSE-MOCK"
+try {
+    $reuseDeadline = [DateTime]::UtcNow.AddSeconds(4.0)
+    while ([DateTime]::UtcNow -lt $reuseDeadline) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{})
+        if ($pidReuseEng.ProcessMap.ContainsKey(44444) -and $pidReuseEng.ProcessMap[44444].Name -eq "beta_new.exe") { break }
+        Start-Sleep -Milliseconds 30
+    }
+    if (-not $pidReuseEng.ProcessMap.ContainsKey(44444)) {
+        throw "RunspaceEngine PID-reuse mock never ingested PID 44444."
+    }
+    $reusedVm = $pidReuseEng.ProcessMap[44444]
+    if ($reusedVm.Name -ne "beta_new.exe" -or [long]$reusedVm.CreateTime -ne 2000L -or $reusedVm.LifecycleState -ne 1) {
+        throw "RunspaceEngine failed to evict & recreate reused PID 44444 (Name=$($reusedVm.Name), CT=$($reusedVm.CreateTime), State=$($reusedVm.LifecycleState))."
+    }
+} finally {
+    $pidReuseEng.Timer.Stop()
+    $pidReuseEng.StateContainer.IsStopping = $true
+    [void]$pidReuseEng.StateContainer.WakeEvent.Set()
+    Start-Sleep -Milliseconds 80
+    $pidReuseEng.PowerShell.Dispose()
+    $pidReuseEng.Runspace.Close()
+    $pidReuseEng.Runspace.Dispose()
+}
+
+# 6-Theme Palette Caching, Semantic Brush Key Parity & PendingNetTimeline Queue
+[PSRPMThemeRegistry]::ClearCache()
+if ([PSRPMThemeRegistry]::NormalizeMode("tokyonight") -ne "TokyoNight" -or [PSRPMThemeRegistry]::NormalizeMode("classic") -ne "Classic") {
+    throw "PSRPMThemeRegistry::NormalizeMode failed case normalization."
+}
+$pCache1 = [PSRPMThemeRegistry]::GetPalette("TokyoNight")
+$pCache2 = [PSRPMThemeRegistry]::GetPalette("TokyoNight")
+if (-not [Object]::ReferenceEquals($pCache1, $pCache2)) {
+    throw "PSRPMThemeRegistry::GetPalette did not return cached reference on repeat call."
+}
+$reqThemeBrushKeys = @(
+    "BrushGaugeCpuFill", "BrushGaugeCpuArea", "BrushGaugeCpuStroke",
+    "BrushGaugeKernelFill", "BrushGaugeKernelArea", "BrushGaugeKernelStroke",
+    "BrushGaugeCommitFill", "BrushGaugeCommitArea", "BrushGaugeCommitStroke",
+    "BrushGaugeRamFill", "BrushGaugeRamArea", "BrushGaugeRamStroke",
+    "BrushGaugeIoReadFill", "BrushGaugeIoReadArea", "BrushGaugeIoReadStroke",
+    "BrushGaugeIoWriteArea", "BrushGaugeIoWriteStroke",
+    "BrushMiniCpuFill", "BrushMiniCommitFill", "BrushMiniRamFill",
+    "BrushSigSignedFg", "BrushSigUnsignedFg",
+    "BrushStatusActiveFg", "BrushStatusIdleFg", "BrushStatusExitedFg",
+    "BrushSvcRunningBg", "BrushSvcPausedBg", "BrushSvcStoppedBg",
+    "BrushStateTimeWaitBg", "BrushStateTimeWaitFg",
+    "BrushNetRowNewBg", "BrushNetRowModBg", "BrushNetRowDelBg"
+)
+foreach ($thName in @("Light", "Dark", "TokyoNight", "TokyoNightLight", "Classic", "HighContrast")) {
+    $tp = [PSRPMThemeRegistry]::GetPalette($thName)
+    foreach ($rk in $reqThemeBrushKeys) {
+        if (-not $tp.Brushes.ContainsKey($rk)) {
+            throw "Theme '$thName' palette missing semantic brush key '$rk'."
+        }
+    }
+}
+$tabPendingCheck = [HostTabItemViewModel]::new("t_pend", "LOCALHOST", "LOCALHOST", "Local", $true, $null)
+if (-not ($tabPendingCheck.PendingNetTimeline -is [System.Collections.Generic.Queue[Object]])) {
+    throw "HostTabItemViewModel.PendingNetTimeline must initialize as Queue[Object]."
+}
+
+# Structural Remediation Invariants (PSRPM.psm1, DataCollector.ps1, RunspaceEngine.ps1)
+$dcSrc12o = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\Private\DataCollector.ps1"))
+if ($dcSrc12o -notmatch '\$rawBytes\.Length\s*-lt\s*256' -or $dcSrc12o -notmatch 'CoreCount\s*\*\s*48') {
+    throw "DataCollector.ps1 missing < 256 B raw JSON passthrough or dynamic Class 8 CoreCount * 48 buffer scaling."
+}
+if ($reSrc12j -match '\)\s*-or\s*\[bool\]\$stateContainer\.LogAutoScroll') {
+    throw "RunspaceEngine.ps1 still contains trailing LogAutoScroll short-circuit bypassing sticky-to-bottom check."
+}
+if (([regex]::Matches($psm1Src12, 'Clipboard\]::SetText')).Count -gt 1) {
+    throw "PSRPM.psm1 contains raw Clipboard::SetText calls outside copyToClipboardSafe."
+}
+foreach ($reqSym in @('$copyToClipboardSafe', '$showMsgSafe', '$jumpToProcessInMainGrid', '$syncTargetSwitchUi', '$flushPendingNetTimeline', '$applySocketSnapshotList', '$getSvcBadgeKey', 'MaxJsonLength = 10485760', 'Export-Csv -LiteralPath')) {
+    if (-not $psm1Src12.Contains($reqSym)) {
+        throw "PSRPM.psm1 missing expected Phase 1-3 remediation helper/guard '$reqSym'."
+    }
+}
+if ($psm1Src12 -match '(?<![A-Za-z0-9_])\$bc\.') {
+    throw "PSRPM.psm1 contains stale undefined `$bc member invocation."
+}
+$svcXamlSrc12o = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\UI\ServiceDetailWindow.xaml"))
+if ($svcXamlSrc12o -notmatch 'x:Key="BrushAccent"' -or $svcXamlSrc12o -notmatch 'TargetType="TabItem"' -or $svcXamlSrc12o -notmatch 'x:Name="BtnDlgClose"[^>]*Style="\{StaticResource DialogButtonStyle\}"') {
+    throw "ServiceDetailWindow.xaml missing dark/Tokyo theme styles (BrushAccent, TabItem template, or DialogButtonStyle on BtnDlgClose)."
+}
+$svcTestDoc = [xml]$svcXamlSrc12o
+$svcTestWin = [System.Windows.Markup.XamlReader]::Load([System.Xml.XmlNodeReader]::new($svcTestDoc))
+$tokyoPal12o = [PSRPMThemeRegistry]::GetPalette("TokyoNight")
+$bc12o = [System.Windows.Media.BrushConverter]::new()
+foreach ($tk in $tokyoPal12o.Brushes.Keys) {
+    $tb = $bc12o.ConvertFromString($tokyoPal12o.Brushes[$tk])
+    if ($tb.CanFreeze) { $tb.Freeze() }
+    $svcTestWin.Resources[$tk] = $tb
+}
+$svcTestBadge = $svcTestWin.FindName("BadgeDlgStatus")
+foreach ($stKey in @("BrushSvcRunningBg", "BrushSvcPausedBg", "BrushSvcStoppedBg")) {
+    $svcTestBadge.SetResourceReference([System.Windows.Controls.Border]::BackgroundProperty, $stKey)
+    if ($svcTestBadge.Background.Color.ToString() -ne $bc12o.ConvertFromString($tokyoPal12o.Brushes[$stKey]).Color.ToString()) {
+        throw "ServiceDetailWindow BadgeDlgStatus failed TokyoNight theme resolution for '$stKey'."
+    }
+}
+$svcTestWin.Close()
+Write-Host "  [PASS] 12O: Verified Phase 1-5 regressions (H1/H4 Dispose, M1 PID-reuse, M2 CloseTcp & KillTree, M4/M5 helpers, 6-theme parity, ServiceDetail badge/theme, <256B GZIP bypass, PendingNetTimeline)." -ForegroundColor Green
+
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()
 foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {

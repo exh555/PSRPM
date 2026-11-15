@@ -110,7 +110,7 @@
         <Border Grid.Row="0" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="{DynamicResource BrushBadgeBg}" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.11.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.12.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -172,7 +172,7 @@
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="Expand branch in Tree View, or jump to first child process if expanded" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+I" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Open System Information graphs window (Summary, CPU, Memory, I/O)" Style="{StaticResource ShortcutDescText}"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Open System Information graphs window (Summary, CPU, Memory, I/O, Network)" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+L" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="7" Grid.Column="1" Text="Toggle bottom Audit Trail &amp; Network Telemetry Console pane" Style="{StaticResource ShortcutDescText}"/>
@@ -181,7 +181,7 @@
                                 <TextBlock Grid.Row="8" Grid.Column="1" Text="Toggle opt-in Per-Process Kernel Network Monitoring (ETW)" Style="{StaticResource ShortcutDescText}"/>
 
                                 <Border Grid.Row="9" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+D" Style="{StaticResource KeyBadgeText}"/></Border>
-                                <TextBlock Grid.Row="9" Grid.Column="1" Text="Cycle through themes: Clean Light, Precision Dark, Classic, and High-Contrast" Style="{StaticResource ShortcutDescText}"/>
+                                <TextBlock Grid.Row="9" Grid.Column="1" Text="Cycle through themes: Clean Light, Dark Mode, Tokyo Night, Tokyo Night Light, Classic, and High-Contrast" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
@@ -194,6 +194,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -223,6 +224,9 @@
 
                                 <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="F5" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="Trigger immediate telemetry poll and differential UI sync" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+B" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="7" Grid.Column="1" Text="Capture or update process baseline snapshot for active host delta comparisons" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
@@ -333,7 +337,7 @@
                         <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10">
                             <StackPanel>
                                 <TextBlock Text="Kernel Named-Pipe Deadlock Prevention" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource BrushKillFg}"/>
-                                <TextBlock Text="- When inspecting open kernel handles, synchronous File and Named-Pipe objects are bypassed during NtQueryObject(ObjectNameInformation) calls.&#x0a;- Completely prevents kernel deadlocks and frozen runspaces on Chromium / msedgewebview2.exe Mojo IPC pipes."
+                                <TextBlock Text="- When inspecting open kernel handles, File handles are pre-checked via kernel32!GetFileType and resolved safely with GetFinalPathNameByHandleW only for disk files (FILE_TYPE_DISK = 1).&#x0a;- Synchronous named-pipe, socket, and character device handles are bypassed before NtQueryObject(ObjectNameInformation), eliminating kernel deadlocks on Chromium / msedgewebview2.exe Mojo IPC pipes."
                                            Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
                         </Border>
@@ -435,7 +439,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
                                         <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.11.0" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.12.0" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,4"/>

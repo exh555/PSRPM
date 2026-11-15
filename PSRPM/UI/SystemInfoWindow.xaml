@@ -27,6 +27,23 @@
         <SolidColorBrush x:Key="BrushNetRxFill" Color="#440284C7"/>
         <SolidColorBrush x:Key="BrushNetTxStroke" Color="#EA580C"/>
         <SolidColorBrush x:Key="BrushNetTxFill" Color="#44EA580C"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuFill" Color="#86EFAC"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuArea" Color="#8886EFAC"/>
+        <SolidColorBrush x:Key="BrushGaugeCpuStroke" Color="#16A34A"/>
+        <SolidColorBrush x:Key="BrushGaugeKernelFill" Color="#FCA5A5"/>
+        <SolidColorBrush x:Key="BrushGaugeKernelArea" Color="#AAFCA5A5"/>
+        <SolidColorBrush x:Key="BrushGaugeKernelStroke" Color="#DC2626"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitFill" Color="#D4D47A"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitArea" Color="#AAD4D47A"/>
+        <SolidColorBrush x:Key="BrushGaugeCommitStroke" Color="#A16207"/>
+        <SolidColorBrush x:Key="BrushGaugeRamFill" Color="#FDBA74"/>
+        <SolidColorBrush x:Key="BrushGaugeRamArea" Color="#AAFDBA74"/>
+        <SolidColorBrush x:Key="BrushGaugeRamStroke" Color="#EA580C"/>
+        <SolidColorBrush x:Key="BrushGaugeIoReadFill" Color="#93C5FD"/>
+        <SolidColorBrush x:Key="BrushGaugeIoReadArea" Color="#AA93C5FD"/>
+        <SolidColorBrush x:Key="BrushGaugeIoReadStroke" Color="#3B82F6"/>
+        <SolidColorBrush x:Key="BrushGaugeIoWriteArea" Color="#BBF9A8D4"/>
+        <SolidColorBrush x:Key="BrushGaugeIoWriteStroke" Color="#DB2777"/>
 
         <Style x:Key="LblMuted" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource BrushTextMuted}"/>
@@ -175,8 +192,8 @@
                             <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
                                 <Viewbox Stretch="Fill">
                                     <Canvas Width="44" Height="120" ClipToBounds="True">
-                                        <Rectangle Width="44" Height="{Binding CpuGaugeTotalHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeTotalTop}" Fill="#86EFAC" Stroke="#16A34A" StrokeThickness="0.8"/>
-                                        <Rectangle Width="44" Height="{Binding CpuGaugeKernelHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeKernelTop}" Fill="#FCA5A5" Stroke="#DC2626" StrokeThickness="0.8"/>
+                                        <Rectangle Width="44" Height="{Binding CpuGaugeTotalHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeTotalTop}" Fill="{DynamicResource BrushGaugeCpuFill}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="0.8"/>
+                                        <Rectangle Width="44" Height="{Binding CpuGaugeKernelHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeKernelTop}" Fill="{DynamicResource BrushGaugeKernelFill}" Stroke="{DynamicResource BrushGaugeKernelStroke}" StrokeThickness="0.8"/>
                                     </Canvas>
                                 </Viewbox>
                             </Border>
@@ -193,10 +210,10 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
-                                        <Polygon Points="{Binding SysCpuFillPoints}" Fill="#8886EFAC" IsHitTestVisible="False"/>
-                                        <Polyline Points="{Binding SysCpuPoints}" Stroke="#16A34A" StrokeThickness="1.1" IsHitTestVisible="False"/>
-                                        <Polygon Points="{Binding SysKernelFillPoints}" Fill="#AAFCA5A5" IsHitTestVisible="False"/>
-                                        <Polyline Points="{Binding SysKernelPoints}" Stroke="#DC2626" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                        <Polygon Points="{Binding SysCpuFillPoints}" Fill="{DynamicResource BrushGaugeCpuArea}" IsHitTestVisible="False"/>
+                                        <Polyline Points="{Binding SysCpuPoints}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                        <Polygon Points="{Binding SysKernelFillPoints}" Fill="{DynamicResource BrushGaugeKernelArea}" IsHitTestVisible="False"/>
+                                        <Polyline Points="{Binding SysKernelPoints}" Stroke="{DynamicResource BrushGaugeKernelStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                         <Line x:Name="CrosshairQuadCpu" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                     </Canvas>
                                 </Viewbox>
@@ -219,7 +236,7 @@
                             <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
                                 <Viewbox Stretch="Fill">
                                     <Canvas Width="44" Height="120" ClipToBounds="True">
-                                        <Rectangle Width="44" Height="{Binding CommitGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding CommitGaugeTop}" Fill="#D4D47A" Stroke="#A16207" StrokeThickness="0.8"/>
+                                        <Rectangle Width="44" Height="{Binding CommitGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding CommitGaugeTop}" Fill="{DynamicResource BrushGaugeCommitFill}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="0.8"/>
                                     </Canvas>
                                 </Viewbox>
                             </Border>
@@ -236,8 +253,8 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
-                                        <Polygon Points="{Binding SysCommitFillPoints}" Fill="#AAD4D47A" IsHitTestVisible="False"/>
-                                        <Polyline Points="{Binding SysCommitPoints}" Stroke="#A16207" StrokeThickness="1.2" IsHitTestVisible="False"/>
+                                        <Polygon Points="{Binding SysCommitFillPoints}" Fill="{DynamicResource BrushGaugeCommitArea}" IsHitTestVisible="False"/>
+                                        <Polyline Points="{Binding SysCommitPoints}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="1.2" IsHitTestVisible="False"/>
                                         <Line x:Name="CrosshairQuadCommit" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                     </Canvas>
                                 </Viewbox>
@@ -269,7 +286,7 @@
                             <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
                                 <Viewbox Stretch="Fill">
                                     <Canvas Width="44" Height="120" ClipToBounds="True">
-                                        <Rectangle Width="44" Height="{Binding RamGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding RamGaugeTop}" Fill="#FDBA74" Stroke="#EA580C" StrokeThickness="0.8"/>
+                                        <Rectangle Width="44" Height="{Binding RamGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding RamGaugeTop}" Fill="{DynamicResource BrushGaugeRamFill}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="0.8"/>
                                     </Canvas>
                                 </Viewbox>
                             </Border>
@@ -286,8 +303,8 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
-                                        <Polygon Points="{Binding SysRamFillPoints}" Fill="#AAFDBA74" IsHitTestVisible="False"/>
-                                        <Polyline Points="{Binding SysRamPoints}" Stroke="#EA580C" StrokeThickness="1.2" IsHitTestVisible="False"/>
+                                        <Polygon Points="{Binding SysRamFillPoints}" Fill="{DynamicResource BrushGaugeRamArea}" IsHitTestVisible="False"/>
+                                        <Polyline Points="{Binding SysRamPoints}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="1.2" IsHitTestVisible="False"/>
                                         <Line x:Name="CrosshairQuadRam" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                     </Canvas>
                                 </Viewbox>
@@ -310,7 +327,7 @@
                             <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
                                 <Viewbox Stretch="Fill">
                                     <Canvas Width="44" Height="120" ClipToBounds="True">
-                                        <Rectangle Width="44" Height="{Binding IoGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding IoGaugeTop}" Fill="#93C5FD" Stroke="#3B82F6" StrokeThickness="0.8"/>
+                                        <Rectangle Width="44" Height="{Binding IoGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding IoGaugeTop}" Fill="{DynamicResource BrushGaugeIoReadFill}" Stroke="{DynamicResource BrushGaugeIoReadStroke}" StrokeThickness="0.8"/>
                                     </Canvas>
                                 </Viewbox>
                             </Border>
@@ -327,10 +344,10 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
-                                        <Polygon Points="{Binding SysIoFillPoints}" Fill="#AA93C5FD" IsHitTestVisible="False"/>
-                                        <Polyline Points="{Binding SysIoPoints}" Stroke="#3B82F6" StrokeThickness="1.1" IsHitTestVisible="False"/>
-                                        <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="#BBF9A8D4" IsHitTestVisible="False"/>
-                                        <Polyline Points="{Binding SysIoWritePoints}" Stroke="#DB2777" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                        <Polygon Points="{Binding SysIoFillPoints}" Fill="{DynamicResource BrushGaugeIoReadArea}" IsHitTestVisible="False"/>
+                                        <Polyline Points="{Binding SysIoPoints}" Stroke="{DynamicResource BrushGaugeIoReadStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                        <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="{DynamicResource BrushGaugeIoWriteArea}" IsHitTestVisible="False"/>
+                                        <Polyline Points="{Binding SysIoWritePoints}" Stroke="{DynamicResource BrushGaugeIoWriteStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                         <Line x:Name="CrosshairQuadIo" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                     </Canvas>
                                 </Viewbox>
@@ -395,8 +412,8 @@
                         <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ChartBorder}">
                             <Viewbox Stretch="Fill">
                                 <Canvas Width="44" Height="120" ClipToBounds="True">
-                                    <Rectangle Width="44" Height="{Binding CpuGaugeTotalHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeTotalTop}" Fill="#86EFAC" Stroke="#16A34A" StrokeThickness="0.8"/>
-                                    <Rectangle Width="44" Height="{Binding CpuGaugeKernelHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeKernelTop}" Fill="#FCA5A5" Stroke="#DC2626" StrokeThickness="0.8"/>
+                                    <Rectangle Width="44" Height="{Binding CpuGaugeTotalHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeTotalTop}" Fill="{DynamicResource BrushGaugeCpuFill}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="0.8"/>
+                                    <Rectangle Width="44" Height="{Binding CpuGaugeKernelHeight}" Canvas.Left="0" Canvas.Top="{Binding CpuGaugeKernelTop}" Fill="{DynamicResource BrushGaugeKernelFill}" Stroke="{DynamicResource BrushGaugeKernelStroke}" StrokeThickness="0.8"/>
                                 </Canvas>
                             </Viewbox>
                         </Border>
@@ -415,10 +432,10 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
-                                    <Polygon Points="{Binding SysCpuFillPoints}" Fill="#8886EFAC" IsHitTestVisible="False"/>
-                                    <Polyline Points="{Binding SysCpuPoints}" Stroke="#16A34A" StrokeThickness="1.0" IsHitTestVisible="False"/>
-                                    <Polygon Points="{Binding SysKernelFillPoints}" Fill="#AAFCA5A5" IsHitTestVisible="False"/>
-                                    <Polyline Points="{Binding SysKernelPoints}" Stroke="#DC2626" StrokeThickness="1.0" IsHitTestVisible="False"/>
+                                    <Polygon Points="{Binding SysCpuFillPoints}" Fill="{DynamicResource BrushGaugeCpuArea}" IsHitTestVisible="False"/>
+                                    <Polyline Points="{Binding SysCpuPoints}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="1.0" IsHitTestVisible="False"/>
+                                    <Polygon Points="{Binding SysKernelFillPoints}" Fill="{DynamicResource BrushGaugeKernelArea}" IsHitTestVisible="False"/>
+                                    <Polyline Points="{Binding SysKernelPoints}" Stroke="{DynamicResource BrushGaugeKernelStroke}" StrokeThickness="1.0" IsHitTestVisible="False"/>
                                     <Line x:Name="CrosshairSysCpu" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                 </Canvas>
                             </Viewbox>
@@ -441,10 +458,10 @@
                                                     <Line X1="0" Y1="32" X2="180" Y2="32" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.5" IsHitTestVisible="False"/>
                                                     <Line X1="0" Y1="48" X2="180" Y2="48" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.5" IsHitTestVisible="False"/>
                                                     <Line X1="0" Y1="64" X2="180" Y2="64" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.5" IsHitTestVisible="False"/>
-                                                    <Polygon Points="{Binding TotalFillPoints}" Fill="#8886EFAC" IsHitTestVisible="False"/>
-                                                    <Polyline Points="{Binding TotalPoints}" Stroke="#16A34A" StrokeThickness="1.0" IsHitTestVisible="False"/>
-                                                    <Polygon Points="{Binding KernelFillPoints}" Fill="#AAFCA5A5" IsHitTestVisible="False"/>
-                                                    <Polyline Points="{Binding KernelPoints}" Stroke="#DC2626" StrokeThickness="1.0" IsHitTestVisible="False"/>
+                                                    <Polygon Points="{Binding TotalFillPoints}" Fill="{DynamicResource BrushGaugeCpuArea}" IsHitTestVisible="False"/>
+                                                    <Polyline Points="{Binding TotalPoints}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="1.0" IsHitTestVisible="False"/>
+                                                    <Polygon Points="{Binding KernelFillPoints}" Fill="{DynamicResource BrushGaugeKernelArea}" IsHitTestVisible="False"/>
+                                                    <Polyline Points="{Binding KernelPoints}" Stroke="{DynamicResource BrushGaugeKernelStroke}" StrokeThickness="1.0" IsHitTestVisible="False"/>
                                                     <Line Tag="CoreCrosshair" X1="0" Y1="0" X2="0" Y2="80" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                                 </Canvas>
                                             </Viewbox>
@@ -558,7 +575,7 @@
                         <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}" Margin="6,0,0,0">
                             <Viewbox Stretch="Fill">
                                 <Canvas Width="44" Height="120" ClipToBounds="True">
-                                    <Rectangle Width="44" Height="{Binding CommitGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding CommitGaugeTop}" Fill="#D4D47A" Stroke="#A16207" StrokeThickness="0.8"/>
+                                    <Rectangle Width="44" Height="{Binding CommitGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding CommitGaugeTop}" Fill="{DynamicResource BrushGaugeCommitFill}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="0.8"/>
                                 </Canvas>
                             </Viewbox>
                         </Border>
@@ -575,8 +592,8 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
-                                    <Polygon Points="{Binding SysCommitFillPoints}" Fill="#AAD4D47A" IsHitTestVisible="False"/>
-                                    <Polyline Points="{Binding SysCommitPoints}" Stroke="#A16207" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                    <Polygon Points="{Binding SysCommitFillPoints}" Fill="{DynamicResource BrushGaugeCommitArea}" IsHitTestVisible="False"/>
+                                    <Polyline Points="{Binding SysCommitPoints}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                     <Line x:Name="CrosshairMemCommit" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                 </Canvas>
                             </Viewbox>
@@ -599,7 +616,7 @@
                         <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}" Margin="6,0,0,0">
                             <Viewbox Stretch="Fill">
                                 <Canvas Width="44" Height="120" ClipToBounds="True">
-                                    <Rectangle Width="44" Height="{Binding RamGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding RamGaugeTop}" Fill="#FDBA74" Stroke="#EA580C" StrokeThickness="0.8"/>
+                                    <Rectangle Width="44" Height="{Binding RamGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding RamGaugeTop}" Fill="{DynamicResource BrushGaugeRamFill}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="0.8"/>
                                 </Canvas>
                             </Viewbox>
                         </Border>
@@ -616,8 +633,8 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
-                                    <Polygon Points="{Binding SysRamFillPoints}" Fill="#AAFDBA74" IsHitTestVisible="False"/>
-                                    <Polyline Points="{Binding SysRamPoints}" Stroke="#EA580C" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                    <Polygon Points="{Binding SysRamFillPoints}" Fill="{DynamicResource BrushGaugeRamArea}" IsHitTestVisible="False"/>
+                                    <Polyline Points="{Binding SysRamPoints}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                     <Line x:Name="CrosshairMemRam" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                 </Canvas>
                             </Viewbox>
@@ -769,7 +786,7 @@
                         <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ChartBorder}">
                             <Viewbox Stretch="Fill">
                                 <Canvas Width="44" Height="120" ClipToBounds="True">
-                                    <Rectangle Width="44" Height="{Binding IoGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding IoGaugeTop}" Fill="#93C5FD" Stroke="#3B82F6" StrokeThickness="0.8"/>
+                                    <Rectangle Width="44" Height="{Binding IoGaugeHeight}" Canvas.Left="0" Canvas.Top="{Binding IoGaugeTop}" Fill="{DynamicResource BrushGaugeIoReadFill}" Stroke="{DynamicResource BrushGaugeIoReadStroke}" StrokeThickness="0.8"/>
                                 </Canvas>
                             </Viewbox>
                         </Border>
@@ -786,10 +803,10 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
-                                    <Polygon Points="{Binding SysIoFillPoints}" Fill="#AA93C5FD" IsHitTestVisible="False"/>
-                                    <Polyline Points="{Binding SysIoPoints}" Stroke="#3B82F6" StrokeThickness="1.1" IsHitTestVisible="False"/>
-                                    <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="#BBF9A8D4" IsHitTestVisible="False"/>
-                                    <Polyline Points="{Binding SysIoWritePoints}" Stroke="#DB2777" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                    <Polygon Points="{Binding SysIoFillPoints}" Fill="{DynamicResource BrushGaugeIoReadArea}" IsHitTestVisible="False"/>
+                                    <Polyline Points="{Binding SysIoPoints}" Stroke="{DynamicResource BrushGaugeIoReadStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
+                                    <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="{DynamicResource BrushGaugeIoWriteArea}" IsHitTestVisible="False"/>
+                                    <Polyline Points="{Binding SysIoWritePoints}" Stroke="{DynamicResource BrushGaugeIoWriteStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                     <Line x:Name="CrosshairSysIo" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
                                 </Canvas>
                             </Viewbox>

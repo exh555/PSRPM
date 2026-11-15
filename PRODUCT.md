@@ -3,7 +3,7 @@
 ## 1. Executive Summary & Vision
 **PSRPM (PowerShell Remote Process Manager)** is an enterprise-grade, **100% fileless**, agentless Windows process monitoring, forensics, and administration application. Built natively for **Windows PowerShell 5.1** and **PowerShell 7+** using pure WPF and in-memory `.NET Reflection.Emit`, PSRPM bridges the gap between raw remote command-line tools and native desktop inspection utilities.
 
-Inspired by **Sysinternals Process Explorer**, PSRPM provides a unified hierarchical **Tree-Grid**, semantic row coloring, real-time telemetry sparklines, an interactive **Multi-Host Tabbed Session Bar**, a live **4-tab System Information** modal, a **7-tab Deep Process Properties Inspector**, and a live **Audit & Network Telemetry Console**--delivered entirely over persistent WinRM `PSSession`s (`-ComputerName`) or zero-privilege local execution (`-LocalOnly`).
+Inspired by **Sysinternals Process Explorer**, PSRPM provides a unified hierarchical **Tree-Grid**, semantic row coloring across **6 themes**, real-time telemetry sparklines, an interactive **Multi-Host Tabbed Session Bar**, a live **5-tab System Information** modal, a **7-tab Deep Process Properties Inspector**, and a live **Audit & Network Telemetry Console**--delivered entirely over persistent WinRM `PSSession`s (`-ComputerName`) or zero-privilege local execution (`-LocalOnly`).
 
 ---
 
@@ -26,7 +26,7 @@ Traditional remote administration on Windows forced operators into severe trade-
 | **Windows Systems & Domain Admins** | Multi-server triage, hung service diagnostics, runaway resource troubleshooting. | Multi-Host Tabbed Session Bar, Service Process mapping, Windows Service control (Start/Stop/Restart), CPU Priority adjustment. |
 | **Incident Responders & Threat Hunters** | Live incident response, anomalous process tree detection, unauthorized persistence verification. | Parent-child Tree-Grid, Authenticode signature verification, PEB CurrentDirectory/Environment inspection, TCP/IP socket tables, Two-Phase Atomic `KillTree`. |
 | **Desktop Support & Fleet Engineers** | End-user workstation troubleshooting without interrupting user sessions or screen sharing. | WinRM remoting (`-ComputerName`), `-LocalOnly` zero-privilege mode, `-NoWait` background terminal execution, Packaged/WebView2 semantic grouping. |
-| **DevOps & Windows SREs** | Diagnosing production microservices, CI/CD runner bottlenecks, memory leakage verification. | 4-Tab System Information graphs, 240-sample circular ring buffers, GZIP wire telemetry monitoring, CSV/JSON forensic snapshots. |
+| **DevOps & Windows SREs** | Diagnosing production microservices, CI/CD runner bottlenecks, memory leakage verification. | 5-Tab System Information graphs, 240-sample circular ring buffers, GZIP wire telemetry monitoring, CSV/JSON forensic snapshots. |
 
 ---
 
@@ -38,7 +38,7 @@ Every capability in PSRPM is governed by four strict architectural non-negotiabl
 flowchart TD
     P1["1. Seamless Connectivity<br/>* Persistent WinRM PSSession (-ComputerName)<br/>* Zero-privilege local mode (-LocalOnly)<br/>* Unlocked background runspaces (-NoWait)"]
     P2["2. Ultra-Low Overhead<br/>* < 0.25% Remote CPU (2-8ms NtQuerySystemInformation)<br/>* ~1.1-1.8 KB/s Steady-State GZIP Wire<br/>* < 20 KB Ring Buffer RAM per Host"]
-    P3["3. Process Explorer UX<br/>* Single-surface Hierarchical Tree-Grid<br/>* Semantic Row Colors & Column Tints<br/>* 7-Tab Inspector & 4-Tab System Graphs<br/>* Multi-Host Warm Standby Tabs"]
+    P3["3. Process Explorer UX<br/>* Single-surface Hierarchical Tree-Grid<br/>* Semantic Row Colors & Column Tints<br/>* 7-Tab Inspector & 5-Tab System Graphs<br/>* Multi-Host Warm Standby Tabs"]
     P4["4. 100% Fileless Architecture<br/>* Zero Add-Type -TypeDefinition / csc.exe<br/>* Zero disk writes to %TEMP%<br/>* Pure In-Memory Reflection.Emit & PS 5.1 Classes"]
 
     P1 --- P2 --- P3 --- P4
@@ -46,12 +46,12 @@ flowchart TD
 
 1. **Near-Zero Remote Impact (`< 0.25%` CPU)**:
    - Collection runs in **2-8 ms** using a single native kernel transition (`ntdll!NtQuerySystemInformation(5)`).
-   - Reusable unmanaged heap buffers (`[Marshal]::AllocHGlobal(512KB)`) prevent Large Object Heap (LOH) allocation churn.
+   - Reusable unmanaged heap buffers (`512 KB` initial Class 5 buffer, `256 KB` service buffer, and an `8 KB` scratch buffer scaling dynamically up to `CoreCount * 48` / `128 KB` max for Class 8) prevent Large Object Heap (LOH) allocation churn.
 2. **Differential Wire Compression (`~1.1 - 1.8 KB/s`)**:
    - Static metadata (`Path`, `CommandLine`, `User`, `Description`, `Company`, `Architecture`) is sent **only once** upon process spawn.
-   - Subsequent ticks transmit only 7-element numeric delta tuples for processes whose metrics changed, compressed in-memory with GZIP.
+   - Subsequent ticks transmit only changed numeric delta tuples for processes whose metrics changed, compressed in-memory with GZIP (passing `< 256`-byte payloads through as raw UTF-8 JSON to avoid GZIP framing inflation).
 3. **Zero-Leak Memory Architecture (`< 20 KB` RAM per Session)**:
-   - Historical metrics use fixed-capacity circular `Queue[double]` ring buffers (30 samples for sparklines, 240 samples for System Information).
+   - Historical metrics use fixed-capacity circular `Queue[double]` ring buffers (30 samples for sparklines, 240 samples for System Information), plus a `2,000`-event `PendingNetTimeline` ring queue for off-tab ETW bursts.
    - Dead processes are evicted synchronously from tracking hashtables on every tick.
    - Closed modals generate zero background string or geometry allocations.
 4. **100% Fileless In-Memory Architecture**:
@@ -90,20 +90,21 @@ flowchart TD
 ### C. 7-Tab Deep Process Properties Inspector
 - **Instant Core Mode (`< 20 ms`)**: Double-clicking any process immediately opens **Image** (Version, Linker Build Time, Path, Command Line, PEB WorkDir, Autostart, Authenticode signature validation), **Performance** counters, **TCP/IP** connections, hosted **Services**, and remote PEB **Environment** variables.
 - **Lazy Tab-Activated `DLLs` & `Handles`**: Loaded modules (`EnumProcessModulesEx`) and open kernel handles (`NtQueryInformationProcess(51)`) load on-demand only when their specific tabs are selected.
-- **Deadlock-Free Bulk Handle Scanning**: Skips synchronous `"File"` / named-pipe IRP queries, eliminating kernel hangs on Chromium Mojo pipes (`msedgewebview2.exe`).
+- **Deadlock-Free Bulk Handle Scanning**: Gates `"File"` objects via `GetFileType -eq 1` (`FILE_TYPE_DISK`) -> `GetFinalPathNameByHandleW`, resolving disk file and folder locks while skipping synchronous named-pipe IRPs that hang Chromium Mojo pipes (`msedgewebview2.exe`).
 
-### D. Live 4-Tab System Information Graphs (`Ctrl+I`)
-- **Sysinternals System Information Replica**: Double-clicking any toolbar mini-graph opens a live 4-tab window:
+### D. Live 5-Tab System Information Graphs (`Ctrl+I`)
+- **Sysinternals System Information Replica**: Double-clicking toolbar mini-graphs or telemetry cards opens a live 5-tab window:
   - **Summary**: Quad-card dashboard (CPU, System Commit, Physical Memory, I/O rates) with double-click tab jumping.
   - **CPU**: Total vs. Kernel CPU curves, context switch / interrupt / DPC deltas, and optional **Per-Core CPU Grid** (`Show one graph per CPU`).
   - **Memory**: Paging counters, Kernel Paged/Nonpaged pools, and exact Commit Charge limits.
   - **I/O**: Read vs. Write bandwidth and session I/O totals.
+  - **Network**: Receive/Transmit rate graphs, live process & host-wide socket inspection (`AllSockets`), and opt-in ETW network timeline (with off-tab burst ring buffering).
 - **Zero Closed-Modal Overhead**: Vector geometry is evaluated only when the modal is open.
 
 ### E. Live Audit Trail & Network Telemetry Console (`Ctrl+L`)
 - Real-time docked console displaying transport RTT, wire compression ratio, live bandwidth (`KB/s`), cumulative bytes received (`RX`), and differential delta counts.
 - Streams live lifecycle events: `[SYNC]`, `[TELEM]`, `[PROC+]`, `[PROC-]`, `[INSPECT]`, and `[ACTION]`.
-- Auto-capped rolling text buffer (max 24,000 characters) prevents terminal memory growth.
+- Auto-capped rolling text buffer (max 72,000 characters, trimming back to 48,000 characters) prevents terminal memory growth.
 
 ### F. Atomic Operations & Process Control
 - **Two-Phase Atomic `KillTree`**: Suspends the entire tree top-down via `ntdll!NtSuspendProcess`, validates `CreationTime` against PID reuse, and terminates bottom-up.

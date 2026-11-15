@@ -1,369 +1,246 @@
-<p align="center">
-  <img src="PSRPM/Assets/psrpm.png" alt="PSRPM Logo" width="128" height="128" />
-</p>
+# PSRPM — PowerShell Remote Process Manager
 
-# PSRPM -- PowerShell Remote Process Manager
+[![Version: 1.11.0](https://img.shields.io/badge/version-1.12.0-0284c7.svg)](CHANGELOG.md)
+[![PowerShell 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-5391FE.svg)](PSRPM/PSRPM.psd1)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[![Version: 1.11.0](https://img.shields.io/badge/version-1.11.0-0284c7.svg)](CHANGELOG.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![PowerShell: 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-blue.svg)](PSRPM/PSRPM.psd1)
+**Sysinternals Process Explorer, TCPView-style socket inspection, and Services/Handle forensics over a single persistent WinRM `PSSession` — zero remote agents, zero temporary files on disk, and `< 0.25%` remote CPU.**
 
-**Process Explorer-inspired remote process, service, and handle management -- with zero RMM, zero remote agents, and zero disk footprint.**
+Built natively for Windows PowerShell 5.1 and PowerShell 7+ using WPF and pure in-memory `.NET Reflection.Emit`, PSRPM gives systems administrators, SREs, and incident responders high-density process diagnostics on both remote servers (`-ComputerName`) and unprivileged local workstations (`-LocalOnly`).
 
-Not every team has an enterprise RMM, and even fewer environments allow deploying persistent third-party agents onto sensitive servers or workstations. **PSRPM** brings the familiar **Sysinternals Process Explorer** workflow—hierarchical **Tree-Grid**, semantic color coding, **7-Tab Process Properties**, **4-Tab System Information** graphs, and live **Audit/Network Telemetry**—to any Windows endpoint over built-in **WinRM** (`-ComputerName`), or locally without admin rights (`-LocalOnly`). Troubleshoot remote machines in real time without installing an agent, dropping `procexp.exe` on disk, or interrupting the user with an RDP/screen-sharing session.
+![PSRPM Main Window — Hierarchical Process Tree, Semantic Highlighting, and Live Telemetry Sparklines](docs/screenshots/01_process_tree_light.png)
+*Clean Light theme showing the vector Process Tree-Grid, Multi-Host Tabbed Session Bar, toolbar CPU/Commit/RAM sparklines, and live semantic status pills. See all 11 2x captures in the **[Screenshot Tour](docs/screenshots/README.md)** (currently showcasing Clean Light Mode; Dark/Tokyo Night themes and the `Network Activity` tab use the same shared theme token engine).*
 
 ---
 
-## Table of Contents
+## 10-Second Quickstart
 
-- [Why PSRPM?](#why-psrpm)
-- [Key Capabilities & Highlights](#key-capabilities--highlights)
-- [Architectural Overview](#architectural-overview)
-- [Performance & Network Benchmarks](#performance--network-benchmarks)
-- [Zero-Leak Memory Architecture & Long-Running Stability](#zero-leak-memory-architecture--long-running-stability)
-- [Getting Started & Installation](#getting-started--installation)
-- [Usage Examples](#usage-examples)
-- [Cmdlet & Parameter Reference](#cmdlet--parameter-reference)
-- [Audit Trail & Network Telemetry Guide](#audit-trail--network-telemetry-guide)
-- [Keyboard Shortcuts & Navigation](#keyboard-shortcuts--navigation)
-- [Repository Structure & Documentation](#repository-structure--documentation)
-- [License](#license)
-- [Development Note](#development-note)
+```powershell
+git clone https://github.com/exh555/psrpm.git
+cd psrpm
+Import-Module .\PSRPM\PSRPM.psd1 -Force
+
+# 1. Local execution — no WinRM configuration or elevation required
+Start-PSRPM -LocalOnly
+
+# 2. Remote monitoring over a persistent WinRM PSSession (alias: psrpm)
+psrpm -ComputerName "SRV-PROD-01" -Credential (Get-Credential)
+
+# 3. Launch in Dark / Tokyo Night theme without blocking your PowerShell prompt
+psrpm -ComputerName "SRV-PROD-01" -Theme TokyoNight -NoWait
+```
+
+> **Prerequisites**: Windows desktop session (WPF) running Windows PowerShell 5.1 or PowerShell 7+ (`Desktop` or `Core`). Remote monitoring uses WinRM ports `5985` (HTTP) or `5986` (HTTPS).
 
 ---
 
 ## Why PSRPM?
 
-### Agentless Remote Control Without an Enterprise RMM
+Remote Windows diagnostics have historically forced engineers into an awkward compromise between heavy enterprise agents, noisy RPC polling, and disconnected CLI snippets:
 
-| Approach | Remote Agent Required? | Endpoint Disk Footprint | User Disruption | Live GUI Tree, Handles & Graphs |
+- **Firewall & Change-Control Friction**: Copying Sysinternals executables over administrative SMB shares (`C$`) or opening legacy DCOM/RPC ports (`135` / `445`) often breaks segmentation rules, while installing monitoring agents isn't practical for ad-hoc incident triage. WinRM (`5985` / `5986`) is usually already enabled and audited.
+- **WMI Observer Effect & Hung-Window Stalls**: Polling `Get-CimInstance Win32_Process` and `GetOwner()` sparks `WmiPrvSE.exe` CPU spikes (`12% - 25%`) and `~280 - 450 KB/s` wire chatter, while `.NET`'s `$proc.Responding` calls synchronous `user32!SendMessageTimeout` (`5,000 ms` per hung window).
+- **Inline C# Compiler Noise**: Ad-hoc remoting scripts built on `Add-Type -TypeDefinition` launch `csc.exe` inside remote `wsmprovhost.exe` hosts, write temporary `.cs`/`.dll` files to `%TEMP%`, add cold-start latency, and trip compiler-from-WinRM detections.
+- **Missing Real-Time Tree, Socket & Handle Context**: Reconstructing parent-child lineage, ephemeral worker spawns, handle/DLL locks, hosted `svchost.exe` services, and active TCP/UDP sockets across plain text tables slows down root-cause triage.
+
+**PSRPM solves all four constraints at once** by executing `ntdll!NtQuerySystemInformation` and native IP Helper / ETW collectors entirely in memory via `.NET Reflection.Emit` over your existing WinRM session—delivering Process Explorer + TCPView workflows at **`< 0.25%` remote CPU** and **`~1.1 - 1.8 KB/s`** steady-state bandwidth.
+
+| Metric / Capability | Standard Task Manager | PowerShell (`Get-CimInstance` / `.NET Process`) | Sysinternals over SMB / RPC | **PSRPM (`v1.12.0`)** |
 | :--- | :--- | :--- | :--- | :--- |
-| **Enterprise RMM** | Yes (persistent service + licensing) | High | None | Varies (often delayed polling) |
-| **RDP / Screen Sharing** | No | Session artifacts | **High** (locks/interrupts user) | Local only |
-| **Sysinternals Process Explorer** | N/A (local GUI) | Binary on target | Requires interactive session | **Yes (local)** |
-| **CLI-Only (`Enter-PSSession` / `Get-Process`)** | No (built-in WinRM) | Zero | None | **No** (flat static text; manual correlation) |
-| **PSRPM (WinRM)** | **No (built-in WinRM)** | **Zero (100% fileless)** | **None (silent background)** | **Yes (multi-host remote)** |
-
-- **Built for Teams Without an RMM (or Restricted Environments):** Manage servers and workstations in SMBs, labs, air-gapped networks, or incident-response engagements where installing a third-party RMM agent is impossible or prohibited.
-- **Non-Intrusive Triage:** Diagnose runaway processes, inspect open file/registry handles, check TCP/IP sockets, or restart stuck services in the background while the end user keeps working.
-- **Least-Privilege Friendly:** Even Tier-1/Helpdesk operators in `Remote Management Users` can monitor remote endpoints read-only without needing Local Administrator rights (see [Security & Least Privilege Access Model](#security--least-privilege-access-model-rbac)).
-
-### Familiar to Sysinternals Process Explorer Users
-If you already know **Process Explorer**, you already know how to use PSRPM:
-- **Same Visual Grammar:** Parent-child Tree-Grid with guide lines, `Process` header cycling (`Tree -> Flat Asc -> Flat Desc -> Tree`), semantic row colors (Services, Own User, Packaged/WebView2, Suspended, New/Exiting flashes), and `CPU` / `Private Bytes` / `Working Set` column tints.
-- **Same Deep Inspection:** `Double-Click` / `Enter` opens the **7-Tab Process Properties** (`Image`, `Performance`, `TCP/IP`, `Services`, `Environment`, plus lazy-loaded `DLLs` and `Handles`); `Ctrl+I` or double-clicking mini-graphs opens **System Information** (`Summary`, `CPU`, `Memory`, `I/O`).
-- **Same Power Actions:** `Del` (`KillProcess`), `Shift+Del` (atomic `KillTree`), Suspend/Resume, Priority control, and Handle closure—extended across **Multi-Host Tabs** (`Ctrl+Shift+K`) over WinRM.
-
-### Why a Live GUI Over Command-Line Only?
-PowerShell remoting (`Enter-PSSession`, `Get-Process`, `Get-CimInstance`) is great for scripted automation, but interactive troubleshooting in a terminal forces you to piece together flat text tables by hand. PSRPM gives you a live visual workspace over that same WinRM connection:
-- **Instant Parent-Child Context:** Instead of manually cross-referencing `PID` and `ParentProcessId` in flat CLI output, the **Tree-Grid** and semantic color coding (Services, Own/User, Packaged/WebView2, Suspended, plus 1-tick New/Exiting flashes) make anomalous process trees obvious at a glance.
-- **Continuous Trends, Not Static Snapshots:** CLI commands show a single frozen moment unless you write polling loops. PSRPM streams differential 1-second updates into **live sparklines** and **4-tab System Information graphs** (`Summary`, `CPU`, `Memory`, `I/O`, and per-core curves) so spikes and memory leaks are immediately visible.
-- **Zero-Cmdlet Deep Forensics:** Checking a process's command line, PEB environment variables, Authenticode signature, TCP/IP sockets, hosted services, loaded DLLs, and open file handles over CLI requires chaining multiple commands and parsing text. PSRPM puts all seven views in one **Process Properties Inspector** (`Enter` / `Double-Click`) with lazy-loaded `DLLs` and `Handles`.
-- **Safer, Faster Triage Across Multiple Hosts:** Point-and-click `KillTree` (`Shift+Del`), Suspend/Resume, Priority changes, and Handle closure—paired with `PID` + `CreationTime` + `ImageName` validation—reduce PID-typo mistakes, while the **Multi-Host Tabbed Session Bar** lets you flip between remote machines in `< 5 ms` without juggling terminal tabs.
+| **Remote Collector Engine** | N/A (Local UI) | WMI / DCOM RPC (`WmiPrvSE.exe`) | Remote binary + service / RPC | **Single `ntdll!NtQuerySystemInformation(5)` syscall** |
+| **Remote CPU Overhead** | N/A | `12% - 25%` RPC spikes | Low once running | **`< 0.25%` CPU (`2 - 8 ms` per tick)** |
+| **Steady-State Wire Traffic** | N/A | `~280 - 450 KB/s` | Heavy RPC payloads | **`~1.1 - 1.8 KB/s` differential GZIP JSON** |
+| **Remote Disk Footprint** | None | None | Drops service / agent binaries | **Zero remote installation; `0 csc.exe`, `0` temp `.dll`/`.cs`** |
+| **Hung-Window UI Freeze Risk** | Occasional UI stall | `$p.Responding` blocks `5,000 ms` per window | Local | **Immune** (reads kernel `WaitReason` directly) |
+| **Multi-Host Operations** | 1 machine per window | Scripted loops | Separate windows | **Single-window Host Tabs (`0 KB/s` idle standby)** |
 
 ---
 
-## Key Capabilities & Highlights
+## Core Capabilities
 
-- **100% Fileless In-Memory Architecture (Zero Disk Binaries, Zero `csc.exe`)**:
-  - Uses pure PowerShell 5.1 native classes ([`ViewModelClasses.ps1`](PSRPM/Private/ViewModelClasses.ps1)) and in-memory `.NET Reflection.Emit` (`AssemblyBuilderAccess.Run`) P/Invoke bindings.
-  - **Zero `Add-Type -TypeDefinition`**, **zero `csc.exe` child processes**, and **zero temporary `.dll` or `.cs` files** written to disk or `%TEMP%`.
-  - *EDR Visibility Notice*: In-memory Win32 and NTAPI operations remain fully visible and observable to endpoint telemetry sensors (ETW, Sysmon, and enterprise EDR).
-- **Single-Call Native Kernel Telemetry (`< 2-5 ms` collection time)**:
-  - Queries `ntdll.dll!NtQuerySystemInformation(SystemProcessInformation = 5)` and `kernel32.dll!GlobalMemoryStatusEx` into a persistent unmanaged buffer ([`DataCollector.ps1`](PSRPM/Private/DataCollector.ps1)).
-  - Eliminates `WmiPrvSE.exe` CPU spikes, N+1 `Win32_Process.GetOwner()` RPC storms, `$p.Responding` 5-second UI hangs, and first-chance `AccessDenied` exception storms.
-- **State-Aware Differential Wire Protocol (`~1.1 - 1.8 KB/s` steady state)**:
-  - Transmits static metadata (`Path`, `CommandLine`, `User`, `Description`, `CompanyName`, `ParentPID`, `Arch`) **only once per process** upon spawn (keyed by `${PID}_${CreateTime}` to prevent PID-reuse collisions).
-  - Subsequent ticks transmit only changed dynamic metric tuples (`[PID, CPU, WorkingSet, PrivateBytes, Threads, Handles, StatusFlags]`) compressed in-memory with GZIP.
-- **Sysinternals Process Explorer Unified Tree-Grid**:
-  - Single-surface hierarchical process tree with continuous pixel-snapped vector guide lines (`|`, `+-`, `\-`), interactive `[+]`/`[-]` expanders, `Left`/`Right` arrow key branch collapse/expansion, 16x16 process icons, right-aligned tabular numeric columns, and classic column tints (`CPU`, `Private Bytes`, `Working Set`).
-  - **Smart Auto-Flat & Process Header Cycling**: Clicking the **Process** column header cycles **Tree View -> Flat Ascending -> Flat Descending -> Tree View** (matching Sysinternals Process Explorer). Clicking any other column header (`CPU`, `Private Bytes`, `Working Set`, `PID`, `Handles`, etc.) switches to **Flat View** and toggles Ascending/Descending; clicking **Tree** (`Ctrl+T`) also restores the hierarchical parent-child tree.
-  - **Ancestor-Preserving Live Filter**: Typing in the filter box (`Ctrl+F`) or clicking a semantic category pill (`Services`, `Own / User`, `Packaged / WebView`) preserves parent ancestry chains in Tree View so every matching process remains contextualized.
-- **Semantic Category Color Coding & Light/Dark Themes**:
-  - Instant visual classification matching Process Explorer conventions: **Services** (Soft Rose), **Own / User Session** (Soft Indigo), **Packaged / WebView2** (Cyan), **Suspended** (Slate Grey), **New Process** (1-tick Lime Flash), and **Exiting Process** (1-tick Red Flash), with one-click switching between **Clean Light** and **Precision Dark** themes (`Ctrl+D`).
-- **7-Tab Deep Process Properties Inspector with Lazy On-Demand Loading**:
-  - **Instant Core Open (`< 20 ms`, `< 2 KB`)**: Opening Process Properties (`Double-Click` or `Enter`) queries only **Image** metadata (Version, PE Linker Build Timestamp, Path, Command Line, Remote PEB Current Directory, Autostart Location, On-Demand Authenticode Signature Verification), **Performance** counters & live ancestry tree, **TCP/IP** endpoints, hosted **Services**, and remote PEB **Environment** variables.
-  - **Lazy Tab-Activated `DLLs` & `Handles`**: Loaded **DLLs** (`psapi!EnumProcessModulesEx`) and open kernel **Handles** (`ntdll!NtQueryInformationProcess(51)` + pipe-safe `NtQueryObject`) are queried **only when you click the `DLLs` or `Handles` tab**, ensuring zero unnecessary CPU or network load.
-- **Sysinternals System Information Graphs (`Ctrl+I` or Double-Click Mini Graphs)**:
-  - Double-clicking any toolbar mini-graph (`CPU`, `Commit`, `Phys RAM`) or pressing **`Ctrl+I`** opens a live 4-tab **System Information** window (`Summary`, `CPU`, `Memory`, `I/O`) with 4-minute (`240`-sample) circular ring buffers (`< 20 KB` total RAM), Kernel vs. Total CPU curves, per-CPU graph grid toggle (`Show one graph per CPU`), exact KB Commit/Physical/Kernel/Paging counters (`psapi!GetPerformanceInfo` + `NtQuerySystemInformation(2, 8)`), and zero UI rendering overhead while closed.
-- **Multi-Host Tabbed Session Bar (Instant `< 5 ms` Switching, `0 KB/s` Standby)**:
-  - Keep multiple remote targets (`-ComputerName` via WinRM) and local systems (`-LocalOnly`) open concurrently in header tabs (`Ctrl+Shift+K` or `[+] Add Host`).
-  - Standby host sessions pause background polling entirely, consuming **0 KB/s wire bandwidth** and **0% remote CPU** while keeping persistent WinRM sessions warm and authenticated.
-  - Each host tab preserves isolated in-memory caches (`ProcessMap`, `ServicesMap`, `SummaryVm`, `TelemStats`) enabling zero-flicker, sub-5 millisecond instant tab cycling (`Ctrl+Tab`, `Ctrl+Shift+Tab`, `Ctrl+W`).
-- **Live Audit Trail & Network Telemetry Console (`Ctrl+L`)**:
-  - Real-time header badges tracking transport RTT, GZIP wire compression ratio, live network bandwidth (`KB/s`), cumulative bytes received (`RX`), and differential delta counts, plus a live stream of `[SYNC]`, `[TELEM]`, `[PROC+]`, `[PROC-]`, `[INSPECT]`, `[ACTION]`, and `[SERVICE]` events.
-- **Thread-Safe Single-Owner Runspace Bus & Atomic Operations**:
-  - Serializes all periodic telemetry polls, on-demand deep inspections, and process/service control actions through a single background coordinator runspace ([`RunspaceEngine.ps1`](PSRPM/Private/RunspaceEngine.ps1)) using `ConcurrentQueue` + `AutoResetEvent` (`< 1 ms` wake latency).
-  - **Two-Phase Atomic Tree Termination (`KillTree`)**: Suspends the target process tree top-down via `ntdll!NtSuspendProcess`, validates `CreationTime` to prevent PID-reuse collateral damage, and terminates bottom-up ([`ProcessActions.ps1`](PSRPM/Private/ProcessActions.ps1)).
+### 1. Process Explorer Tree-Grid, 30-Column Catalog & Baseline Diffs (`Ctrl+B`)
+- **Pixel-Snapped Vector Hierarchy**: Parent-child tree connectors (`|`, `+-`, `\-`) and collapsible expanders rendered via WPF `<Path>` vectors across DPI scales. Clicking the `Process` column cycles 4 ways (`Tree Newest First` -> `Tree Classic Oldest First` -> `Flat Asc` -> `Flat Desc`); clicking metric headers switches to **Flat View** for global ranking (`Ctrl+T` returns to Tree View).
+- **Ancestor-Preserving Live Filter (`Ctrl+F` / `Esc`)**: Filters processes instantly by name, PID, path, command line, user, or description while keeping parent ancestry chains visible for full context.
+- **Process Explorer Semantic Coloring**: Color-codes **New** (1-tick green flash), **Exiting** (1-tick crimson flash), **Suspended**, **High CPU (`> 50%`)**, **Packaged / WebView2** (UWP, AppContainer, `msedgewebview2.exe`), **Service Process**, **Own / User**, and **System**. Category highlights can be toggled without disabling live spawn/exit flashes.
+- **30-Column Customization & Persisted Preferences**: Open **Select Process Columns** to search, toggle, and reorder 30 columns across `Identity`, `Performance`, `Image`, and `Network ETW` groups, or apply one-click presets (`Default (10)`, `Process Explorer`, `Forensic / Security`). Explicit layout/theme preferences save cleanly to `%LOCALAPPDATA%\PSRPM\preferences.json`.
+- **Process Baseline Snapshots (`Ctrl+B`)**: Captures `Private Bytes`, `Working Set`, and `Handles` with `PID` + `CreateTime` PID-reuse protection, surfacing `[NEW]` markers and signed `Private Delta`, `WS Delta`, `Peak CPU`, and `Peak Private` columns.
+- **Batch & Atomic Control**: `Ctrl+Click` / `Shift+Click` multi-select dispatch for **Suspend / Resume**, **Set Priority** (`Idle` through `High`), **Kill Process**, and **Two-Phase Atomic `KillTree`** (suspends parent-to-child via `ntdll!NtSuspendProcess`, re-validates `CreationTime` + `ImageName`, then terminates bottom-up). `PID <= 4` kernel processes are guarded against mutation.
+
+![Ancestor-Preserving Search Filter](docs/screenshots/02_ancestor_search_filter.png)
 
 ---
 
-## Architectural Overview
+### 2. TCPView-Style Network Activity & Opt-In Kernel ETW (`Ctrl+Shift+N`)
+PSRPM combines an on-demand TCPView-style socket viewer with an optional zero-cost-when-off kernel network ETW stream inside the **Network Activity** workspace tab:
+- **Active Sockets (`AllSockets`)**: Queries host-wide IPv4 and IPv6 TCP/UDP endpoints via `iphlpapi!GetExtendedTcpTable` / `GetExtendedUdpTable` with `OWNER_MODULE` attribution and per-connection EStats (`GetPerTcpConnectionEStats` / `GetPerTcp6ConnectionEStats`) for `Sent/Recv Packets` and `Sent/Recv Bytes`. Includes quick filter chips (`TCP v4`, `TCP v6`, `UDP v4`, `UDP v6`, `Established`, `Listening`, `Syn Sent`, `Time/Close Wait`), bottom summary bar (`Endpoints | Established | Listening | Time Wait | Close Wait`), `Auto (2s)` refresh, CSV export, jump-to-tree / `Process Properties (TCP/IP)`, and **Close Conn** (`iphlpapi!SetTcpEntry` for IPv4 TCP, Administrator required).
+- **Opt-In Per-Process Kernel Network ETW (`Ctrl+Shift+N`)**: Disabled by default (`0%` overhead when off). When enabled, a pure-IL (`Reflection.Emit`) ETW consumer attaches to classic `TcpIpGuid`/`UdpIpGuid` or `Microsoft-Windows-Kernel-Network`, maintains lock-free double-buffered slot recycling (`DrainAndReset`), enforces a `25k/50k` events/sec circuit breaker, populates 4 process-grid columns (`Network`, `Tree Net`, `Net Recv`, `Net Send`) with 3-tier subtree rollup, and streams `Recv`/`Send` bursts into **ETW Activity Stream** (buffering up to `2,000` off-tab events in `PendingNetTimeline`). Non-admin Tier-1 sessions degrade gracefully with a non-blocking banner.
+
+---
+
+### 3. Deep Process, Handle & Windows Service Forensics
+- **7-Tab Process Properties Inspector (`Enter` / Double-Click)**:
+  - **Instant Core Mode (`~12 - 25 ms`, `~1.5 - 2.5 KB`)**: Opens immediately with **Image** (PE Linker Build Timestamp, File Version, Path, Command Line, remote PEB `CurrentDirectory`, Autostart location, on-demand Authenticode **Verify**), **Performance** (CPU times, Cycles, Total/GDI/USER handles, Kernel pools, I/O counters, Process Ancestry Tree), **TCP/IP**, **Services**, and remote PEB **Environment** variables.
+  - **Lazy Tab-Activated `DLLs` & `Handles`**: Enumerates loaded modules (`psapi!EnumProcessModulesEx`, cached by path, `~30 - 45 ms`) and kernel handles (`ntdll!NtQueryInformationProcess(51)`, `~20 - 35 ms`) only when you click their tabs.
+
+| Image & Security Metadata | Performance & Ancestry Tree | Lazy-Loaded DLL Modules |
+| :---: | :---: | :---: |
+| ![Process Properties — Image](docs/screenshots/05_process_properties_image.png) | ![Process Properties — Performance](docs/screenshots/06_process_properties_performance.png) | ![Process Properties — DLLs](docs/screenshots/07_process_properties_modules.png) |
+
+- **Deadlock-Free Global Handle / DLL Search (`Ctrl+Shift+F`)**: Searches loaded DLL paths and open kernel handles across processes. `"File"` handles are strictly gated with `GetFileType -eq 1` (`FILE_TYPE_DISK`) -> `GetFinalPathNameByHandleW`, resolving locked disk files and folders while never calling `NtQueryObject(ObjectNameInformation)` on synchronous named pipes (preventing kernel hangs on `msedgewebview2.exe` Mojo pipes). Supports individual `CloseHandle` via `DuplicateHandle`.
+- **Services Manager & Two-Way Dependencies Inspector**: Manage Windows Services in the dedicated **Services** tab (`Start`, `Stop`, `Restart`, `Select Process in Tree`) and open **Properties & Dependencies** to trace both *Services this depends on* and *Services depending on this*.
+
+| Services Manager | Service Details & Two-Way Dependencies |
+| :---: | :---: |
+| ![Services Manager Tab](docs/screenshots/10_services_manager_light.png) | ![Service Details & Dependencies Inspector](docs/screenshots/11_service_dependencies_inspector.png) |
+
+- **Restricted-ACL Remote Memory Dumps (`CreateDump`)**: Generates on-demand Minidumps and Full Memory Dumps in `%SystemRoot%\Temp\PSRPM_Dumps` (or `%LOCALAPPDATA%\PSRPM\Dumps`) with inheritance disabled and DACLs restricted strictly to `SYSTEM`, `Administrators`, and the invoking operator.
+
+---
+
+### 4. 5-Tab System Information (`Ctrl+I`), 6 Themes (`Ctrl+D`) & Multi-Host Tabs
+- **Live 5-Tab System Information (`Ctrl+I` or Double-Click Mini-Graphs)**: Replicates Process Explorer's **Summary** (hardware/storage inventory + 2x2 graphs with double-click tab jump), **CPU** (Total vs. Kernel curves, Context Switch / Interrupt / System Call deltas, optional **Show one graph per CPU** per-core grid), **Memory** (Commit Charge, Physical RAM, Paged/Nonpaged Kernel Pools, Paging deltas), **I/O**, and **Network** (Rx/Tx curves, sockets, ETW burst stream) — with interactive crosshair hover tooltips showing timestamped top-process attribution across the 240-sample (4-minute) ring buffer.
+
+| System Information Summary | System Information CPU & Kernel Telemetry |
+| :---: | :---: |
+| ![System Information Dashboard](docs/screenshots/03_system_information_dashboard.png) | ![System Information CPU Tab](docs/screenshots/04_system_information_cpu.png) |
+
+- **6 Synchronized Themes (`Ctrl+D` / `-Theme` / `Options -> Theme`)**: Switch live across **Clean Light**, **Precision Dark**, **Tokyo Night**, **Tokyo Night Light**, **Classic**, and **High-Contrast** powered by a centralized `PSRPMThemeRegistry` propagating `DynamicResource` tokens across the main window and all modals.
+- **Multi-Host Tabbed Session Bar (`Ctrl+Shift+K`, `Ctrl+Tab`, `Ctrl+W`)**: Connect to multiple remote hosts and `-LocalOnly` in parallel tabs. Active tab switches swap isolated state caches in `< 5 ms`; standby host tabs pause polling to consume **`0 KB/s` network bandwidth and `0%` remote CPU** while keeping their WinRM socket warm.
+
+![Connect to Target System Dialog](docs/screenshots/09_connect_remote_winrm.png)
+
+---
+
+### 5. Audit & Network Telemetry Console (`Ctrl+L`) & Automated Verification
+- **Live Audit & Telemetry Console (`Ctrl+L`)**: Docked, resizable monospace console streaming real-time transport RTT, payload GZIP compression ratio, wire throughput (`KB/s`), cumulative RX bytes, sequence delta counts, and structured lifecycle events (`[INIT]`, `[SYNC]`, `[TELEM]`, `[PROC+]`, `[PROC-]`, `[INSPECT]`, `[ACTION]`, `[SERVICE]`), backed by a rolling text buffer capped at `72,000` characters (trimming back to `48,000`).
+- **Automated Quality & Regression Harness**: Continuously validated via [`Tests/Test-PSRPMEngine.ps1`](Tests/Test-PSRPMEngine.ps1) (12 core engine, fileless audit, delta benchmark, ETW, PID-reuse, fault-injection, and 6-theme parity suites), [`Tests/Test-PSRPMExtendedQA.ps1`](Tests/Test-PSRPMExtendedQA.ps1) (44/44 checks in [`Tests/QA_Report.md`](Tests/QA_Report.md)), and [`Tests/Test-ReleaseReadiness.ps1`](Tests/Test-ReleaseReadiness.ps1).
+
+![Audit Trail & Network Telemetry Console](docs/screenshots/08_live_telemetry_audit_console.png)
+
+---
+
+## Architecture & Engineering Invariants
 
 ```mermaid
-flowchart TB
-    subgraph Host["LOCAL WORKSTATION (WPF UI + Coordinator Runspace)"]
-        direction TB
-        UI["WPF UI Thread (STA Main Loop)<br/>* Unified Tree-Grid & Sparkline Strip<br/>* 7-Tab Deep Process Properties Modal (Lazy Tab Loader)<br/>* Live Audit Trail & Network Telemetry Console"]
-        Bus["Single-Owner Coordinator Runspace<br/>* ConcurrentQueue + AutoResetEvent (<1ms Wake)<br/>* Serializes Polls, Deep Inspections & Process Actions<br/>* Differential State Merge & Parent-Child Tree Builder"]
-        UI <-->|"CommandQueue / ResultQueue<br/>+ 150ms UI Dispatcher Sync"| Bus
+flowchart LR
+    subgraph Local["Local Workstation (STA Runspace)"]
+        UI["WPF MainWindow & Modals<br/>6-Theme DynamicResource Registry"]
+        RE["RunspaceEngine.ps1<br/>Async Poll + In-Place Reconciliation"]
+        RB["Ring Buffers (&lt; 20 KB/Host)<br/>240 SysInfo | 30 Sparkline | 2,000 ETW"]
+        UI <-->|"Dirty-Checked INotifyPropertyChanged"| RE
+        RE --> RB
     end
 
-    subgraph Target["REMOTE TARGET COMPUTER (Persistent WinRM PSSession or -LocalOnly)"]
-        direction TB
-        Native["In-Memory Reflection.Emit P/Invoke Layer<br/>* ntdll!NtQuerySystemInformation(5) (~2ms)<br/>* kernel32!QueryFullProcessImageNameW & GlobalMemoryStatusEx<br/>* advapi32!OpenProcessToken ($script:SidCache)<br/>* psapi!EnumProcessModulesEx & ntdll!NtQueryObject (Lazy On-Demand)"]
-        Diff["Differential Telemetry State Cache<br/>* Static Metadata Sent Once per (PID + CreateTime)<br/>* Delta Dynamic Tuples Only on Change<br/>* GZIP + Base64 JSON Stream (~1.2 KB/tick)"]
-        Native --> Diff
+    RE <-->|"Single WinRM PSSession (5985 / 5986)<br/>Differential UTF-8 JSON (GZIP >= 256 B)"| DC
+
+    subgraph Remote["Remote Target (wsmprovhost.exe, 100% Fileless Reflection.Emit)"]
+        DC["DataCollector.ps1<br/>NtQuerySystemInformation(5/2/8)<br/>One-Time Meta + Changed Deltas"]
+        ETW["Opt-In Pure-IL ETW Consumer<br/>TcpIp / UdpIp / Kernel-Network"]
+        DI["DeepInspector.ps1<br/>Lazy Core / Modules / Handles / AllSockets"]
+        PA["ProcessActions.ps1<br/>PID+CreateTime Guarded Actions / CreateDump"]
     end
-
-    Bus <==>|"Persistent WinRM PSSession (or Local In-Process)<br/>Differential GZIP JSON Payload"| Target
 ```
+
+1. **Zero Per-Tick Unmanaged Heap Churn**: Pre-allocates reusable unmanaged buffers at session initialization (`512 KB` for Class 5 process enumeration, `256 KB` for service enumeration, and an `8 KB` scratch buffer scaling dynamically up to `CoreCount * 48` / `128 KB` max for Class 8) and resets pointers cleanly via `try/finally`.
+2. **Synchronous Dead-Process Eviction & Smart Compression**: Terminated processes are pruned from remote collector caches every tick (`"dead":[...]`), static strings (`Path`, `CommandLine`, `Description`, `CompanyName`, `User`, `Architecture`) transmit once per spawn, and small deltas `< 256` bytes bypass GZIP to avoid compression-header bloat while larger payloads use in-memory `GZIP:` streaming.
+3. **In-Place UI Reconciliation & Closed-Modal Silence**: Live `ObservableCollection` grids never call `.Clear()`; scroll offsets, selection sets, and tree expansion states persist cleanly across ticks, and System Information `<Path>` geometry is only generated while `$summaryVm.IsSysInfoOpen` is true.
+4. **Hardened Against Real-World Windows Pitfalls**: Unsigned 32-bit kernel counters use `([long]ReadInt32 -band 0xFFFFFFFFL)` instead of `[uint32]` casts to prevent overflow crashes after high system uptime; `x86`/`x64` P/Invoke structures parameterize `[IntPtr]::Size`; all `.ps1`/`.psm1` files are strictly 7-bit ASCII for Windows PowerShell 5.1 Windows-1252 parser safety.
+
+Deep technical specifications live in **[`docs/TELEMETRY_AND_PROTOCOL.md`](docs/TELEMETRY_AND_PROTOCOL.md)**, **[`DESIGN.md`](DESIGN.md)**, and **[`docs/ENGINEERING_PLAYBOOK.md`](docs/ENGINEERING_PLAYBOOK.md)**.
 
 ---
 
-## Performance & Network Benchmarks
+## Command Reference (`Start-PSRPM` / `Start-RemoteProcessManager` / `psrpm`)
 
-| Metric / Capability | Naive PowerShell (`Get-Process`) | Legacy WMI (`Win32_Process`) | **PSRPM Differential Engine** |
+```powershell
+# Monitor a remote server over HTTPS on port 5986 with alternate credentials
+psrpm -ComputerName "10.20.30.40" -Credential (Get-Credential) -Port 5986 -UseSSL
+
+# High-frequency local troubleshooting pinned on top of other windows
+Start-PSRPM -LocalOnly -RefreshIntervalMs 500 -AlwaysOnTop -Theme Dark
+```
+
+| Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **Remote CPU Impact** | 8% - 15% spike | 12% - 25% (`WmiPrvSE.exe`) | **< 0.25% CPU** |
-| **Kernel Collection Time (175 procs)** | ~350 ms | ~650 ms - 2,500 ms | **~2 - 8 ms** |
-| **Initial Full Baseline (175 procs, 265 svcs)** | ~280 KB (CLIXML) | ~450 KB (CLIXML) | **~24 KB GZIP** (`121 KB` raw, **80% saved**) |
-| **Steady-State Wire Payload (1s tick)** | ~280 KB/s | ~450 KB/s | **~1.1 - 1.5 KB/s (Delta GZIP)** |
-| **UI Hang Risk (`$p.Responding`)** | High (5s SendMessageTimeout) | None | **Zero (Kernel WaitReason)** |
-| **UI State Preservation** | Lost on refresh | Lost on refresh | **100% In-Place Reconciled** |
+| `-ComputerName` | `String` | `"localhost"` | Target hostname or IP address for WinRM remoting (positional `0`). |
+| `-Credential` | `PSCredential` | Current User | Alternate domain/local credentials for authenticating the `PSSession`. |
+| `-Port` | `Int32` | `5985` / `5986` | Custom WinRM TCP port (`0` resolves default HTTP/HTTPS port). |
+| `-UseSSL` | `Switch` | `$false` | Connect using HTTPS WinRM transport. |
+| `-RefreshIntervalMs` | `Int32` | `1000` | Polling interval in milliseconds (`250` to `60000`). |
+| `-LocalOnly` (`-Local`) | `Switch` | `$false` | Execute directly in the local PowerShell process without WinRM or admin rights. |
+| `-NoWait` (`-Background`) | `Switch` | `$false` | Launch the WPF UI in a background STA runspace and return the terminal prompt immediately. |
+| `-Theme` | `String` | `"Light"` | Initial theme: `Light`, `Dark`, `TokyoNight`, `TokyoNightLight`, `Classic`, or `HighContrast`. |
+| `-Dark` | `Switch` | `$false` | Shortcut switch to launch with the dark theme. |
+| `-AlwaysOnTop` (`-Topmost`) | `Switch` | `$false` | Pin PSRPM above standard desktop windows. |
+| `-IconPath` | `String` | Bundled Icon | Optional custom `.ico`/image path for window branding. |
 
----
-
-## Zero-Leak Memory Architecture & Long-Running Stability
-
-PSRPM is engineered for continuous multi-hour and multi-day monitoring sessions across production fleets without memory bloat, LOH (Large Object Heap) fragmentation, or performance degradation. Both the remote monitored host and the local administrator client enforce strict, deterministic memory controls:
-
-### Remote Target Host (Monitored Machine)
-- **Reusable Unmanaged Kernel Buffers**: Pre-allocates fixed unmanaged heap memory once per session (`512 KB` for `NtQuerySystemInformation(5)` and `8 KB` for system metrics). Eliminates per-tick unmanaged buffer allocation/deallocation churn and LOH memory fragmentation.
-- **Deterministic Dead-Process Eviction**: At the end of every tick, active kernel keys are reconciled. Terminated PIDs are immediately purged from `ProcCpuCache`, `ProcMetaCache`, `LastDynState`, and `ActivePidToKey`, ensuring remote hashtables never leak or grow as processes spawn and exit over days of uptime.
-- **Static Metadata Suppression**: Static attributes (executable path, command line, description, company, architecture) are transmitted across the wire **exactly once** per process lifetime. Once acknowledged in `$script:SentMetaKeys`, static metadata is suppressed from subsequent payloads, keeping steady-state wire traffic at ~1.1 - 1.5 KB/s.
-- **0.00% CPU & 0 KB/s in Standby**: Inactive host tabs are completely excluded from the polling loop. Remote machines consume zero CPU and generate zero network traffic while their tab is not actively viewed.
-
-### Local Administrator Client (WPF & Runspace)
-- **Fixed-Capacity Circular Ring Buffers**: Historical metrics (CPU, Kernel, Commit, RAM, I/O rates, per-core metrics) use fixed-size `Queue[double]` ring buffers: **30 samples** for toolbar sparklines and **240 samples** (4 minutes) for System Information graphs. Historical telemetry memory is **hard-capped at < 20 KB per host session**.
-- **Lazy Graph Execution**: Complex 360x120 vector path strings (`SysCpuPoints`, `SysCommitPoints`, per-core graphs) are calculated **only when the System Information window is open**. Closed modals generate zero background string allocations.
-- **In-Place UI Diff Reconciliation**: Never calls `$ObservableCollection.Clear()`. Existing `ProcessItemViewModel` instances are updated in-place via dirty-checked `INotifyPropertyChanged`, avoiding visual tree churn and WPF Garbage Collection Gen 2 pauses.
-- **Two-Stage Dead-Process Reaping**: Exited processes flash red for 1 tick, then are immediately purged from `ProcessMap` and the UI `ObservableCollection`, allowing the .NET runtime to reclaim memory immediately.
-- **Rolling Activity Log Buffer**: The live Audit Console text buffer is auto-trimmed when it exceeds 24,000 characters (discarding the oldest 8,000 characters), preventing memory growth during heavy telemetry streaming.
-- **Frozen Brushes & Icons**: All vector geometry, theme brushes, and extracted process icons call `.Freeze()`, detaching from WPF change-listening dependency graphs to prevent visual tree memory leaks.
-
----
-
-## Getting Started & Installation
-
-### Prerequisites
-- **Local Workstation**: Windows 10, Windows 11, or Windows Server 2016+ with Windows PowerShell 5.1 (or PowerShell 7+ via Windows PowerShell compatibility).
-- **Remote Target (`-ComputerName`)**: Built-in Windows PowerShell Remoting / WinRM (enabled by default on Windows Server 2012+ and commonly enabled via GPO in domain environments; otherwise `Enable-PSRemoting -Force`). **No PSRPM files, services, or agents are installed on the remote computer.**
-
-### Option 1: Import Directly from Repository
+### Connecting to Workgroup / Non-Domain Hosts (`TrustedHosts`)
+When targeting a non-domain machine or IP address over HTTP WinRM:
 ```powershell
-Import-Module .\PSRPM\PSRPM.psd1 -Force
+# Run once in an elevated PowerShell console on your local workstation:
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "10.20.30.45" -Concatenate -Force
+
+# Connect with explicit credentials:
+psrpm -ComputerName "10.20.30.45" -Credential (Get-Credential)
 ```
 
-### Option 2: Install to Your User PowerShell Module Path
-To make `Start-PSRPM` and the `psrpm` alias available automatically in every PowerShell window:
+---
+
+## Keyboard Shortcuts
+
+| Category | Shortcut | Action |
+| :--- | :--- | :--- |
+| **View & Navigation** | `Ctrl+T` | Toggle hierarchical **Tree View** / **Flat View** |
+| | `Ctrl+F` / `Esc` | Focus search filter (Processes, Services, or Network tab) / clear and return focus |
+| | `Left` / `Right Arrow` | Collapse/jump to parent or expand/jump to first child in Tree View |
+| | `Ctrl+I` | Open 5-Tab **System Information** window (`Summary`, `CPU`, `Memory`, `I/O`, `Network`) |
+| | `Ctrl+L` | Toggle bottom **Audit Trail & Network Telemetry Console** |
+| | `Ctrl+Shift+N` | Toggle opt-in **Per-Process Kernel Network Monitoring (ETW)** |
+| | `Ctrl+D` | Cycle themes (`Clean Light`, `Dark Mode`, `Tokyo Night`, `Tokyo Night Light`, `Classic`, `High-Contrast`) |
+| | `Ctrl+Shift+T` | Toggle **Always On Top** window pinning |
+| **Process Operations** | `Enter` / `Double-Click` | Open 7-Tab **Process Properties Inspector** (or Service Inspector on `Services` tab) |
+| | `Ctrl / Shift+Click` | Multi-select or range-select processes for batch operations |
+| | `Del` / `Shift+Del` | **Kill Process** / two-phase atomic **Kill Process Tree** (`CreationTime` guarded) |
+| | `Ctrl+Shift+F` | Open global **Find Handle or DLL Substring** window |
+| | `Ctrl+B` | Capture / update **Process Baseline Snapshot** for delta comparisons |
+| | `Space` / `F5` | Pause/resume telemetry polling / trigger immediate refresh |
+| **Multi-Host & App** | `Ctrl+K` / `Ctrl+Shift+K` | Connect/Switch active host target / open new Host Tab (standby preserved) |
+| | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle forward / backward across open Host Tabs (`< 5 ms` swap) |
+| | `Ctrl+W` | Close current Host Tab |
+| | `Ctrl+S` / `F1` / `Alt+F4` | Export process snapshot CSV / open Help & Diagnostics / clean exit |
+
+---
+
+## Security, RBAC & Fileless Transparency
+
+PSRPM adheres to standard Windows WinRM security boundaries and a strict **2-Tier Least-Privilege Model**:
+
+| Access Tier | Required Privileges | Capabilities & Access Control Behavior |
+| :--- | :--- | :--- |
+| **Tier 1: Read-Only Monitoring** | Standard User in `Remote Management Users` (no Local Admin required) | Real-time CPU, RAM, Disk I/O, Network graphs, Active Sockets, process tree, Windows Services list, and DLL/PEB details for owned processes. Protected/non-owned processes report `[Access Denied / Protected]` cleanly without stalling. |
+| **Tier 2: Administrative Control** | Local Administrator / `SeDebugPrivilege` | `KillProcess`, `KillTree`, `Suspend`/`Resume`, `SetPriority`, `CloseHandle`, `CloseTcpConnection` (`SetTcpEntry`), Net ETW kernel session, and `CreateDump`. Mutating actions validate `PID` + `CreationTime` + `ImageName` before execution; memory dumps enforce non-inherited owner/admin ACLs. |
+
+- **100% Fileless Architecture**: PSRPM contains **zero** `Add-Type -TypeDefinition` / `MemberDefinition` calls, never invokes `csc.exe`, and drops zero `.cs` or `.dll` artifacts to `%TEMP%` on either workstation or target.
+- **EDR & Endpoint Transparency**: Executing filelessly avoids temporary compiler disk churn and `csc.exe` heuristics, while **all Win32 and NTAPI calls remain natively observable** to Windows Event Tracing (ETW), Sysmon, and enterprise EDR telemetry. Credentials passed via `-Credential` stay in memory inside the local PowerShell runspace.
+
+### Verification Suite
+Run the full automated verification harness before committing or deploying:
 ```powershell
-$userModuleDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PSRPM'
-Copy-Item -Path .\PSRPM -Destination $userModuleDir -Recurse -Force
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-PSRPMEngine.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-ReleaseReadiness.ps1
 ```
 
 ---
 
-## Usage Examples
+## Repository Layout & Documentation
 
-### 1. Connect to a Remote Computer (`-ComputerName`) -- Primary Mode
-```powershell
-# Connect to a remote computer using your current Windows session credentials
-Start-PSRPM -ComputerName "SRV-PROD-01.corp.local"
-
-# Or use the exported module alias 'psrpm' with explicit credentials
-$cred = Get-Credential
-psrpm -ComputerName "10.20.30.45" -Credential $cred -RefreshIntervalMs 1000
-
-# Connect over HTTPS (WinRM SSL) on a custom port
-Start-PSRPM -ComputerName "DMZ-WEB-01" -UseSSL -Port 5986 -Credential $cred
-```
-
-### 2. Run Locally Without WinRM or Admin Rights (`-LocalOnly`)
-Ideal for local workstation diagnostics or testing under a non-administrator account without WinRM rights:
-```powershell
-Start-PSRPM -LocalOnly
-# Or via alias:
-psrpm -Local
-```
-
-### 3. Run in Background Without Locking the Terminal (`-NoWait`)
-Launch PSRPM asynchronously so your terminal prompt returns **immediately (0 ms)**:
-```powershell
-# Launch in background on local computer
-psrpm -LocalOnly -NoWait
-
-# Launch in background targeting a remote host
-psrpm -ComputerName "SRV-PROD-01" -NoWait
-```
-> **Tip for fully detached sessions**: If you want PSRPM to stay open even after you close the terminal window entirely, launch it detached via:
-> ```powershell
-> Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command psrpm -LocalOnly"
-> ```
-
-### 4. Custom Application Icon Support (`-IconPath`)
-PSRPM includes a built-in high-DPI telemetry icon (`Assets/psrpm.ico`) rendered across the title bar, taskbar, and all modal windows. You can also supply your own custom `.ico` or `.png` icon:
-```powershell
-# Launch with a custom enterprise or security operations icon
-psrpm -LocalOnly -IconPath "C:\Icons\MyCustomIcon.ico"
-```
+- **[`PSRPM/`](PSRPM/)** — PowerShell module (`PSRPM.psd1`, `PSRPM.psm1`), private engines (`DataCollector.ps1`, `DeepInspector.ps1`, `ProcessActions.ps1`, `RunspaceEngine.ps1`, `ViewModelClasses.ps1`), WPF XAML dialogs (`UI/*.xaml`), and `Assets/`.
+- **[`Tests/`](Tests/)** — 12-suite engine verification (`Test-PSRPMEngine.ps1`), 44-check extended QA (`Test-PSRPMExtendedQA.ps1`, `QA_Report.md`), GZIP benchmark (`Test-GzipPerformance.ps1`), and release readiness checker (`Test-ReleaseReadiness.ps1`).
+- **[`docs/`](docs/)** — **[Operator User Guide](docs/USER_GUIDE.md)**, **[Telemetry & Wire Protocol](docs/TELEMETRY_AND_PROTOCOL.md)**, **[Engineering Playbook](docs/ENGINEERING_PLAYBOOK.md)**, **[Visual Design System](DESIGN.md)**, **[Product Spec](PRODUCT.md)**, and **[2x Screenshot Tour](docs/screenshots/README.md)**.
+- **[`tools/`](tools/)** — Screenshot automation (`Capture-Screenshots.ps1`), workload simulator (`Simulate-Workload.ps1`), and release helper (`Set-ReleaseVersion.ps1`).
+- **[`CHANGELOG.md`](CHANGELOG.md)** — Full version history following Keep a Changelog & SemVer (`1.11.0`).
+- **[`LICENSE`](LICENSE)** — MIT License.
 
 ---
 
-## Cmdlet & Parameter Reference
-
-### `Start-PSRPM` (Aliases: `psrpm`, `Start-RemoteProcessManager`)
-
-```powershell
-Start-PSRPM [[-ComputerName] <String>] [-Credential <PSCredential>] [-Port <Int32>] [-UseSSL] [-RefreshIntervalMs <Int32>] [-LocalOnly] [-NoWait] [-IconPath <String>] [<CommonParameters>]
-```
-
-| Parameter | Type | Required | Default | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `-ComputerName` | `String` | No | `"localhost"` | Hostname or IP address of the remote target Windows computer. |
-| `-Credential` | `PSCredential` | No | Current User | Optional `PSCredential` for authenticating the WinRM `PSSession`. |
-| `-Port` | `Int32` | No | `5985` / `5986` | Optional custom WinRM port. |
-| `-UseSSL` | `SwitchParameter` | No | `$false` | Use HTTPS transport for the WinRM `PSSession`. |
-| `-RefreshIntervalMs` | `Int32` | No | `1000` | Telemetry polling interval in milliseconds (`250` to `60000`). |
-| `-LocalOnly` (`-Local`) | `SwitchParameter` | No | `$false` | Run directly in the local PowerShell process without WinRM or elevation requirements. |
-| `-NoWait` (`-Background`) | `SwitchParameter` | No | `$false` | Launch asynchronously in a background STA runspace, returning terminal control immediately. |
-| `-IconPath` | `String` | No | `Assets/psrpm.ico` | Path to a custom `.ico` or `.png` application icon for the title bar, taskbar, and all modals. |
-
----
-
-## Audit Trail & Network Telemetry Guide
-
-Press **`Ctrl+L`** (or click **Audit Console (Ctrl+L)** in the bottom-right status bar) to open the real-time **Audit Trail & Network Telemetry Console**.
-
-### Sample Telemetry Output
-```text
-[12:55:58.219] [INIT] PSRPM initialized for target 'localhost' (Mode: WinRM PSSession, Interval: 1000ms).
-[12:55:59.951] [SYNC #1] Full Snapshot from 'localhost' (WINRM) | RTT: 1173ms | Wire: 24.74 KB -> Raw: 121.06 KB (GZIP 80% saved) | Procs: 173, Services: 265
-[12:56:25.850] [TELEM]   Seq #  26 | RTT:  58ms (Avg: 83.7ms) | Wire:  1.15 KB -> Raw:  1.74 KB (GZIP 34%) | BW: 1.15 KB/s (RX: 51.9 KB) | Dyn: 47, +Meta: 0, -Exit: 0
-[12:56:28.997] [TELEM]   Seq #  29 | RTT: 145ms (Avg: 83.7ms) | Wire:  8.57 KB -> Raw: 31.01 KB (GZIP 72%) | BW: 8.57 KB/s (RX: 63.0 KB) | Dyn: 57, +Meta: 0, -Exit: 0, SvcSync: 265
-[12:56:44.669] [TELEM]   Seq #  44 | RTT:  35ms (Avg: 67.6ms) | Wire:  2.17 KB -> Raw:  3.16 KB (GZIP 31%) | BW: 2.17 KB/s (RX: 82.7 KB) | Dyn: 78, +Meta: 1, -Exit: 0
-[12:56:44.669] [PROC+]   Spawned: svchost.exe (PID 5748, PPID 908, User: NT AUTHORITY\SYSTEM)
-```
-
-### Telemetry Field Reference
-
-| Tag / Field | Description |
-| :--- | :--- |
-| **`[SYNC #1]`** | Initial full baseline snapshot. Transmits static metadata for all running processes (`Procs: 173`) and services (`Services: 265`). Subsequent ticks never re-transmit static metadata for existing processes. |
-| **`[TELEM]`** | Per-tick differential telemetry update (can be muted/resumed anytime via the **`Stream Ticks`** checkbox in the console header). |
-| **`[PROC+]` / `[PROC-]`** | Real-time process creation (`Spawned`) and termination (`Exited`) events detected between ticks. |
-| **`[INSPECT]`** | On-demand Process Properties inspection telemetry (`Mode: Core`, `Mode: DLLs`, or `Mode: Handles`) with RTT and payload size. |
-| **`RTT (Avg)`** | Round-trip execution time in milliseconds for the poll (`Avg` is the rolling session average). |
-| **`Wire -> Raw (GZIP %)`** | **`Wire`** is the compressed payload transferred over the network; **`Raw`** is the uncompressed JSON size; **`GZIP %`** is the bandwidth saved. |
-| **`BW (RX)`** | **`BW`** is current network throughput (`KB/s`); **`RX`** is cumulative network kilobytes received during the session. |
-| **`Dyn` / `+Meta` / `-Exit`** | **`Dyn`**: processes whose CPU/Memory/Handles changed on this tick; **`+Meta`**: newly spawned processes; **`-Exit`**: terminated processes. |
-| **`SvcSync`** | Periodic 30-second refresh of the Windows Services table (`265` services). |
-
----
-
-## Keyboard Shortcuts & Navigation
-
-| Shortcut | Action |
-| :--- | :--- |
-| `Left Arrow` | Collapse selected process branch in Tree View (or jump to parent process if already collapsed/leaf) |
-| `Right Arrow` | Expand selected process branch in Tree View (or jump to first child process if already expanded) |
-| `Enter` / `Double-Click` | Open **7-Tab Process Properties Inspector** for selected process |
-| `F5` | Immediate telemetry poll / refresh |
-| `Space` | Pause / Resume live telemetry polling |
-| `Ctrl+F` | Focus instant search filter box |
-| `Esc` | Clear search filter and return focus to process grid |
-| `Ctrl+T` | Toggle between **Hierarchical Tree-Grid** and **Flat List** (resets column sort to tree order) |
-| `Ctrl+D` | Toggle between **Clean Light Theme** and **Precision Dark Theme** |
-| `Ctrl+K` | Open **Connect to Target System** modal (switch active host) |
-| `Ctrl+Shift+K` | Open **Connect to Target System** modal in **New Tab** mode |
-| `Ctrl+W` | Close active Host Tab (switches to nearest remaining tab) |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle forward / backward through open Host Tabs |
-| `Ctrl+I` / `Double-Click Mini Graph` | Open **System Information** window (`Summary`, `CPU`, `Memory`, `I/O` live graphs) |
-| `Ctrl+L` | Toggle bottom **Audit Trail & Network Telemetry Console** |
-| `Ctrl+S` | Export live process snapshot to CSV |
-| `F1` | Open **Help, Keyboard Shortcuts & Information Reference** modal |
-| `Del` | Terminate selected process (`KillProcess`) |
-| `Shift+Del` | Terminate selected process and all descendants (`KillTree`) |
-
----
-
-## Repository Structure & Documentation
-
-```text
-PSRPM/
-+-- README.md                              # Project Overview, Benchmarks & Quickstart
-+-- CHANGELOG.md                           # Version History & Release Notes
-+-- LICENSE                                # MIT Open Source License
-+-- AGENTS.md                              # Quick Guardrails for AI Coding Agents & Contributors
-+-- PRODUCT.md                             # Comprehensive Product Strategy & Operator Personas
-+-- DESIGN.md                              # Impeccable UI/UX Design System & Color Tokens
-+-- docs/
-|   +-- ENGINEERING_PLAYBOOK.md            # Mission, Guardrails, "Never-To-Do's" & Roadmap
-|   +-- TELEMETRY_AND_PROTOCOL.md          # Deep-Dive into Differential Wire Protocol & Native P/Invoke
-|   \-- USER_GUIDE.md                      # Operator Manual, 7-Tab Inspector & WinRM Troubleshooting
-+-- PSRPM/                                 # PowerShell Module Directory
-|   +-- PSRPM.psd1                         # PowerShell Module Manifest
-|   +-- PSRPM.psm1                         # Main Module Entry Point & WPF Controller
-|   +-- Private/
-|   |   +-- DataCollector.ps1              # Reflection.Emit Native Collector & Delta Engine
-|   |   +-- DeepInspector.ps1              # Lazy On-Demand PEB, DLLs, Handles & Socket Inspector
-|   |   +-- ProcessActions.ps1             # Atomic KillTree, Suspend/Resume, Priority & Service Control
-|   |   +-- RunspaceEngine.ps1             # Single-Owner Runspace Coordinator & Tree Reconciler
-|   |   \-- ViewModelClasses.ps1           # Pure PS 5.1 INotifyPropertyChanged ViewModels
-|   +-- Assets/
-|   |   +-- psrpm.ico                      # Multi-Resolution Windows Icon (256, 48, 32, 24, 16)
-|   |   +-- psrpm.png / psrpm.svg          # Master 256x256 High-DPI Tachometer Gauge & Turbo Impeller Assets
-|   |   +-- psrpm_*.png                    # Mipmap PNGs (16x16, 24x24, 32x32, 48x48, 256x256)
-|   |   \-- psrpm_*.svg                    # Scalable Vector SVGs (16x16, 24x24, 32x32, 48x48, 256x256)
-|   \-- UI/
-|       +-- MainWindow.xaml                # Process Explorer-Inspired Tree-Grid Main Window
-|       +-- PropertiesWindow.xaml          # 7-Tab Process Properties Inspector Modal
-|       +-- SystemInfoWindow.xaml          # 4-Tab Live System Information Graphs Modal
-|       +-- ConnectDialog.xaml             # In-App Remote Host / LocalOnly Switcher Modal
-|       \-- HelpWindow.xaml                # 4-Tab Help, Shortcuts & Runtime Diagnostics Modal
-\-- Tests/
-    \-- Test-PSRPMEngine.ps1               # Automated 11-Suite Verification & Benchmark Script
-```
-
-- **[Engineering Playbook: Mission, Guardrails, "Never-To-Do's" & Roadmap (`docs/ENGINEERING_PLAYBOOK.md`)](docs/ENGINEERING_PLAYBOOK.md)**
-- **[Telemetry & Wire Protocol Architecture (`docs/TELEMETRY_AND_PROTOCOL.md`)](docs/TELEMETRY_AND_PROTOCOL.md)**
-- **[Operator User Guide & Troubleshooting (`docs/USER_GUIDE.md`)](docs/USER_GUIDE.md)**
-- **[Agent & Contributor Quick-Reference (`AGENTS.md`)](AGENTS.md)**
-- **[Product Strategy & Specifications (`PRODUCT.md`)](PRODUCT.md)**
-- **[Design System & Visual Specifications (`DESIGN.md`)](DESIGN.md)**
-- **[Release Notes & Version History (`CHANGELOG.md`)](CHANGELOG.md)**
-- **[License (`LICENSE`)](LICENSE)**
-
----
-
-## Security & Least Privilege Access Model (RBAC)
-
-PSRPM is designed with a strict two-tier privilege separation architecture:
-
-| Tier | Required Permissions | Supported Capabilities | Access Control Behavior |
-| :--- | :--- | :--- | :--- |
-| **Tier 1: Read-Only Monitoring** | Standard User member of `Remote Management Users` (No Local Administrator required) | Real-time CPU, RAM, Disk I/O & IOPS, network telemetry, hierarchical process tree, running services, loaded DLLs for owned processes | Non-owned processes report sanitized `[Access Denied / Protected]` command lines, environment blocks, and handles without throwing exceptions or hanging. |
-| **Tier 2: Administrative Operations** | Local Administrator or `SeDebugPrivilege` enabled | Process termination (`KillProcess`, `KillTree`), process suspension/resumption, priority adjustment, kernel handle closure (`CloseHandle`), and secure memory dump generation (`CreateDump`) | Mutating actions validate live target identity (`PID`, `CreationTime`, and `ImageName`) before executing to prevent PID-reuse collateral damage. Memory dumps are written with non-inherited ACLs (`SYSTEM`, `Administrators`, and invoking user only). |
-
----
-
-## License
-
-This project is licensed under the terms of the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
----
-
-## Development Note
-
-This project was built from conception to production through human-directed **agentic AI coding** (pair programming with Google DeepMind Antigravity). All architectural guardrails, native `Reflection.Emit` kernel collectors, WinRM differential telemetry wire protocols, and WPF desktop interfaces were engineered, benchmarked, and verified under the strict fileless security and performance budgets documented in the [Engineering Playbook](docs/ENGINEERING_PLAYBOOK.md) and [AGENTS.md](AGENTS.md).
-
+*Built with PowerShell 5.1, WPF, `Reflection.Emit`, and a strict zero-temp-file policy. Notice: Windows endpoints remain subject to native OS privileges, WinRM firewall policies, and enterprise EDR auditing.*

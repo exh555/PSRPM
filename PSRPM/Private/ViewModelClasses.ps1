@@ -4,11 +4,36 @@
 # Dirty-Checked INotifyPropertyChanged + Process Explorer Tree Geometry & Sparkline Builders
 
 class PSRPMThemeRegistry {
+    hidden static [hashtable] $_PaletteCache = @{}
+
     static [bool] IsDarkMode([string]$mode) {
         return ($mode -in @("Dark", "TokyoNight", "HighContrast"))
     }
 
+    static [string] NormalizeMode([string]$mode) {
+        if ($mode -eq "TokyoNight")      { return "TokyoNight" }
+        if ($mode -eq "TokyoNightLight") { return "TokyoNightLight" }
+        if ($mode -eq "Dark")            { return "Dark" }
+        if ($mode -eq "Classic")         { return "Classic" }
+        if ($mode -eq "HighContrast")    { return "HighContrast" }
+        return "Light"
+    }
+
+    static [void] ClearCache() {
+        [PSRPMThemeRegistry]::_PaletteCache.Clear()
+    }
+
     static [hashtable] GetPalette([string]$mode) {
+        $norm = [PSRPMThemeRegistry]::NormalizeMode($mode)
+        if ([PSRPMThemeRegistry]::_PaletteCache.ContainsKey($norm)) {
+            return [PSRPMThemeRegistry]::_PaletteCache[$norm]
+        }
+        $built = [PSRPMThemeRegistry]::BuildPalette($norm)
+        [PSRPMThemeRegistry]::_PaletteCache[$norm] = $built
+        return $built
+    }
+
+    hidden static [hashtable] BuildPalette([string]$mode) {
         if ($mode -eq "TokyoNight") {
             return @{
                 Name        = "TokyoNight"
@@ -98,6 +123,34 @@ class PSRPMThemeRegistry {
                     BrushNetRowModFg     = "#FDE047"
                     BrushNetRowDelBg     = "#3F161D"
                     BrushNetRowDelFg     = "#FCA5A5"
+                    BrushGaugeCpuFill    = "#9ECE6A"
+                    BrushGaugeCpuArea    = "#559ECE6A"
+                    BrushGaugeCpuStroke  = "#9ECE6A"
+                    BrushGaugeKernelFill = "#F7768E"
+                    BrushGaugeKernelArea = "#77F7768E"
+                    BrushGaugeKernelStroke = "#F7768E"
+                    BrushGaugeCommitFill = "#E0AF68"
+                    BrushGaugeCommitArea = "#55E0AF68"
+                    BrushGaugeCommitStroke = "#E0AF68"
+                    BrushGaugeRamFill    = "#FF9E64"
+                    BrushGaugeRamArea    = "#55FF9E64"
+                    BrushGaugeRamStroke  = "#FF9E64"
+                    BrushGaugeIoReadFill = "#7AA2F7"
+                    BrushGaugeIoReadArea = "#557AA2F7"
+                    BrushGaugeIoReadStroke = "#7AA2F7"
+                    BrushGaugeIoWriteArea = "#66BB9AF7"
+                    BrushGaugeIoWriteStroke = "#BB9AF7"
+                    BrushMiniCpuFill     = "#449ECE6A"
+                    BrushMiniCommitFill  = "#44E0AF68"
+                    BrushMiniRamFill     = "#44FF9E64"
+                    BrushSigSignedFg     = "#9ECE6A"
+                    BrushSigUnsignedFg   = "#F7768E"
+                    BrushStatusActiveFg  = "#9ECE6A"
+                    BrushStatusIdleFg    = "#7E85A8"
+                    BrushStatusExitedFg  = "#F7768E"
+                    BrushSvcRunningBg    = "#0D9488"
+                    BrushSvcPausedBg     = "#9E6A1C"
+                    BrushSvcStoppedBg    = "#3D59A1"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#1A1B26"; Fg = "#C0CAF5" }
@@ -222,6 +275,34 @@ class PSRPMThemeRegistry {
                     BrushNetRowModFg     = "#5C430D"
                     BrushNetRowDelBg     = "#F2D4D7"
                     BrushNetRowDelFg     = "#7A1C24"
+                    BrushGaugeCpuFill    = "#9BC97E"
+                    BrushGaugeCpuArea    = "#889BC97E"
+                    BrushGaugeCpuStroke  = "#385F0D"
+                    BrushGaugeKernelFill = "#E39AA8"
+                    BrushGaugeKernelArea = "#AAE39AA8"
+                    BrushGaugeKernelStroke = "#8C2D3D"
+                    BrushGaugeCommitFill = "#DEC488"
+                    BrushGaugeCommitArea = "#AADEC488"
+                    BrushGaugeCommitStroke = "#754A0D"
+                    BrushGaugeRamFill    = "#E6AC84"
+                    BrushGaugeRamArea    = "#AAE6AC84"
+                    BrushGaugeRamStroke  = "#965027"
+                    BrushGaugeIoReadFill = "#8FB0DE"
+                    BrushGaugeIoReadArea = "#AA8FB0DE"
+                    BrushGaugeIoReadStroke = "#2959AA"
+                    BrushGaugeIoWriteArea = "#BBD4A2C4"
+                    BrushGaugeIoWriteStroke = "#7847BB"
+                    BrushMiniCpuFill     = "#33385F0D"
+                    BrushMiniCommitFill  = "#338F5E15"
+                    BrushMiniRamFill     = "#33965027"
+                    BrushSigSignedFg     = "#264709"
+                    BrushSigUnsignedFg   = "#8C2D3D"
+                    BrushStatusActiveFg  = "#385F0D"
+                    BrushStatusIdleFg    = "#5A607D"
+                    BrushStatusExitedFg  = "#8C2D3D"
+                    BrushSvcRunningBg    = "#33635C"
+                    BrushSvcPausedBg     = "#8F5E15"
+                    BrushSvcStoppedBg    = "#5A607D"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#E6E7ED"; Fg = "#343B59" }
@@ -346,6 +427,34 @@ class PSRPMThemeRegistry {
                     BrushNetRowModFg     = "#FFFF00"
                     BrushNetRowDelBg     = "#3B0000"
                     BrushNetRowDelFg     = "#FF8080"
+                    BrushGaugeCpuFill    = "#00CC00"
+                    BrushGaugeCpuArea    = "#4400FF00"
+                    BrushGaugeCpuStroke  = "#00FF00"
+                    BrushGaugeKernelFill = "#FF3333"
+                    BrushGaugeKernelArea = "#66FF5555"
+                    BrushGaugeKernelStroke = "#FF5555"
+                    BrushGaugeCommitFill = "#CCCC00"
+                    BrushGaugeCommitArea = "#55FFFF00"
+                    BrushGaugeCommitStroke = "#FFFF00"
+                    BrushGaugeRamFill    = "#FF9900"
+                    BrushGaugeRamArea    = "#55FFAA00"
+                    BrushGaugeRamStroke  = "#FFA500"
+                    BrushGaugeIoReadFill = "#0099FF"
+                    BrushGaugeIoReadArea = "#5500FFFF"
+                    BrushGaugeIoReadStroke = "#00FFFF"
+                    BrushGaugeIoWriteArea = "#55FF00FF"
+                    BrushGaugeIoWriteStroke = "#FF00FF"
+                    BrushMiniCpuFill     = "#4400FF00"
+                    BrushMiniCommitFill  = "#44FFFF00"
+                    BrushMiniRamFill     = "#44FFA500"
+                    BrushSigSignedFg     = "#00FF00"
+                    BrushSigUnsignedFg   = "#FF5555"
+                    BrushStatusActiveFg  = "#00FF00"
+                    BrushStatusIdleFg    = "#FFFFFF"
+                    BrushStatusExitedFg  = "#FF5555"
+                    BrushSvcRunningBg    = "#008000"
+                    BrushSvcPausedBg     = "#806600"
+                    BrushSvcStoppedBg    = "#444444"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#000000"; Fg = "#FFFFFF" }
@@ -470,6 +579,34 @@ class PSRPMThemeRegistry {
                     BrushNetRowModFg     = "#713F12"
                     BrushNetRowDelBg     = "#FEE2E2"
                     BrushNetRowDelFg     = "#7F1D1D"
+                    BrushGaugeCpuFill    = "#86EFAC"
+                    BrushGaugeCpuArea    = "#8886EFAC"
+                    BrushGaugeCpuStroke  = "#16A34A"
+                    BrushGaugeKernelFill = "#FCA5A5"
+                    BrushGaugeKernelArea = "#AAFCA5A5"
+                    BrushGaugeKernelStroke = "#DC2626"
+                    BrushGaugeCommitFill = "#D4D47A"
+                    BrushGaugeCommitArea = "#AAD4D47A"
+                    BrushGaugeCommitStroke = "#A16207"
+                    BrushGaugeRamFill    = "#FDBA74"
+                    BrushGaugeRamArea    = "#AAFDBA74"
+                    BrushGaugeRamStroke  = "#EA580C"
+                    BrushGaugeIoReadFill = "#93C5FD"
+                    BrushGaugeIoReadArea = "#AA93C5FD"
+                    BrushGaugeIoReadStroke = "#3B82F6"
+                    BrushGaugeIoWriteArea = "#BBF9A8D4"
+                    BrushGaugeIoWriteStroke = "#DB2777"
+                    BrushMiniCpuFill     = "#3322C55E"
+                    BrushMiniCommitFill  = "#33EAB308"
+                    BrushMiniRamFill     = "#33F97316"
+                    BrushSigSignedFg     = "#15803D"
+                    BrushSigUnsignedFg   = "#B91C1C"
+                    BrushStatusActiveFg  = "#16A34A"
+                    BrushStatusIdleFg    = "#475569"
+                    BrushStatusExitedFg  = "#DC2626"
+                    BrushSvcRunningBg    = "#16A34A"
+                    BrushSvcPausedBg     = "#D97706"
+                    BrushSvcStoppedBg    = "#64748B"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#FFFFFF"; Fg = "#000000" }
@@ -594,6 +731,34 @@ class PSRPMThemeRegistry {
                     BrushNetRowModFg     = "#FDE047"
                     BrushNetRowDelBg     = "#3F161D"
                     BrushNetRowDelFg     = "#FCA5A5"
+                    BrushGaugeCpuFill    = "#22C55E"
+                    BrushGaugeCpuArea    = "#5522C55E"
+                    BrushGaugeCpuStroke  = "#4ADE80"
+                    BrushGaugeKernelFill = "#EF4444"
+                    BrushGaugeKernelArea = "#77EF4444"
+                    BrushGaugeKernelStroke = "#F87171"
+                    BrushGaugeCommitFill = "#CA8A04"
+                    BrushGaugeCommitArea = "#55CA8A04"
+                    BrushGaugeCommitStroke = "#FACC15"
+                    BrushGaugeRamFill    = "#EA580C"
+                    BrushGaugeRamArea    = "#55EA580C"
+                    BrushGaugeRamStroke  = "#FB923C"
+                    BrushGaugeIoReadFill = "#38BDF8"
+                    BrushGaugeIoReadArea = "#5538BDF8"
+                    BrushGaugeIoReadStroke = "#38BDF8"
+                    BrushGaugeIoWriteArea = "#66F472B6"
+                    BrushGaugeIoWriteStroke = "#F472B6"
+                    BrushMiniCpuFill     = "#4422C55E"
+                    BrushMiniCommitFill  = "#44EAB308"
+                    BrushMiniRamFill     = "#44F97316"
+                    BrushSigSignedFg     = "#4ADE80"
+                    BrushSigUnsignedFg   = "#FCA5A5"
+                    BrushStatusActiveFg  = "#4ADE80"
+                    BrushStatusIdleFg    = "#94A3B8"
+                    BrushStatusExitedFg  = "#F87171"
+                    BrushSvcRunningBg    = "#15803D"
+                    BrushSvcPausedBg     = "#B45309"
+                    BrushSvcStoppedBg    = "#475569"
                 }
                 Rows = @{
                     Default   = @{ Bg = "#0F172A"; Fg = "#F1F5F9" }
@@ -718,6 +883,34 @@ class PSRPMThemeRegistry {
                 BrushNetRowModFg     = "#713F12"
                 BrushNetRowDelBg     = "#FEE2E2"
                 BrushNetRowDelFg     = "#7F1D1D"
+                BrushGaugeCpuFill    = "#86EFAC"
+                BrushGaugeCpuArea    = "#8886EFAC"
+                BrushGaugeCpuStroke  = "#16A34A"
+                BrushGaugeKernelFill = "#FCA5A5"
+                BrushGaugeKernelArea = "#AAFCA5A5"
+                BrushGaugeKernelStroke = "#DC2626"
+                BrushGaugeCommitFill = "#D4D47A"
+                BrushGaugeCommitArea = "#AAD4D47A"
+                BrushGaugeCommitStroke = "#A16207"
+                BrushGaugeRamFill    = "#FDBA74"
+                BrushGaugeRamArea    = "#AAFDBA74"
+                BrushGaugeRamStroke  = "#EA580C"
+                BrushGaugeIoReadFill = "#93C5FD"
+                BrushGaugeIoReadArea = "#AA93C5FD"
+                BrushGaugeIoReadStroke = "#3B82F6"
+                BrushGaugeIoWriteArea = "#BBF9A8D4"
+                BrushGaugeIoWriteStroke = "#DB2777"
+                BrushMiniCpuFill     = "#3322C55E"
+                BrushMiniCommitFill  = "#33EAB308"
+                BrushMiniRamFill     = "#33F97316"
+                BrushSigSignedFg     = "#15803D"
+                BrushSigUnsignedFg   = "#B91C1C"
+                BrushStatusActiveFg  = "#16A34A"
+                BrushStatusIdleFg    = "#475569"
+                BrushStatusExitedFg  = "#DC2626"
+                BrushSvcRunningBg    = "#16A34A"
+                BrushSvcPausedBg     = "#D97706"
+                BrushSvcStoppedBg    = "#64748B"
             }
             Rows = @{
                 Default   = @{ Bg = "#FFFFFF"; Fg = "#0F172A" }
@@ -3010,6 +3203,7 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [hashtable]$BaselineSnapshots
     [Object]$NetworkSockets
     [Object]$NetworkTimeline
+    [Object]$PendingNetTimeline
     [bool]$HasLoadedSockets
     [string]$NetworkSubMode
     [string]$NetworkSocketsSummary
@@ -3048,6 +3242,7 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.BaselineSnapshots = @{}
         $this.NetworkSockets  = [System.Collections.Generic.List[Object]]::new()
         $this.NetworkTimeline = [System.Collections.Generic.List[Object]]::new()
+        $this.PendingNetTimeline = [System.Collections.Generic.Queue[Object]]::new()
         $this.HasLoadedSockets = $false
         $this.NetworkSubMode   = "Sockets"
         $this.NetworkSocketsSummary = "Not queried yet"

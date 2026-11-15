@@ -57,6 +57,7 @@ $script:PSRPMActionScriptBlock = {
         &$addPInvoke "NtResumeProcess"            "ntdll.dll"    ([int])    @([IntPtr])
         &$addPInvoke "NtQuerySystemInformation"  "ntdll.dll"    ([int])    @([int], [IntPtr], [int], [int].MakeByRefType())
         &$addPInvoke "MiniDumpWriteDump"          "dbghelp.dll"  ([int])    @([IntPtr], [uint32], [IntPtr], [int], [IntPtr], [IntPtr], [IntPtr])
+        &$addPInvoke "GetExtendedTcpTable"        "iphlpapi.dll" ([uint32]) @([IntPtr], [uint32].MakeByRefType(), [int], [int], [int], [uint32])
         &$addPInvoke "SetTcpEntry"                "iphlpapi.dll" ([int])    @([IntPtr])
 
         [void]$tb.CreateType()
@@ -287,6 +288,10 @@ $script:PSRPMActionScriptBlock = {
                                 $failedPids.Add($pIdVal)
                             }
                         } else {
+                            if ($pIdVal -eq $TargetPid) {
+                                $errRoot = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                                throw "Cannot terminate process tree: unable to open root PID $TargetPid (Win32 Error: $errRoot)."
+                            }
                             $failedPids.Add($pIdVal)
                         }
                     }
@@ -647,6 +652,9 @@ $script:PSRPMActionScriptBlock = {
             }
 
             "CloseTcpConnection" {
+                if ($TargetPid -le 4) {
+                    throw "Cannot close TCP connection owned by critical system process (PID $TargetPid); connection could not be closed."
+                }
                 if ([string]::IsNullOrWhiteSpace($HandleId)) {
                     throw "HandleId is required to close a TCP connection (expected 'LocalIP|LocalPort|RemoteIP|RemotePort')."
                 }
@@ -672,10 +680,69 @@ $script:PSRPMActionScriptBlock = {
                     throw "Invalid TCP port range in endpoint '$HandleId'."
                 }
 
+                # Verify owning process still matches ExpectedName and ExpectedStartTime
+                $hOwnerProc = [PSRPM.NativeActionsV4]::OpenProcess(0x1000, 0, $TargetPid)
+                if ($hOwnerProc -eq [IntPtr]::Zero) {
+                    $errOpen = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                    throw "PID $TargetPid identity verification failed: cannot open owning process (Win32 Error: $errOpen); connection could not be closed."
+                }
+                try {
+                    &$verifyProcessIdentity $hOwnerProc $TargetPid $ExpectedStartTime $ExpectedName
+                } finally {
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hOwnerProc)
+                }
+
                 $locBytes = $locIpObj.GetAddressBytes()
                 $remBytes = $remIpObj.GetAddressBytes()
+                $locAddrInt = [BitConverter]::ToInt32($locBytes, 0)
+                $remAddrInt = [BitConverter]::ToInt32($remBytes, 0)
                 $locPortNet = (($locPort -band 0xFF) -shl 8) -bor (($locPort -shr 8) -band 0xFF)
                 $remPortNet = (($remPort -band 0xFF) -shl 8) -bor (($remPort -shr 8) -band 0xFF)
+
+                # Enumerate TCP_TABLE_OWNER_PID_ALL (5) for AF_INET (2) to verify tuple existence and TargetPid ownership
+                $tblSize = [uint32]65536
+                $tblPtr  = [IntPtr]::Zero
+                $matchedOwnerPid = -1
+                try {
+                    $tblPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal([int]$tblSize)
+                    $tblRet = [PSRPM.NativeActionsV4]::GetExtendedTcpTable($tblPtr, [ref]$tblSize, 0, 2, 5, 0)
+                    $tblTry = 0
+                    while ($tblRet -eq 122 -and $tblTry -lt 4 -and $tblSize -le 16777216) {
+                        $tblTry++
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($tblPtr)
+                        $tblPtr = [IntPtr]::Zero
+                        $tblPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal([int]$tblSize)
+                        $tblRet = [PSRPM.NativeActionsV4]::GetExtendedTcpTable($tblPtr, [ref]$tblSize, 0, 2, 5, 0)
+                    }
+                    if ($tblRet -ne 0) {
+                        throw "GetExtendedTcpTable failed while verifying TCP connection ownership (Win32 error $tblRet); connection could not be closed."
+                    }
+                    $numRows = ([long][System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, 0) -band 0xFFFFFFFFL)
+                    for ($ri = 0L; $ri -lt $numRows; $ri++) {
+                        $rOff = 4 + ([int]$ri * 24)
+                        if (($rOff + 24) -gt [int]$tblSize) { break }
+                        $rLocAddr = [System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, $rOff + 4)
+                        $rLocPort = ([System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, $rOff + 8) -band 0xFFFF)
+                        $rRemAddr = [System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, $rOff + 12)
+                        $rRemPort = ([System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, $rOff + 16) -band 0xFFFF)
+                        if ($rLocAddr -eq $locAddrInt -and $rLocPort -eq $locPortNet -and $rRemAddr -eq $remAddrInt -and $rRemPort -eq $remPortNet) {
+                            $matchedOwnerPid = [int](([long][System.Runtime.InteropServices.Marshal]::ReadInt32($tblPtr, $rOff + 20) -band 0xFFFFFFFFL))
+                            break
+                        }
+                    }
+                } finally {
+                    if ($tblPtr -ne [IntPtr]::Zero) {
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($tblPtr)
+                        $tblPtr = [IntPtr]::Zero
+                    }
+                }
+
+                if ($matchedOwnerPid -lt 0) {
+                    throw "TCP connection $($epParts[0]):$locPort -> $($epParts[2]):$remPort could not be closed or no longer exists in active IPv4 table."
+                }
+                if ($matchedOwnerPid -ne $TargetPid) {
+                    throw "Refused closing TCP connection $($epParts[0]):$locPort -> $($epParts[2]):${remPort}: ownership mismatch (expected PID $TargetPid, actual PID $matchedOwnerPid); could not be closed."
+                }
 
                 $rowPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(20)
                 try {
@@ -715,7 +782,7 @@ $script:PSRPMActionScriptBlock = {
         $res.Success = $false
         $errMsg = $_.Exception.Message
         $res.Message = $errMsg
-        if ($errMsg -match "reuse detected|identity verification failed|Cannot terminate|Cannot suspend|Cannot resume|Cannot close handle|Cannot generate memory dump|Cannot change priority|Refused") {
+        if ($errMsg -match "reuse detected|identity verification failed|Cannot terminate|Cannot suspend|Cannot resume|Cannot close handle|Cannot close TCP connection|Access denied closing TCP connection|Cannot generate memory dump|Cannot change priority|Refused|no longer exists in active IPv4 table") {
             $res.Status  = "Refused"
             $res.ErrorId = "PSRPM.Process.Refused"
         } else {

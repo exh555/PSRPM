@@ -17,7 +17,10 @@ param(
     [switch]$GenerateReport,
 
     [Parameter(Mandatory = $false)]
-    [string]$ReportPath = "Tests\QA_Report.md",
+    [switch]$WriteTrackedReport,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ReportPath = (Join-Path ([System.IO.Path]::GetTempPath()) "PSRPM_QA_Report.md"),
 
     [Parameter(Mandatory = $false)]
     [switch]$SkipWpfRender
@@ -391,7 +394,7 @@ $qaStats.Timings["Suite 2: Edge Cases & Topologies"] = $swSuite2.ElapsedMillisec
 Write-Host "`n[SUITE 3] UX/UI, XAML Templates, WCAG Theme Contrast & Freezables" -ForegroundColor Yellow
 $swSuite3 = [System.Diagnostics.Stopwatch]::StartNew()
 
-# 3.1 Load and Verify All 7 XAML Dialogs
+# 3.1 Load and Verify All 8 XAML Dialogs
 $xamlTemplates = @(
     @{ File = "MainWindow.xaml";          RequiredCount = 39 }
     @{ File = "PropertiesWindow.xaml";    RequiredCount = 11 }
@@ -400,6 +403,7 @@ $xamlTemplates = @(
     @{ File = "HelpWindow.xaml";          RequiredCount = 10 }
     @{ File = "ServiceDetailWindow.xaml"; RequiredCount = 16 }
     @{ File = "FindHandleWindow.xaml";    RequiredCount = 11 }
+    @{ File = "SelectColumnsWindow.xaml"; RequiredCount = 13 }
 )
 
 $xamlAllValid = $true
@@ -417,9 +421,9 @@ foreach ($xt in $xamlTemplates) {
         $ms.Close()
     }
 }
-Assert-QACheck "UX/UI Integrity" "WPF XAML Schema Validation (7 Windows & Dialogs)" `
+Assert-QACheck "UX/UI Integrity" "WPF XAML Schema Validation (8 Windows & Dialogs)" `
     $xamlAllValid `
-    "Successfully compiled and parsed MainWindow, Properties, Connect, SysInfo, Help, ServiceDetail, and FindHandle XAML."
+    "Successfully compiled and parsed MainWindow, Properties, Connect, SysInfo, Help, ServiceDetail, FindHandle, and SelectColumns XAML."
 
 # 3.2 Dual Theme Semantic Color Contrast (WCAG 2.1 AA Compliance)
 # Formula: (L1 + 0.05) / (L2 + 0.05) where L is relative luminance
@@ -551,17 +555,19 @@ Assert-QACheck "UX/UI Integrity" "Selective Category Highlighting Invariance (Li
     $hlInvariant `
     "Standard Category: $standardCatBg | Minimal: $minimalCatBg | New (Lime): $newFlashBg | Exiting (Crimson): $exitFlashBg"
 
-# 3.6 Four-Palette Theme Engine & Host Tab State Synchronization
+# 3.6 Six-Palette Theme Engine & Host Tab State Synchronization
 $tabTestVm = [HostTabItemViewModel]::new("tab_theme_test", "SRV-TEST", "SRV-TEST", "WinRM", $false, $null)
 
 $themeSuccess = $true
 $themeErrors = [System.Collections.Generic.List[string]]::new()
-$themesToTest = @("Light", "Dark", "Classic", "HighContrast")
+$themesToTest = @("Light", "Dark", "TokyoNight", "TokyoNightLight", "Classic", "HighContrast")
 
 foreach ($tMode in $themesToTest) {
     try {
-        $isDark = ($tMode -in @("Dark", "HighContrast"))
-        $tabTestVm.UpdateVisualState($true, $isDark, $false, "Connected", $false, 5)
+        $tabTestVm.UpdateVisualState($true, $tMode, $false, "Connected", $false, 5)
+        if ($tabTestVm.ThemeMode -ne $tMode) {
+            $themeErrors.Add("HostTabItemViewModel ThemeMode mismatch for '$tMode': got '$($tabTestVm.ThemeMode)'")
+        }
         $hlVm.SetThemeMode($tMode)
         $hlVm.RefreshRowColors()
         if (-not $hlVm.RowBackground -or -not $hlVm.RowForeground) {
@@ -573,9 +579,9 @@ foreach ($tMode in $themesToTest) {
     }
 }
 
-Assert-QACheck "UX/UI Integrity" "Four-Palette Theme Engine (Light/Dark/Classic/HighContrast)" `
+Assert-QACheck "UX/UI Integrity" "Six-Palette Theme Engine (Light/Dark/TokyoNight/TokyoNightLight/Classic/HighContrast)" `
     ($themeSuccess -and $themeErrors.Count -eq 0) `
-    "Verified all 4 palettes on HostTabItemViewModel and ProcessItemViewModel: Clean Light, Precision Dark, Sysinternals Classic, and High-Contrast."
+    "Verified all 6 palettes on HostTabItemViewModel and ProcessItemViewModel: Clean Light, Dark Mode, Tokyo Night, Tokyo Night Light, Sysinternals Classic, and High-Contrast."
 
 $swSuite3.Stop()
 $qaStats.Timings["Suite 3: UX/UI & Themes"] = $swSuite3.ElapsedMilliseconds
@@ -664,20 +670,22 @@ Assert-QACheck "Zero-Leak Architecture" "Local Telemetry Circular Ring Buffer Ha
     $queueBounded `
     "CpuHistory240 capped at $cpuHistCount samples | CoreGraphs[0] capped at $coreHistCount samples across 300 pushes (< 20 KB local memory)."
 
-# 4.5 Console Log Buffer Truncation (Capped at 24,000 characters)
+# 4.5 Console Log Buffer Truncation (Capped at 72,000 characters -> retain trailing 48,000)
 $fakeLogBox = [System.Windows.Controls.TextBox]::new()
-# Append 50 large log lines
-for ($l = 1; $l -le 50; $l++) {
-    $line = "[$(Get-Date -Format 'HH:mm:ss.fff')] Test Log Entry Event Number $l with extended diagnostic payload data line.`r`n"
-    if ($fakeLogBox.Text.Length -gt 24000) {
-        $fakeLogBox.Text = $fakeLogBox.Text.Substring(8000)
+$logPruneTriggered = $false
+for ($l = 1; $l -le 700; $l++) {
+    $line = "[$(Get-Date -Format 'HH:mm:ss.fff')] Test Log Entry Event Number $l with extended diagnostic payload data line for 72KB ring truncation check.`r`n"
+    if ($fakeLogBox.Text.Length -gt 72000) {
+        $curLogText = $fakeLogBox.Text
+        $fakeLogBox.Text = $curLogText.Substring($curLogText.Length - 48000)
+        $logPruneTriggered = $true
     }
     $fakeLogBox.AppendText($line)
 }
-$logBounded = ($fakeLogBox.Text.Length -le 24000)
-Assert-QACheck "Zero-Leak Architecture" "Activity Console Log Buffer Capping (<= 24,000 chars)" `
+$logBounded = ($logPruneTriggered -and $fakeLogBox.Text.Length -le 72000 -and $fakeLogBox.Text.Length -ge 48000)
+Assert-QACheck "Zero-Leak Architecture" "Activity Console Log Buffer Capping (<= 72,000 chars)" `
     $logBounded `
-    "Log console buffer length: $($fakeLogBox.Text.Length) characters (successfully pruned oldest 8,000 chars when full)."
+    "Log console buffer length: $($fakeLogBox.Text.Length) characters (triggered 72,000->48,000 prune cleanly)."
 
 $swSuite4.Stop()
 $qaStats.Timings["Suite 4: Performance & Memory"] = $swSuite4.ElapsedMilliseconds
@@ -1058,17 +1066,19 @@ try {
     $netEng.StateContainer.SimulateDelayMs = 400
     [void]$netEng.StateContainer.WakeEvent.Set()
 
-    # Measure UI responsiveness during simulated network delay
-    $swUiPump = [System.Diagnostics.Stopwatch]::StartNew()
+    # Measure UI responsiveness during simulated network delay (exclude inter-sample sleep from dispatch timer)
+    $uiPumpTotalMs = 0.0
     for ($p = 0; $p -lt 5; $p++) {
+        $swUiDispatch = [System.Diagnostics.Stopwatch]::StartNew()
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
             [System.Windows.Threading.DispatcherPriority]::Background,
             [Action]{}
         )
+        $swUiDispatch.Stop()
+        $uiPumpTotalMs += $swUiDispatch.Elapsed.TotalMilliseconds
         Start-Sleep -Milliseconds 20
     }
-    $swUiPump.Stop()
-    $uiPumpLatency = [Math]::Round($swUiPump.ElapsedMilliseconds / 5.0, 1)
+    $uiPumpLatency = [Math]::Round($uiPumpTotalMs / 5.0, 2)
 
     # Wait for the delayed tick to arrive
     $rttDeadline = [DateTime]::UtcNow.AddSeconds(3.0)
@@ -1106,7 +1116,7 @@ try {
     [void]$netEng.StateContainer.WakeEvent.Set()
 
     $dropDeadline = [DateTime]::UtcNow.AddSeconds(3.0)
-    while ([DateTime]::UtcNow -lt $dropDeadline -and $netEng.StateContainer.ConnectionState -ne "Disconnected") {
+    while ([DateTime]::UtcNow -lt $dropDeadline -and (($netEng.StateContainer.ConnectionState -ne "Disconnected") -or ($netConnDot -and ([string]$netConnDot.Fill -notin @("#DC2626", "#FFDC2626"))))) {
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
             [System.Windows.Threading.DispatcherPriority]::Background,
             [Action]{}
@@ -1118,18 +1128,30 @@ try {
     $procsPreserved = ($netProcCol.Count -gt 0)
 
     Assert-QACheck "Network Fault-Tolerance" "Sudden Network Disconnect & State Preservation (Red Dot #DC2626)" `
-        ($cStateAfterDrop -eq "Disconnected" -and $procsPreserved) `
+        ($cStateAfterDrop -eq "Disconnected" -and $procsPreserved -and ((-not $netConnDot) -or ($dotColorAfterDrop -in @("#DC2626", "#FFDC2626")))) `
         "ConnectionState: '$cStateAfterDrop', Dot: '$dotColorAfterDrop', Existing processes preserved in memory: $($netProcCol.Count)"
 
     # 8.5 Truncated & Corrupted Wire Packet Ingestion
-    $netEng.StateContainer.Payload = "GZIP:TRUNCATED_DAMAGED_BASE64_BYTE_STREAM_###"
-    $netEng.StateContainer.PayloadBytes = 45
-    # Trigger UI Dispatcher pass to consume corrupt payload
-    [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
-        [System.Windows.Threading.DispatcherPriority]::Background,
-        [Action]{}
-    )
-    $handledCorrupt = ($netEng.StateContainer.LastErr -ne $null)
+    $netEng.StateContainer.SimulateError = $null
+    $netEng.StateContainer.SimulateDelayMs = 1500
+    [System.Threading.Monitor]::Enter($netEng.StateContainer.SyncRoot)
+    try {
+        $netEng.StateContainer.LastErr = $null
+        $netEng.StateContainer.Payload = "GZIP:TRUNCATED_DAMAGED_BASE64_BYTE_STREAM_###"
+        $netEng.StateContainer.PayloadTabId = $netEng.StateContainer.ActiveTabId
+        $netEng.StateContainer.PayloadBytes = 45
+    } finally {
+        [System.Threading.Monitor]::Exit($netEng.StateContainer.SyncRoot)
+    }
+    $corruptDeadline = [DateTime]::UtcNow.AddSeconds(2.5)
+    while ([DateTime]::UtcNow -lt $corruptDeadline -and (($null -ne $netEng.StateContainer.Payload) -or ($null -eq $netEng.StateContainer.LastErr))) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Background,
+            [Action]{}
+        )
+        Start-Sleep -Milliseconds 30
+    }
+    $handledCorrupt = (($null -eq $netEng.StateContainer.Payload) -and ($null -ne $netEng.StateContainer.LastErr) -and ([string]$netEng.StateContainer.LastErr -notmatch 'WSMan'))
     Assert-QACheck "Network Fault-Tolerance" "Corrupted / Truncated Wire Packet Ingestion Defense" `
         $handledCorrupt `
         "Corrupted wire stream safely trapped without crashing WPF dispatcher: '$($netEng.StateContainer.LastErr)'"
@@ -1141,7 +1163,7 @@ try {
     [void]$netEng.StateContainer.WakeEvent.Set()
 
     $recovDeadline = [DateTime]::UtcNow.AddSeconds(3.0)
-    while ([DateTime]::UtcNow -lt $recovDeadline -and $netEng.StateContainer.ConnectionState -eq "Disconnected") {
+    while ([DateTime]::UtcNow -lt $recovDeadline -and (($netEng.StateContainer.ConnectionState -notin @("Connected", "LocalMode")) -or ($netEng.StateContainer.FreshnessState -ne "Fresh") -or ($netConnDot -and ([string]$netConnDot.Fill -notin @("#16A34A", "#FF16A34A"))))) {
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
             [System.Windows.Threading.DispatcherPriority]::Background,
             [Action]{}
@@ -1152,7 +1174,7 @@ try {
     $dotColorAfterRecov = if ($netConnDot) { [string]$netConnDot.Fill } else { "" }
 
     Assert-QACheck "Network Fault-Tolerance" "Automatic Network Recovery & Reconnection (Green Dot #16A34A)" `
-        ($cStateAfterRecov -in @("Connected", "LocalMode")) `
+        (($cStateAfterRecov -in @("Connected", "LocalMode")) -and ((-not $netConnDot) -or ($dotColorAfterRecov -in @("#16A34A", "#FF16A34A")))) `
         "Recovered connection state: '$cStateAfterRecov', Dot: '$dotColorAfterRecov', Live telemetry resumed."
 
 } finally {
@@ -1186,7 +1208,10 @@ foreach ($k in $qaStats.Timings.Keys) {
 Write-Host "================================================================================" -ForegroundColor Cyan
 
 # Optional: Generate Markdown Report File
-if ($GenerateReport -or $ReportPath) {
+if ($WriteTrackedReport -and -not $PSBoundParameters.ContainsKey('ReportPath')) {
+    $ReportPath = "Tests\QA_Report.md"
+}
+if ($GenerateReport -or $WriteTrackedReport -or $ReportPath) {
     $reportAbs = if ([System.IO.Path]::IsPathRooted($ReportPath)) { $ReportPath } else { Join-Path $repoRoot $ReportPath }
     $reportDir = Split-Path -Parent $reportAbs
     if (-not (Test-Path $reportDir)) { [void](New-Item -ItemType Directory -Path $reportDir) }

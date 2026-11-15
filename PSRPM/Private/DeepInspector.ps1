@@ -948,18 +948,25 @@ $script:PSRPMDeepInspectorScriptBlock = {
                             }
                             if ($envPtr -ne [IntPtr]::Zero -and $envSize -gt 0 -and $envSize -le 65536) {
                                 if ([PSRPM.NativeInspectorV3]::ReadProcessMemory($hProc, $envPtr, $buf, [IntPtr]$envSize, [ref]$bytesRead) -ne 0) {
-                                    $pos = 0
-                                    while ($pos -lt ($envSize - 2)) {
-                                        $entry = [System.Runtime.InteropServices.Marshal]::PtrToStringUni([IntPtr]::Add($buf, $pos))
-                                        if ([string]::IsNullOrEmpty($entry)) { break }
-                                        $eqIdx = $entry.IndexOf('=')
-                                        if ($eqIdx -gt 0) {
-                                            $result.Environment.Add(@{
-                                                Key   = $entry.Substring(0, $eqIdx)
-                                                Value = $entry.Substring($eqIdx + 1)
-                                            })
+                                    $readLen = [Math]::Min([int]$bytesRead.ToInt64(), [int]$envSize)
+                                    $charCount = [int]([Math]::Floor($readLen / 2))
+                                    if ($charCount -gt 0) {
+                                        $envRawStr = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($buf, $charCount)
+                                        $pos = 0
+                                        while ($pos -lt $envRawStr.Length) {
+                                            $nulIdx = $envRawStr.IndexOf([char]0, $pos)
+                                            $entry = if ($nulIdx -ge 0) { $envRawStr.Substring($pos, $nulIdx - $pos) } else { $envRawStr.Substring($pos) }
+                                            if ([string]::IsNullOrEmpty($entry)) { break }
+                                            $eqIdx = $entry.IndexOf('=')
+                                            if ($eqIdx -gt 0) {
+                                                $result.Environment.Add(@{
+                                                    Key   = $entry.Substring(0, $eqIdx)
+                                                    Value = $entry.Substring($eqIdx + 1)
+                                                })
+                                            }
+                                            if ($nulIdx -lt 0) { break }
+                                            $pos = $nulIdx + 1
                                         }
-                                        $pos += ($entry.Length + 1) * 2
                                     }
                                 }
                             }
@@ -1073,15 +1080,30 @@ $script:PSRPMDeepInspectorScriptBlock = {
             $closeModProc = ($hModProc -ne [IntPtr]::Zero)
             if ($hModProc -eq [IntPtr]::Zero) { $hModProc = $hProc }
 
+            $modBuf      = $buf
+            $modBufSize  = 65536
+            $modBufAlloc = $false
             try {
                 $cbNeeded = [uint32]0
-                if ($hModProc -ne [IntPtr]::Zero -and [PSRPM.NativeInspectorV3]::EnumProcessModulesEx($hModProc, $buf, 65536, [ref]$cbNeeded, 0x03) -ne 0 -and $cbNeeded -gt 0) {
+                if ($hModProc -ne [IntPtr]::Zero -and [PSRPM.NativeInspectorV3]::EnumProcessModulesEx($hModProc, $modBuf, [uint32]$modBufSize, [ref]$cbNeeded, 0x03) -ne 0 -and $cbNeeded -gt 0) {
+                    if ([int]$cbNeeded -gt $modBufSize) {
+                        $reqModSize = [Math]::Min(262144, [int]$cbNeeded)
+                        $newModBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($reqModSize)
+                        $modBuf = $newModBuf
+                        $modBufSize = $reqModSize
+                        $modBufAlloc = $true
+                        $cbNeeded2 = [uint32]0
+                        if ([PSRPM.NativeInspectorV3]::EnumProcessModulesEx($hModProc, $modBuf, [uint32]$modBufSize, [ref]$cbNeeded2, 0x03) -ne 0 -and $cbNeeded2 -gt 0) {
+                            $cbNeeded = $cbNeeded2
+                        }
+                    }
                     $ptrSize = [IntPtr]::Size
-                    $modCount = [Math]::Min([int]($cbNeeded / $ptrSize), 1024)
+                    $allocSlots = [int]($modBufSize / $ptrSize)
+                    $modCount = [Math]::Min([int]([Math]::Floor($cbNeeded / $ptrSize)), $allocSlots)
                     $seenModPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
                     for ($mIdx = 0; $mIdx -lt $modCount; $mIdx++) {
-                        $hMod = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($buf, $mIdx * $ptrSize)
+                        $hMod = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($modBuf, $mIdx * $ptrSize)
                         $sbPath.Length = 0
                         if ([PSRPM.NativeInspectorV3]::GetModuleFileNameExW($hModProc, $hMod, $sbPath, 1024) -gt 0) {
                             $mPath = $sbPath.ToString()
@@ -1130,6 +1152,10 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     }
                 }
             } finally {
+                if ($modBufAlloc -and $modBuf -ne [IntPtr]::Zero) {
+                    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($modBuf)
+                    $modBuf = [IntPtr]::Zero
+                }
                 if ($closeModProc) { [void][PSRPM.NativeInspectorV3]::CloseHandle($hModProc) }
             }
 

@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.11.0'
+    ModuleVersion     = '1.12.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -78,11 +78,10 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Added Network Activity workspace tab with Active Sockets (TCPView-style IPv4/IPv6 endpoint table, filters, auto-refresh, CSV export) and ETW Activity Stream
-- Added DeepInspector AllSockets enumeration with OWNER_MODULE and TCP EStats plus CloseTcpConnection via iphlpapi!SetTcpEntry
-- Added 5th Network tab in System Information and interactive crosshair hover tooltips with top-process attribution across sparklines and charts
-- Added Ctrl+B Process Baseline Snapshots with PID-reuse protection, session peak metrics, and 4 new columns expanding the catalog to 30 columns
-- Added Tokyo Night and Tokyo Night Light themes via PSRPMThemeRegistry and migrated remaining hardcoded dialog/toolbar colors to DynamicResource tokens
+- Fixed async closure, shutdown teardown and unmanaged buffer leaks (coordinator worker disposal, local collector AllocHGlobal cleanup, PropertiesWindow/ServiceDetailWindow callbacks, ServiceDetailWindow badge crash)
+- Hardened same-tick PID reuse, CloseTcpConnection/KillTree validation, PEB/module bounds, clipboard handling and target-switch parity
+- Performance: Class 8 scaling above 170 cores, <256 B raw JSON bypass, cached theme palettes and brushes, keyed socket reconciliation, off-tab ETW buffering
+- 6-theme parity across all dialogs, refreshed Help copy, restructured README with Why PSRPM, and reliable 44-check extended QA
 '@
         }
     }
