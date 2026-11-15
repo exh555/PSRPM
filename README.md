@@ -30,7 +30,7 @@ psrpm -ComputerName "SRV-PROD-01" -Credential (Get-Credential)
 psrpm -ComputerName "SRV-PROD-01" -Theme TokyoNight -Wait
 ```
 
-> **Prerequisites**: Windows desktop session (WPF) running Windows PowerShell 5.1 (`Desktop` edition). Remote monitoring uses WinRM ports `5985` (HTTP) or `5986` (HTTPS).
+> **Prerequisites**: Windows desktop session (WPF) running Windows PowerShell 5.1 (`Desktop` edition) -- targeted because PowerShell 5.1 is preinstalled and guaranteed on all Windows 10/11 and Windows Server endpoints with zero extra runtime deployment. Remote monitoring uses WinRM ports `5985` (HTTP) or `5986` (HTTPS).
 
 ---
 
