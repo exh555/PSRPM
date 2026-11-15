@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-14
+
+### Added
+- **Network Activity Workspace Tab & Active Socket Inspector (`MainWindow.xaml`, `DeepInspector.ps1`, `ProcessActions.ps1`, `PSRPM.psm1`)**:
+  - Added the `Network Activity` workspace tab (`TabNetworkActivity`) featuring **Active Sockets** (`GridNetworkSockets`, Sysinternals TCPView-style live IPv4/IPv6 TCP/UDP endpoint view with protocol/state filter chips, search, 2-second auto-refresh, and CSV export) and **ETW Activity Stream** (`GridNetworkTimeline`).
+  - Added `AllSockets` mode and shared native `OWNER_MODULE` + per-connection EStats (`GetPerTcpConnectionEStats` / `GetPerTcp6ConnectionEStats`) enumeration in `DeepInspector.ps1` (`PSRPM.NativeInspectorV3`).
+  - Added `CloseTcpConnection` action backed by `iphlpapi.dll!SetTcpEntry` in `ProcessActions.ps1` (`PSRPM.NativeActionsV4`).
+- **System Information `Network` Tab & Interactive Graph Hover Telemetry (`SystemInfoWindow.xaml`, `ViewModelClasses.ps1`, `PSRPM.psm1`, `MainWindow.xaml`)**:
+  - Added a 5th `Network` tab and `QuadNet` Summary strip to System Information plus the `BorderTelemNetRate` toolbar pill, powered by 240-sample auto-scaled Rx/Tx history and session totals in `SystemSummaryViewModel`.
+  - Added interactive crosshair hover tooltips with timestamped top-process attribution (`RecordTopProcessSample`, `GetGraphHoverInfo`, `GetCoreHoverInfo`) across toolbar mini sparklines (`GridMiniCpu`, `GridMiniCommit`, `GridMiniRam`) and System Information charts.
+- **Process Baseline Snapshots, Session Peaks & 30-Column Catalog (`ViewModelClasses.ps1`, `RunspaceEngine.ps1`, `SelectColumnsWindow.xaml`, `PSRPM.psm1`, `MainWindow.xaml`)**:
+  - Added `Ctrl+B` Process Baseline Snapshots (`MenuViewBaseline` / `MenuViewClearBaseline` / `BadgeBaselineActive`) with PID-reuse `CreateTime` protection (`[NEW]` markers), inline memory delta badges, and theme-aware delta brushes.
+  - Added 4 opt-in columns (`Peak CPU`, `Peak Private`, `Private Delta`, `WS Delta`), expanding `Get-PSRPMColumnCatalog` and `SelectColumnsWindow.xaml` from 26 to 30 columns with numeric sorting (`RunspaceEngine.ps1`) and preference persistence support.
+  - Added enriched row (`ProcessHoverToolTip`) and cell (`CpuCellToolTip`, `PrivateCellToolTip`, `WsCellToolTip`, `HandlesCellToolTip`) hover tooltips on `ProcessItemViewModel`.
+- **Tokyo Night Themes & Centralized Theme Registry (`ViewModelClasses.ps1`, `PSRPM.psm1`, `DESIGN.md`)**:
+  - Added `PSRPMThemeRegistry` and two new themes (`TokyoNight`, `TokyoNightLight`) for a 6-theme engine (`Light`, `Dark`, `TokyoNight`, `TokyoNightLight`, `Classic`, `HighContrast`) exposed via `-Theme`, `Options -> Theme`, `Ctrl+D`, and `preferences.json`.
+- **Expanded Automated Verification (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added tests `12L`, `12M`, and `12N` covering the 6-theme registry and WCAG contrast, Network SysInfo/AllSockets/`CloseTcpConnection`, session peaks/baseline diffs with PID-reuse protection, 30-column preferences, and 240/30/60 circular graph hover attribution.
+
+### Changed
+- **Dynamic Theme Token Migration & Screenshot Tooling (`MainWindow.xaml`, `HelpWindow.xaml`, `PropertiesWindow.xaml`, `tools/Capture-Screenshots.ps1`)**:
+  - Migrated remaining hardcoded accent, badge, status swatch, and action button colors across `MainWindow.xaml`, `HelpWindow.xaml`, and `PropertiesWindow.xaml` to `DynamicResource` theme tokens.
+  - Updated `New-ModernWindowFrame` in `tools/Capture-Screenshots.ps1` to preserve parent `<Window.Resources>` before detaching window content and regenerated the 2x Retina screenshots.
+
 ## [1.10.0] - 2026-11-14
 
 ### Added

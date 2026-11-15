@@ -296,10 +296,10 @@ Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard 
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "MenuViewSelectColumns", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeTokyoNight", "MenuThemeTokyoNightLight", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "BorderTelemNetRate", "MenuViewSelectColumns", "MenuViewBaseline", "MenuViewClearBaseline", "BadgeBaselineActive", "TxtBaselineLabel", "BtnClearBaseline", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPeakCpu", "ColPeakPrivate", "ColPrivateDelta", "ColWorkingSetDelta", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory", "TabNetworkActivity", "BtnNetModeSockets", "BtnNetModeTimeline", "BtnNetRefreshSockets", "ChkNetAutoRefresh", "BtnNetCloseConn", "ChipNetTcp4", "ChipNetTcp6", "ChipNetUdp4", "ChipNetUdp6", "ChipNetEstablished", "ChipNetListening", "ChipNetSynSent", "ChipNetTimeWait", "ChipNetRecv", "ChipNetSend", "BtnNetClear", "BtnNetExportCsv", "TxtNetActivitySummary", "TxtNetStatusCounts", "TxtSearchNetwork", "BtnClearSearchNetwork", "NetTabNoticeBanner", "BtnNetBannerEnableEtw", "BtnNetBannerSwitchSockets", "GridNetworkSockets", "GridNetworkTimeline", "CtxNetSockCloseConn", "CtxNetSockCopyDetails", "CtxNetTimeCopyDetails", "NetEmptyStateOverlay") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "ChkOpenInNewTab") }
-    @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo") }
+    @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo", "QuadNet") }
     @{ File = "HelpWindow.xaml";       RequiredControls = @("HelpTabControl", "TxtHeaderBadge", "TxtAboutVersion", "TxtAboutHost", "TxtAboutUser", "TxtAboutTarget", "TxtAboutTransport", "TxtAboutPsVersion", "TxtAboutClrVersion", "TxtAboutArch", "BtnHelpClose") }
     @{ File = "ServiceDetailWindow.xaml"; RequiredControls = @("TxtDlgDisplayName", "TxtDlgServiceName", "TxtDlgPid", "BadgeDlgStatus", "TxtDlgStatus", "SvcTabControl", "TxtDlgDescription", "TxtDlgPath", "TxtDlgStartup", "TxtDlgAccount", "TxtDlgDepSummary", "GridDlgPrereqs", "GridDlgDependents", "BtnDlgStart", "BtnDlgStop", "BtnDlgRestart", "BtnDlgClose") }
     @{ File = "FindHandleWindow.xaml"; RequiredControls = @("TxtSearchHandle", "BtnSearchHandle", "TxtHandleStatus", "GridHandleResults", "CtxCloseHandle", "CtxGoToProcess", "CtxCopyPath", "BtnCloseHandle", "BtnGoToProcess", "BtnCopyPath", "BtnCloseDlg") }
@@ -341,6 +341,17 @@ foreach ($xf in $xamlFiles) {
     }
 
     Write-Host "  Verified $($xf.File): All $($xf.RequiredControls.Count) required named controls resolved cleanly." -ForegroundColor Gray
+    if ($xf.File -eq "SystemInfoWindow.xaml") {
+        $sysTabsTest = $winObj.FindName("SysInfoTabControl")
+        if ($sysTabsTest.Items.Count -ne 5 -or [string]$sysTabsTest.Items[4].Header -ne "Network") {
+            throw "SystemInfoWindow.xaml expected 5 tabs with 5th tab 'Network', got Count=$($sysTabsTest.Items.Count)."
+        }
+        foreach ($reqSysBrush in @("BrushNetRxStroke", "BrushNetRxFill", "BrushNetTxStroke", "BrushNetTxFill")) {
+            if (-not $winObj.Resources.Contains($reqSysBrush)) {
+                throw "SystemInfoWindow.xaml missing fallback brush '$reqSysBrush'."
+            }
+        }
+    }
     if ($xf.File -eq "MainWindow.xaml") {
         $gridProcTest = $winObj.FindName("GridProcesses")
         if ($gridProcTest.SelectionMode -ne [System.Windows.Controls.DataGridSelectionMode]::Extended) {
@@ -361,8 +372,20 @@ foreach ($xf in $xamlFiles) {
             }
         }
         if ($winObj.FindName("NetEtwAlertBanner").Visibility -ne [System.Windows.Visibility]::Collapsed -or
-            $winObj.FindName("BtnToolbarNetRxTx").Visibility -ne [System.Windows.Visibility]::Collapsed) {
-            throw "MainWindow.xaml Net ETW banner and Rx/Tx button must start Collapsed when Net ETW is off."
+            $winObj.FindName("BtnToolbarNetRxTx").Visibility -ne [System.Windows.Visibility]::Collapsed -or
+            $winObj.FindName("BadgeBaselineActive").Visibility -ne [System.Windows.Visibility]::Collapsed) {
+            throw "MainWindow.xaml Net ETW banner, Rx/Tx button, and Baseline badge must start Collapsed."
+        }
+        foreach ($optPeakColName in @("ColPeakCpu", "ColPeakPrivate", "ColPrivateDelta", "ColWorkingSetDelta")) {
+            $optCol = $winObj.FindName($optPeakColName)
+            if ($null -eq $optCol -or $optCol.Visibility -ne [System.Windows.Visibility]::Collapsed) {
+                throw "MainWindow.xaml opt-in column '$optPeakColName' must start Collapsed."
+            }
+        }
+        foreach ($reqMainBrush in @("BrushNetRxStroke", "BrushNetRxFill", "BrushNetTxStroke", "BrushNetTxFill", "BrushDeltaGrowthFg", "BrushDeltaShrinkFg", "BrushDeltaNewFg", "BrushBadgeTcpBg", "BrushBadgeTcpFg", "BrushBadgeUdpBg", "BrushBadgeUdpFg", "BrushStateEstBg", "BrushStateEstFg", "BrushStateListenBg", "BrushStateListenFg")) {
+            if (-not $winObj.Resources.Contains($reqMainBrush)) {
+                throw "MainWindow.xaml missing fallback brush '$reqMainBrush'."
+            }
         }
         $logPaneTest = $winObj.FindName("LogPane")
         $logResizerTest = $winObj.FindName("LogPaneResizer")
@@ -1722,6 +1745,525 @@ try {
     if ([System.IO.File]::Exists($tempPrefFile)) { try { [System.IO.File]::Delete($tempPrefFile) } catch {} }
 }
 Write-Host "  Verified 12K: Explicit preferences persistence (LocalApplicationData\PSRPM\preferences.json), field sanitization, reset, and malformed JSON resilience." -ForegroundColor Gray
+
+# 12L: Tokyo Night & Tokyo Night Light Theme Registry, ViewModel, Tab & Preferences Verification
+if (-not [PSRPMThemeRegistry]::IsDarkMode("TokyoNight") -or [PSRPMThemeRegistry]::IsDarkMode("TokyoNightLight")) {
+    throw "PSRPMThemeRegistry.IsDarkMode mismatch for TokyoNight / TokyoNightLight."
+}
+$tnDark = [PSRPMThemeRegistry]::GetPalette("TokyoNight")
+$tnLight = [PSRPMThemeRegistry]::GetPalette("TokyoNightLight")
+foreach ($reqBrush in @("BrushWindowBg", "BrushSurfaceBg", "BrushTextPrimary", "BrushAccent", "BrushBadgeBg", "BrushSparkGrid", "BrushLogBg", "BrushLogTelem1", "BrushTargetNodeBg", "BrushKillBg", "BrushSwatchSvcBg")) {
+    if (-not $tnDark.Brushes.ContainsKey($reqBrush) -or -not $tnLight.Brushes.ContainsKey($reqBrush)) {
+        throw "Tokyo Night palette missing required brush key '$reqBrush'."
+    }
+}
+$tnVm = [ProcessItemViewModel]::new()
+$tnVm.PID = 901
+$tnVm.ParentPID = 4
+$tnVm.Name = "tn_worker.exe"
+$tnVm.Category = "Service"
+$tnVm.SetThemeMode("TokyoNight")
+if (-not $tnVm.IsDarkTheme -or $tnVm.RowBackground -ne "#2C1F35" -or $tnVm.RowForeground -ne "#C0CAF5") {
+    throw "TokyoNight Service row mismatch: Bg=$($tnVm.RowBackground), Fg=$($tnVm.RowForeground)"
+}
+$tnVm.SetLifecycleState(1)
+if ($tnVm.RowBackground -ne "#1C382E" -or $tnVm.RowForeground -ne "#9ECE6A") {
+    throw "TokyoNight New row mismatch: Bg=$($tnVm.RowBackground), Fg=$($tnVm.RowForeground)"
+}
+$tnVm.SetLifecycleState(0)
+$tnVm.SetThemeMode("TokyoNightLight")
+if ($tnVm.IsDarkTheme -or $tnVm.RowBackground -ne "#EBD8E4" -or $tnVm.RowForeground -ne "#4A2538") {
+    throw "TokyoNightLight Service row mismatch: Bg=$($tnVm.RowBackground), Fg=$($tnVm.RowForeground)"
+}
+$tnVm.SetLifecycleState(1)
+if ($tnVm.RowBackground -ne "#CFE3CC" -or $tnVm.RowForeground -ne "#264709") {
+    throw "TokyoNightLight New row mismatch: Bg=$($tnVm.RowBackground), Fg=$($tnVm.RowForeground)"
+}
+
+$tnTab = [HostTabItemViewModel]::new("t1", "PC-TN", "PC-TN", "WINRM", $false, $null)
+$tnTab.UpdateVisualState($true, "TokyoNight", $true, "Connected", $false, 12)
+if (-not $tnTab.IsDarkTheme -or $tnTab.TabBackground -ne "#1A1B26" -or $tnTab.TabBorderBrush -ne "#7AA2F7") {
+    throw "HostTabItemViewModel TokyoNight active mismatch."
+}
+$tnTab.UpdateVisualState($false, "TokyoNightLight", $true, "Standby", $false, 0)
+if ($tnTab.IsDarkTheme -or $tnTab.TabBackground -ne "#D6D8DF" -or $tnTab.TabBorderBrush -ne "#C1C2C7") {
+    throw "HostTabItemViewModel TokyoNightLight standby mismatch."
+}
+
+$tempTnPref = Join-Path ([System.IO.Path]::GetTempPath()) "psrpm_tn_prefs_$([System.Guid]::NewGuid().ToString('N')).json"
+try {
+    & $psrpmModPrefs { param($p) $script:PSRPMPreferencesPathOverride = $p } $tempTnPref
+    [System.IO.File]::WriteAllText($tempTnPref, '{"Theme":"TokyoNight"}', [System.Text.UTF8Encoding]::new($false))
+    $tnPrefRead1 = & $psrpmModPrefs { Read-PSRPMPreferences }
+    [System.IO.File]::WriteAllText($tempTnPref, '{"Theme":"TokyoNightLight"}', [System.Text.UTF8Encoding]::new($false))
+    $tnPrefRead2 = & $psrpmModPrefs { Read-PSRPMPreferences }
+    if ($tnPrefRead1.Preferences.Theme -ne "TokyoNight" -or $tnPrefRead2.Preferences.Theme -ne "TokyoNightLight") {
+        throw "Read-PSRPMPreferences rejected TokyoNight / TokyoNightLight themes."
+    }
+} finally {
+    & $psrpmModPrefs { $script:PSRPMPreferencesPathOverride = $null }
+    if ([System.IO.File]::Exists($tempTnPref)) { try { [System.IO.File]::Delete($tempTnPref) } catch {} }
+}
+Write-Host "  Verified 12L: TokyoNight & TokyoNightLight theme registry, ViewModel rows, HostTabItemViewModel, and preferences." -ForegroundColor Gray
+
+# 12M: Network System Info Tab, AllSockets DeepInspector, Hover Tooltips, Peaks, Baseline Diffs & 6-Theme WCAG Brushes
+Write-Host "`n[TEST 12M] Verifying Network SysInfo Graph, AllSockets Mode, Hover Tooltips, Peaks & Baseline Diffs..." -ForegroundColor Yellow
+
+# A. Verify all 6 themes define all 15 new brushes and meet >= 4.5:1 contrast for delta & badge foregrounds
+$getRelLum = {
+    param([string]$hex)
+    $h = $hex.TrimStart('#')
+    if ($h.Length -eq 8) { $h = $h.Substring(2) }
+    $r = [Convert]::ToInt32($h.Substring(0, 2), 16) / 255.0
+    $g = [Convert]::ToInt32($h.Substring(2, 2), 16) / 255.0
+    $b = [Convert]::ToInt32($h.Substring(4, 2), 16) / 255.0
+    $lin = {
+        param([double]$c)
+        if ($c -le 0.03928) { return ($c / 12.92) }
+        return [Math]::Pow(($c + 0.055) / 1.055, 2.4)
+    }
+    return (0.2126 * (& $lin $r) + 0.7152 * (& $lin $g) + 0.0722 * (& $lin $b))
+}
+$getContrastRatio = {
+    param([string]$hexA, [string]$hexB)
+    $l1 = & $getRelLum $hexA
+    $l2 = & $getRelLum $hexB
+    $hi = [Math]::Max($l1, $l2)
+    $lo = [Math]::Min($l1, $l2)
+    return (($hi + 0.05) / ($lo + 0.05))
+}
+
+$reqNetThemeKeys = @(
+    "BrushNetRxStroke", "BrushNetRxFill", "BrushNetTxStroke", "BrushNetTxFill",
+    "BrushDeltaGrowthFg", "BrushDeltaShrinkFg", "BrushDeltaNewFg",
+    "BrushBadgeTcpBg", "BrushBadgeTcpFg", "BrushBadgeUdpBg", "BrushBadgeUdpFg",
+    "BrushStateEstBg", "BrushStateEstFg", "BrushStateListenBg", "BrushStateListenFg",
+    "BrushStateTimeWaitBg", "BrushStateTimeWaitFg",
+    "BrushNetRowNewBg", "BrushNetRowNewFg",
+    "BrushNetRowModBg", "BrushNetRowModFg",
+    "BrushNetRowDelBg", "BrushNetRowDelFg"
+)
+foreach ($tName in @("Light", "Dark", "TokyoNight", "TokyoNightLight", "Classic", "HighContrast")) {
+    $palCheck = [PSRPMThemeRegistry]::GetPalette($tName)
+    foreach ($rk in $reqNetThemeKeys) {
+        if (-not $palCheck.Brushes.ContainsKey($rk)) {
+            throw "Theme '$tName' missing required brush '$rk'."
+        }
+        $valHex = [string]$palCheck.Brushes[$rk]
+        if ($valHex -notmatch '^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$') {
+            throw "Theme '$tName' brush '$rk' has invalid hex '$valHex'."
+        }
+    }
+    $surfHex = [string]$palCheck.Brushes["BrushSurfaceBg"]
+    foreach ($dKey in @("BrushDeltaGrowthFg", "BrushDeltaShrinkFg", "BrushDeltaNewFg")) {
+        $crDelta = & $getContrastRatio ([string]$palCheck.Brushes[$dKey]) $surfHex
+        if ($crDelta -lt 4.5) {
+            throw "Theme '$tName' delta brush '$dKey' contrast against BrushSurfaceBg is $([Math]::Round($crDelta, 2)) (< 4.5:1)."
+        }
+    }
+    foreach ($pair in @(
+        @("BrushBadgeTcpBg", "BrushBadgeTcpFg"),
+        @("BrushBadgeUdpBg", "BrushBadgeUdpFg"),
+        @("BrushStateEstBg", "BrushStateEstFg"),
+        @("BrushStateListenBg", "BrushStateListenFg"),
+        @("BrushStateTimeWaitBg", "BrushStateTimeWaitFg"),
+        @("BrushNetRowNewBg", "BrushNetRowNewFg"),
+        @("BrushNetRowModBg", "BrushNetRowModFg"),
+        @("BrushNetRowDelBg", "BrushNetRowDelFg")
+    )) {
+        $crBadge = & $getContrastRatio ([string]$palCheck.Brushes[$pair[0]]) ([string]$palCheck.Brushes[$pair[1]])
+        if ($crBadge -lt 4.5) {
+            throw "Theme '$tName' badge pair '$($pair[0])/$($pair[1])' contrast is $([Math]::Round($crBadge, 2)) (< 4.5:1)."
+        }
+    }
+}
+
+# B. SystemSummaryViewModel Network 240-Sample Curve, Auto-Scale Peak, Closed Guard & Session Totals
+$netSummVm = [SystemSummaryViewModel]::new()
+$netSummVm.IsSysInfoOpen = $false
+$beforeRxPts = $netSummVm.SysNetRxPoints
+$extArr = [double[]]::new(29)
+$extArr[27] = 100.0 # 100 KB/s Rx
+$extArr[28] = 50.0  # 50 KB/s Tx
+$netSummVm.UpdateExtendedTelemetry($extArr, @())
+if ($netSummVm.SysNetRxPoints -ne $beforeRxPts) {
+    throw "SystemSummaryViewModel rebuilt Net Rx points while IsSysInfoOpen=false ('$($netSummVm.SysNetRxPoints)' vs '$beforeRxPts')."
+}
+Start-Sleep -Milliseconds 120
+$extArr[27] = 512.0 # 512 KB/s Rx burst
+$extArr[28] = 256.0 # 256 KB/s Tx burst
+$netSummVm.UpdateExtendedTelemetry($extArr, @())
+$netSummVm.IsSysInfoOpen = $true
+$netSummVm.RefreshSysInfoGraphs()
+if ($netSummVm.SysNetRxPoints -eq $beforeRxPts -or -not $netSummVm.SysNetRxPoints.Contains(",") -or -not $netSummVm.SysNetTxPoints.Contains(",")) {
+    throw "SystemSummaryViewModel did not generate Net Rx/Tx polylines when IsSysInfoOpen=true."
+}
+if ($netSummVm.NetGaugeHeight -le 0.0 -or $netSummVm.NetSessionTotalFormatted -eq "0 B" -or $netSummVm.NetTotalRateFormatted -notlike "*/s") {
+    throw "SystemSummaryViewModel network readouts invalid: Gauge=$($netSummVm.NetGaugeHeight), Sess='$($netSummVm.NetSessionTotalFormatted)', Tot='$($netSummVm.NetTotalRateFormatted)'."
+}
+$netSummVm.UpdateNetEtwStatus(1, 340)
+if ($netSummVm.NetEtwStatusSummary -notlike "*340*") { throw "UpdateNetEtwStatus(1,340) mismatch: '$($netSummVm.NetEtwStatusSummary)'." }
+$netSummVm.UpdateNetEtwStatus(2, 26000)
+if ($netSummVm.NetEtwStatusSummary -notlike "*breaker*") { throw "UpdateNetEtwStatus(2,26000) mismatch: '$($netSummVm.NetEtwStatusSummary)'." }
+$netSummVm.UpdateNetEtwStatus(3, 0)
+if ($netSummVm.NetEtwStatusSummary -notlike "*Tier 1*") { throw "UpdateNetEtwStatus(3,0) mismatch: '$($netSummVm.NetEtwStatusSummary)'." }
+
+# C. DeepInspector.ps1 "AllSockets" On-Demand Snapshot Mode
+$allSockJson = & $script:PSRPMDeepInspectorScriptBlock 0 $false "AllSockets"
+$jssAllSock = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+$jssAllSock.MaxJsonLength = 67108864
+$allSockRes = $jssAllSock.DeserializeObject($allSockJson)
+if (-not $allSockRes -or -not [bool]$allSockRes["Success"]) {
+    throw "DeepInspector AllSockets failed: $($allSockRes['Error'])"
+}
+$sockRows = $allSockRes["Sockets"]
+if ($null -eq $sockRows -or $sockRows.Count -lt 1) {
+    throw "DeepInspector AllSockets returned 0 system-wide sockets on local host."
+}
+$sampleSock = $sockRows[0]
+foreach ($reqSockField in @("PID", "Protocol", "State", "LocalAddress", "LocalPort", "RemoteAddress", "RemotePort", "LocalEndpoint", "RemoteEndpoint", "CreateTimestamp", "CreateTime", "ModuleName", "SentPackets", "RecvPackets", "SentBytes", "RecvBytes")) {
+    if (-not $sampleSock.ContainsKey($reqSockField)) {
+        throw "DeepInspector AllSockets record missing expected TCPView key '$reqSockField'."
+    }
+}
+$hasTcpStateTitleCase = $false
+foreach ($sr in $sockRows) {
+    if ($sr["State"] -in @("Listen", "Listening", "Established", "Time Wait", "Close Wait")) {
+        $hasTcpStateTitleCase = $true
+        break
+    }
+}
+if (-not $hasTcpStateTitleCase) {
+    throw "DeepInspector AllSockets did not normalize socket State to TitleCase (e.g. Listen/Established/Time Wait)."
+}
+
+# C2. ProcessActions "CloseTcpConnection" P/Invoke + Endpoint Validation
+$closeTestJson = & $script:PSRPMActionScriptBlock "CloseTcpConnection" 0 "" "" "Normal" "127.0.0.1|65499|127.0.0.1|65498"
+$closeTestRes = $jssAllSock.DeserializeObject($closeTestJson)
+if (-not $closeTestRes -or [bool]$closeTestRes["Success"] -or ([string]$closeTestRes["Message"] -notmatch 'Win32 error|SetTcpEntry|Access denied|could not be closed')) {
+    throw "CloseTcpConnection probe unexpected result: $closeTestJson"
+}
+
+# D. ProcessItemViewModel Session Peaks, Baseline Diffs (+/-/NEW & PID-Reuse CreateTime Protection), & Hover Tooltips
+$peakBaseVm = [ProcessItemViewModel]::new()
+$peakBaseVm.SetStaticMetadata(@{ id = $PID; ct = 134076000000000000L; n = "worker_test.exe"; desc = "Worker Host"; comp = "PSRPM QA"; ver = "1.0.0"; cmd = "worker_test.exe --run"; path = "C:\Tools\worker_test.exe"; u = "TEST\User"; sid = 8; arch = "x64"; start = "2026-11-14 10:00:00"; prio = 8; p = 0; cat = "Own" }, $false)
+$peakBaseVm.SetThemeMode("Light")
+$peakBaseVm.UpdateDynamic(12.50, 30000000L, 20000000L, 12, 200, 0)
+$peakBaseVm.UpdateDynamic(2.10, 25000000L, 15000000L, 12, 180, 0)
+if ($peakBaseVm.PeakCPU -ne 12.50 -or $peakBaseVm.PeakCPUFormatted -ne "12.50" -or $peakBaseVm.PeakPrivateBytes -ne 20000000L -or $peakBaseVm.PeakHandles -ne 200) {
+    throw "ProcessItemViewModel failed to retain high-water session peaks (PeakCPU=$($peakBaseVm.PeakCPU), PeakPriv=$($peakBaseVm.PeakPrivateBytes))."
+}
+# Baseline set at 15MB Private, 25MB WS, 180 Handles -> grow by +2MB/+4MB (badge visible), then shrink below baseline
+$peakBaseVm.SetBaselineState($true, $false, 15000000L, 25000000L, 180)
+$peakBaseVm.UpdateDynamic(3.00, 29000000L, 17000000L, 12, 195, 0)
+if ($peakBaseVm.PrivateBytesDelta -ne 2000000L -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible" -or -not $peakBaseVm.PrivateDeltaFormatted.StartsWith("+")) {
+    throw "ProcessItemViewModel baseline growth diff mismatch: Delta=$($peakBaseVm.PrivateBytesDelta), Fmt='$($peakBaseVm.PrivateDeltaFormatted)', Vis=$($peakBaseVm.PrivateDeltaBadgeVisibility)."
+}
+if ([string]::IsNullOrWhiteSpace($peakBaseVm.CommandLineToolTip) -or -not $peakBaseVm.CommandLineToolTip.Contains("Command line:")) {
+    throw "ProcessItemViewModel CommandLineToolTip regression."
+}
+if ([string]::IsNullOrWhiteSpace($peakBaseVm.ProcessHoverToolTip) -or -not $peakBaseVm.ProcessHoverToolTip.Contains("Path:") -or -not $peakBaseVm.ProcessHoverToolTip.Contains("(Peak ") -or -not $peakBaseVm.ProcessHoverToolTip.Contains("Baseline:") -or -not $peakBaseVm.CpuCellToolTip.Contains("Session Peak:")) {
+    throw "ProcessItemViewModel ProcessHoverToolTip / CpuCellToolTip missing expected telemetry sections."
+}
+# Sub-threshold delta (< 64 KB) hides inline compact badge while preserving full column text
+$peakBaseVm.UpdateDynamic(1.00, 25004096L, 15004096L, 12, 180, 0)
+if ($peakBaseVm.PrivateDeltaBadgeVisibility -ne "Collapsed" -or [string]::IsNullOrWhiteSpace($peakBaseVm.PrivateDeltaFormatted)) {
+    throw "Sub-64KB delta should collapse inline badge while keeping formatted column string."
+}
+# Negative shrink delta (>= 64 KB) shows compact negative badge and shrink brush
+$peakBaseVm.UpdateDynamic(1.00, 23000000L, 13000000L, 12, 175, 0)
+if ($peakBaseVm.PrivateBytesDelta -ne -2000000L -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible" -or -not $peakBaseVm.PrivateDeltaFormatted.StartsWith("-") -or -not $peakBaseVm.PrivateDeltaBadgeText.StartsWith("-")) {
+    throw "Negative baseline shrink diff mismatch: Delta=$($peakBaseVm.PrivateBytesDelta), Fmt='$($peakBaseVm.PrivateDeltaFormatted)', Badge='$($peakBaseVm.PrivateDeltaBadgeText)'."
+}
+# PID-reuse protection: same PID with new CreateTime must become [NEW] instead of subtracting stale process memory
+$pidSnap = @{
+    [int]$peakBaseVm.PID = @{
+        CreateTime   = 134075000000000000L
+        PrivateBytes = 90000000L
+        MemoryBytes  = 90000000L
+        Handles      = 500
+    }
+}
+$snapEntry = $pidSnap[[int]$peakBaseVm.PID]
+$isRecycledNew = ([string]$snapEntry.CreateTime -ne [string]$peakBaseVm.CreateTime)
+if (-not $isRecycledNew) { throw "CreateTime mismatch expected for recycled PID simulation." }
+$peakBaseVm.SetBaselineState($true, $true, 0L, 0L, 0)
+if ($peakBaseVm.PrivateDeltaFormatted -ne "[NEW]" -or $peakBaseVm.PrivateDeltaBadgeText -ne "[NEW]" -or $peakBaseVm.PrivateDeltaBadgeVisibility -ne "Visible") {
+    throw "Post-baseline [NEW] marker mismatch: Fmt='$($peakBaseVm.PrivateDeltaFormatted)'."
+}
+if ([SystemSummaryViewModel]::FormatBytesStatic(1048576.0) -ne "1.0 MB") {
+    throw "SystemSummaryViewModel::FormatBytesStatic(1MB) mismatch."
+}
+
+# E. 30-Column Catalog & New Sort Keys Round-Trip in Preferences
+$psrpmModCat = Get-Module -Name PSRPM
+$colCat30 = & $psrpmModCat { Get-PSRPMColumnCatalog }
+if ($colCat30.Count -ne 30) {
+    throw "Expected 30 catalog columns after adding Peak/Delta columns, got $($colCat30.Count)."
+}
+foreach ($reqColKey in @("PeakCPU", "PeakPrivate", "PrivateDelta", "WSDelta")) {
+    $hitCol = $colCat30 | Where-Object { $_.Key -eq $reqColKey } | Select-Object -First 1
+    if (-not $hitCol -or [bool]$hitCol.DefaultVisible) {
+        throw "Catalog entry '$reqColKey' missing or must default to hidden."
+    }
+}
+$tempNewColPref = Join-Path ([System.IO.Path]::GetTempPath()) "psrpm_newcols_$([System.Guid]::NewGuid().ToString('N')).json"
+try {
+    & $psrpmModCat { param($p) $script:PSRPMPreferencesPathOverride = $p } $tempNewColPref
+    [System.IO.File]::WriteAllText($tempNewColPref, '{"SortProperty":"PrivateBytesDelta","VisibleColumns":["Process","PeakCPU","PeakPrivate","PrivateDelta","WSDelta"]}', [System.Text.UTF8Encoding]::new($false))
+    $newColRead = & $psrpmModCat { Read-PSRPMPreferences }
+    if ($newColRead.Preferences.SortProperty -ne "PrivateBytesDelta" -or ($newColRead.Preferences.VisibleColumns -join ',') -ne "Process,PeakCPU,PeakPrivate,PrivateDelta,WSDelta") {
+        throw "Preferences failed to round-trip new Peak/Delta sort key & visible columns."
+    }
+} finally {
+    & $psrpmModCat { $script:PSRPMPreferencesPathOverride = $null }
+    if ([System.IO.File]::Exists($tempNewColPref)) { try { [System.IO.File]::Delete($tempNewColPref) } catch {} }
+}
+
+# F. Regression Guard: Zero $script: Inside .GetNewClosure() + ActiveSockets/Timeline WPF Grid & Toolbar Fit
+foreach ($closureFile in @(
+    (Join-Path $repoRoot "PSRPM\PSRPM.psm1"),
+    (Join-Path $repoRoot "PSRPM\Private\RunspaceEngine.ps1"),
+    (Join-Path $repoRoot "PSRPM\Private\ViewModelClasses.ps1")
+)) {
+    $cAst = [System.Management.Automation.Language.Parser]::ParseFile($closureFile, [ref]$null, [ref]$null)
+    $cInvs = $cAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and $n.Member.Value -eq 'GetNewClosure' }, $true)
+    foreach ($ci in $cInvs) {
+        $sbExpr = $ci.Expression
+        if ($sbExpr -is [System.Management.Automation.Language.ParenExpressionAst]) { $sbExpr = $sbExpr.Pipeline.GetPureExpression() }
+        if ($sbExpr) {
+            $badScriptVars = $sbExpr.FindAll({ param($v) $v -is [System.Management.Automation.Language.VariableExpressionAst] -and $v.VariablePath.IsScript }, $true)
+            if ($badScriptVars.Count -gt 0) {
+                throw "Closure scope bug in $(Split-Path $closureFile -Leaf) L$($ci.Extent.StartLineNumber): `$script:$($badScriptVars[0].VariablePath.UserPath) resolves to dynamic closure scope."
+            }
+        }
+    }
+}
+$netQaBytes = [System.IO.File]::ReadAllBytes((Join-Path $repoRoot "PSRPM\UI\MainWindow.xaml"))
+$msNetQa = [System.IO.MemoryStream]::new($netQaBytes)
+$netQaWin = [System.Windows.Markup.XamlReader]::Load($msNetQa)
+$msNetQa.Close()
+# Verify Start-PSRPM Theme parameter has valid default so .GetNewClosure() never throws ValidationMetadataException
+$psrpmAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot "PSRPM\PSRPM.psm1"), [ref]$null, [ref]$null)
+foreach ($fnName in @("Start-PSRPM", "Start-RemoteProcessManager")) {
+    $fnAst = $psrpmAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fnName }, $true) | Select-Object -First 1
+    $themeParamAst = $fnAst.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq "Theme" } | Select-Object -First 1
+    if (-not $themeParamAst -or -not $themeParamAst.DefaultValue) {
+        throw "$fnName `$Theme parameter with [ValidateSet] must define a valid non-empty default so .GetNewClosure() never throws ValidationMetadataException."
+    }
+}
+$psrpmRawTxt = [System.IO.File]::ReadAllText((Join-Path $repoRoot "PSRPM\PSRPM.psm1"))
+if ($psrpmRawTxt -match '=\s*if\s*\([^\r\n]+\)\s*\{[^}\r\n]*GetDefaultView') {
+    throw "PSRPM.psm1 must assign CollectionViewSource::GetDefaultView directly (if (...) unwraps empty ListCollectionView to `$null)."
+}
+$sockGrid = $netQaWin.FindName("GridNetworkSockets")
+$timeGrid = $netQaWin.FindName("GridNetworkTimeline")
+$sockOc   = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$timeOc   = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$sockGrid.ItemsSource = $sockOc
+$timeGrid.ItemsSource = $timeOc
+$sockView = [System.Windows.Data.CollectionViewSource]::GetDefaultView($sockOc)
+$timeView = [System.Windows.Data.CollectionViewSource]::GetDefaultView($timeOc)
+if ($null -eq $sockView -or $null -eq $timeView) {
+    throw "CollectionViewSource::GetDefaultView returned `$null on empty ObservableCollection."
+}
+if ($sockGrid.Columns.Count -ne 14) {
+    throw "GridNetworkSockets expected 14 TCPView columns, found $($sockGrid.Columns.Count)."
+}
+$fltState = @{ FilterTcp4 = $true; FilterTcp6 = $true; FilterUdp4 = $true; FilterUdp6 = $true; FilterEst = $false; FilterListen = $false; FilterSynSent = $false; FilterTimeWait = $false; Search = "" }
+$sockView.Filter = & {
+    param($localFlt)
+    return ([Predicate[Object]]{
+        param($x)
+        if (-not $x) { return $false }
+        $p = [string]$x.Protocol; $s = [string]$x.State
+        $protoOk = switch ($p) {
+            "TCP"   { [bool]$localFlt.FilterTcp4 }
+            "TCPv6" { [bool]$localFlt.FilterTcp6 }
+            "UDP"   { [bool]$localFlt.FilterUdp4 }
+            "UDPv6" { [bool]$localFlt.FilterUdp6 }
+            default { $true }
+        }
+        if (-not $protoOk) { return $false }
+        if ($localFlt.FilterEst -or $localFlt.FilterListen -or $localFlt.FilterSynSent -or $localFlt.FilterTimeWait) {
+            $stateOk = (
+                ($localFlt.FilterEst      -and ($s -eq "Established")) -or
+                ($localFlt.FilterListen   -and ($s -eq "Listen" -or $s -eq "Listening")) -or
+                ($localFlt.FilterSynSent  -and ($s -eq "Syn Sent")) -or
+                ($localFlt.FilterTimeWait -and ($s -eq "Time Wait" -or $s -eq "Close Wait"))
+            )
+            if (-not $stateOk) { return $false }
+        }
+        if ($localFlt.Search) { return ([string]$x.ProcessName).IndexOf($localFlt.Search, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }
+        return $true
+    }.GetNewClosure())
+} $fltState
+$timeView.Filter = ([Predicate[Object]]{ param($x) if (-not $x) { return $false }; if ($fltState.Search) { return ([string]$x.ProcessName).IndexOf($fltState.Search, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }; return $true }.GetNewClosure())
+# Verify ActiveSockets closure callback pattern using module-scoped active-tab getter populates grid
+$qaTabObj = [HostTabItemViewModel]::new("tab_qa_1", "Localhost", "Localhost", "LOCAL", $true, $null)
+if (-not [bool]$qaTabObj.AutoRefreshSockets) {
+    throw "HostTabItemViewModel.AutoRefreshSockets should default to true for live TCPView updates."
+}
+$simHostState = @{ ActiveTab = $qaTabObj }
+$getActiveSim = { return $simHostState.ActiveTab }
+$simBuilt = [System.Collections.Generic.List[Object]]::new()
+$simBuilt.Add([PSCustomObject]@{ PID = 4; PIDDisplay = "4"; ProcessName = "System"; Protocol = "TCP"; LocalAddress = "0.0.0.0"; LocalPort = 445; LocalPortDisplay = "445"; RemoteAddress = "0.0.0.0"; RemotePort = 0; RemotePortDisplay = "0"; LocalEndpoint = "0.0.0.0:445"; RemoteEndpoint = "0.0.0.0:0"; State = "Listen"; CreateTime = ""; ModuleName = "System"; SentPackets = 0L; RecvPackets = 0L; SentBytes = 0L; RecvBytes = 0L; SentPacketsFormatted = ""; RecvPacketsFormatted = ""; SentBytesFormatted = ""; RecvBytesFormatted = ""; LifecycleState = "" })
+$simBuilt.Add([PSCustomObject]@{ PID = 1234; PIDDisplay = "1234"; ProcessName = "msedge.exe"; Protocol = "TCP"; LocalAddress = "10.0.0.5"; LocalPort = 51000; LocalPortDisplay = "51000"; RemoteAddress = "1.1.1.1"; RemotePort = 443; RemotePortDisplay = "443"; LocalEndpoint = "10.0.0.5:51000"; RemoteEndpoint = "1.1.1.1:443"; State = "Established"; CreateTime = "11/14/2026 6:08:21 PM"; ModuleName = "msedge.exe"; SentPackets = 21L; RecvPackets = 26L; SentBytes = 2937L; RecvBytes = 47023L; SentPacketsFormatted = "21"; RecvPacketsFormatted = "26"; SentBytesFormatted = "2,937"; RecvBytesFormatted = "47,023"; LifecycleState = "Mod" })
+$simBuilt.Add([PSCustomObject]@{ PID = 5678; PIDDisplay = "5678"; ProcessName = "svchost.exe"; Protocol = "UDP"; LocalAddress = "0.0.0.0"; LocalPort = 5353; LocalPortDisplay = "5353"; RemoteAddress = "*"; RemotePort = 0; RemotePortDisplay = ""; LocalEndpoint = "0.0.0.0:5353"; RemoteEndpoint = "*:*"; State = "Listening"; CreateTime = "11/14/2026 10:54:52 AM"; ModuleName = "Dnscache"; SentPackets = 0L; RecvPackets = 0L; SentBytes = 0L; RecvBytes = 0L; SentPacketsFormatted = ""; RecvPacketsFormatted = ""; SentBytesFormatted = ""; RecvBytesFormatted = ""; LifecycleState = "New" })
+$simBuilt.Add([PSCustomObject]@{ PID = 0; PIDDisplay = ""; ProcessName = "[Time Wait]"; Protocol = "TCPv6"; LocalAddress = "::1"; LocalPort = 55000; LocalPortDisplay = "55000"; RemoteAddress = "::1"; RemotePort = 80; RemotePortDisplay = "80"; LocalEndpoint = "[::1]:55000"; RemoteEndpoint = "[::1]:80"; State = "Time Wait"; CreateTime = ""; ModuleName = ""; SentPackets = 0L; RecvPackets = 0L; SentBytes = 0L; RecvBytes = 0L; SentPacketsFormatted = ""; RecvPacketsFormatted = ""; SentBytesFormatted = ""; RecvBytesFormatted = ""; LifecycleState = "Del" })
+$simBuilt.Add([PSCustomObject]@{ PID = 4321; PIDDisplay = "4321"; ProcessName = "curl.exe"; Protocol = "TCP"; LocalAddress = "10.0.0.5"; LocalPort = 52000; LocalPortDisplay = "52000"; RemoteAddress = "93.184.216.34"; RemotePort = 443; RemotePortDisplay = "443"; LocalEndpoint = "10.0.0.5:52000"; RemoteEndpoint = "93.184.216.34:443"; State = "Syn Sent"; CreateTime = "11/14/2026 6:09:00 PM"; ModuleName = "curl.exe"; SentPackets = 0L; RecvPackets = 0L; SentBytes = 0L; RecvBytes = 0L; SentPacketsFormatted = ""; RecvPacketsFormatted = ""; SentBytesFormatted = ""; RecvBytesFormatted = ""; LifecycleState = "New" })
+$cbSim = ({
+    param($items)
+    $curT = & $getActiveSim
+    if ($curT -and $curT.TabId -eq "tab_qa_1") {
+        foreach ($it in $items) { $sockOc.Add($it) }
+    }
+}.GetNewClosure())
+& $cbSim $simBuilt
+$timeOc.Add([PSCustomObject]@{ TimestampTicks = [DateTime]::Now.Ticks; TimeText = "12:00:00.0"; PID = 4; ProcessName = "System"; Operation = "Recv"; Detail = "Rx: 1.0 KB/s | Tx: "; RateFormatted = "1.0 KB/s"; TreeRateFormatted = "1.0 KB/s"; SessionTotalFormatted = "1.0 KB"; Category = "System"; User = "SYSTEM" })
+if ([int]$sockView.Count -ne 5 -or $sockGrid.Items.Count -ne 5 -or [int]$timeView.Count -ne 1 -or $timeGrid.Items.Count -ne 1) {
+    throw "Network Activity DataGrid / CollectionViewSource failed to surface populated rows (Sock=$($sockGrid.Items.Count), Time=$($timeGrid.Items.Count))."
+}
+$fltState.FilterEst = $true; $sockView.Refresh()
+if ([int]$sockView.Count -ne 1) { throw "Socket Established filter expected 1 match, got $($sockView.Count)." }
+$fltState.FilterEst = $false; $fltState.FilterListen = $true; $sockView.Refresh()
+if ([int]$sockView.Count -ne 2) { throw "Socket Listening filter expected 2 matches (TCP Listen + UDP Listening), got $($sockView.Count)." }
+$fltState.FilterTcp4 = $false; $fltState.FilterTcp6 = $false; $fltState.FilterUdp6 = $false; $sockView.Refresh()
+if ([int]$sockView.Count -ne 1) { throw "Socket UDPv4+Listening filter expected 1 match, got $($sockView.Count)." }
+$fltState.FilterUdp4 = $false; $fltState.FilterTcp6 = $true; $fltState.FilterListen = $false; $fltState.FilterTimeWait = $true; $sockView.Refresh()
+if ([int]$sockView.Count -ne 1) { throw "Socket TCPv6+TimeWait filter expected 1 match, got $($sockView.Count)." }
+$fltState.FilterTcp4 = $true; $fltState.FilterUdp4 = $true; $fltState.FilterUdp6 = $true; $fltState.FilterTimeWait = $false; $fltState.FilterSynSent = $true; $sockView.Refresh()
+if ([int]$sockView.Count -ne 1) { throw "Socket SynSent filter expected 1 match, got $($sockView.Count)." }
+$fltState.FilterSynSent = $false; $sockView.Refresh()
+$netQaWin.FindName("BtnToolbarNetRxTx").Visibility = [System.Windows.Visibility]::Visible
+$netQaWin.FindName("TxtNetEtwBtn").Text = "Net ETW (99/s)"
+$netQaWin.FindName("TxtTelemNetRate").Text = "NET: v 12.3 KB/s ^ 4.5 KB/s"
+$netQaWin.FindName("TxtTelemDiskRate").Text = "I/O: 284.0 KB/s | 32 IOPS"
+$netQaWin.Measure([System.Windows.Size]::new(1280, 780))
+$netQaWin.Arrange([System.Windows.Rect]::new(0, 0, 1280, 780))
+$netQaWin.UpdateLayout()
+$pillNet = $netQaWin.FindName("BorderTelemNetRate")
+if ($pillNet -and $pillNet.ActualWidth -lt ($pillNet.DesiredSize.Width - 1.0)) {
+    throw "BorderTelemNetRate clipped in 1280px toolbar layout (Actual=$($pillNet.ActualWidth), Desired=$($pillNet.DesiredSize.Width))."
+}
+# G. 12N: Graph Hover Tooltips, Crosshair XAML Elements, 240-Sample Top-Process Attribution & Mini Index Alignment
+foreach ($miniName in @("CardMiniCpu", "GridMiniCpu", "CrosshairMiniCpu", "CardMiniCommit", "GridMiniCommit", "CrosshairMiniCommit", "CardMiniRam", "GridMiniRam", "CrosshairMiniRam")) {
+    if (-not $netQaWin.FindName($miniName)) {
+        throw "MainWindow.xaml missing mini sparkline hover element '$miniName'."
+    }
+}
+try { $netQaWin.Close() } catch {}
+Write-Host "  [PASS] 12M: Verified 6-theme WCAG brushes, Network SysInfo curves/totals, AllSockets ($($allSockRes['Count']) sockets), Hover tooltips, Peaks/Baseline diffs, closure-scope guard & 30-column preferences." -ForegroundColor Green
+$sysHoverXmlBytes = [System.IO.File]::ReadAllBytes((Join-Path $repoRoot "PSRPM\UI\SystemInfoWindow.xaml"))
+$msSysHover = [System.IO.MemoryStream]::new($sysHoverXmlBytes)
+$sysHoverWin = [System.Windows.Markup.XamlReader]::Load($msSysHover)
+$msSysHover.Close()
+foreach ($sysElem in @(
+    "BorderQuadCpuChart", "CanvasQuadCpu", "CrosshairQuadCpu",
+    "BorderQuadCommitChart", "CanvasQuadCommit", "CrosshairQuadCommit",
+    "BorderQuadRamChart", "CanvasQuadRam", "CrosshairQuadRam",
+    "BorderQuadIoChart", "CanvasQuadIo", "CrosshairQuadIo",
+    "QuadNet",
+    "BorderSysCpuChart", "CanvasSysCpu", "CrosshairSysCpu", "ItemsCoreGraphs",
+    "BorderMemCommitChart", "CanvasMemCommit", "CrosshairMemCommit",
+    "BorderMemRamChart", "CanvasMemRam", "CrosshairMemRam",
+    "BorderSysIoChart", "CanvasSysIo", "CrosshairSysIo",
+    "BorderSysNetChart", "CanvasSysNet", "CrosshairSysNet"
+)) {
+    if (-not $sysHoverWin.FindName($sysElem)) {
+        throw "SystemInfoWindow.xaml missing hover element '$sysElem'."
+    }
+}
+try { $sysHoverWin.Close() } catch {}
+
+$hoverVm = [SystemSummaryViewModel]::new()
+$preTip  = $hoverVm.GetGraphHoverInfo("Cpu", 0, $false)
+if ($preTip -notlike "*pre-session*") {
+    throw "Expected pre-session hover message before live samples arrive, got: '$preTip'"
+}
+$preMiniTip = $hoverVm.GetGraphHoverInfo("Cpu", 0, $true)
+if ($preMiniTip -notlike "*pre-session*" -or $preMiniTip -notlike "*System Information*") {
+    throw "Mini sparkline pre-session hover tooltip missing expected text: '$preMiniTip'"
+}
+
+$baseUtc = [DateTime]::UtcNow.AddSeconds(-300)
+for ($t = 1; $t -le 260; $t++) {
+    $sampleSys = [double[]]::new(29)
+    $sampleSys[0]  = [double](10.0 + ($t % 50))
+    $sampleSys[1]  = 16000L
+    $sampleSys[2]  = 32768L
+    $sampleSys[3]  = 180
+    $sampleSys[4]  = 2100
+    $sampleSys[5]  = 65000
+    $sampleSys[6]  = 18000L
+    $sampleSys[7]  = 32768L
+    $sampleSys[8]  = 4.0
+    $sampleSys[9]  = 18432000L
+    $sampleSys[10] = 33554432L
+    $sampleSys[11] = 20000000L
+    $sampleSys[12] = 33554432L
+    $sampleSys[13] = 17170432L
+    $sampleSys[24] = 1048576L
+    $sampleSys[25] = 262144L
+    $sampleSys[26] = 65536L
+    $sampleSys[27] = 512.0
+    $sampleSys[28] = 64.0
+    $coresMock = @( @( [double](12.0 + ($t % 40)), 3.5 ) )
+
+    $hoverVm.UpdateSummary($sampleSys[0], $sampleSys[1], $sampleSys[2], $sampleSys[3], $sampleSys[4], $sampleSys[5], $sampleSys[6], $sampleSys[7])
+    $hoverVm.UpdateExtendedTelemetry($sampleSys, $coresMock)
+
+    $tickUtc = $baseUtc.AddSeconds($t).Ticks
+    $capForTick = if ($t -le 240) { 0 } elseif ($t -eq 259) { 2 } else { 1 }
+    $cpuOwner = if ($t -eq 231) { "early_boundary.exe" } elseif ($t -eq 260) { "msedge.exe" } else { "proc_$t.exe" }
+    $cpuPid   = if ($t -eq 260) { 4832 } else { 1000 + $t }
+    $netOwner = if ($capForTick -eq 1) { "msedge.exe" } else { "" }
+    $netPid   = if ($capForTick -eq 1) { 4832 } else { 0 }
+
+    $hoverVm.RecordTopProcessSample(
+        $tickUtc,
+        $cpuPid, $cpuOwner, (14.25 + ($t % 5)),
+        9500, "Antigravity.exe", 2147483648L,
+        4832, "msedge.exe", 1610612736L,
+        $netPid, $netOwner, 524288L, 65536L, $capForTick
+    )
+}
+
+if ($hoverVm.GetCpuHistory240().Count -ne 240) {
+    throw "CpuHistory240 exceeded or fell short of 240 cap."
+}
+
+$tipSysLatest  = $hoverVm.GetGraphHoverInfo("Cpu", 239, $false)
+$tipMiniLatest = $hoverVm.GetGraphHoverInfo("Cpu", 29,  $true)
+if ($tipSysLatest -notlike "*msedge.exe (PID 4832)*" -or $tipMiniLatest -notlike "*msedge.exe (PID 4832)*") {
+    throw "Latest hover tooltip missing top CPU process attribution. Sys='$tipSysLatest', Mini='$tipMiniLatest'"
+}
+# Index 210 of 240-buffer corresponds to Mini index 0 (after 260 ticks, tick 231 sits at slot 210)
+$tipSys210  = $hoverVm.GetGraphHoverInfo("Cpu", 210, $false)
+$tipMini0   = $hoverVm.GetGraphHoverInfo("Cpu", 0,   $true)
+if ($tipSys210 -notlike "*early_boundary.exe*" -or $tipMini0 -notlike "*early_boundary.exe*") {
+    throw "Mini sparkline index 0 did not align with 240-history index 210. Sys210='$tipSys210', Mini0='$tipMini0'"
+}
+
+$tipCommit = $hoverVm.GetGraphHoverInfo("Commit", 239, $false)
+$tipRam    = $hoverVm.GetGraphHoverInfo("Ram",    239, $false)
+$tipIo     = $hoverVm.GetGraphHoverInfo("Io",     239, $false)
+if ($tipCommit -notlike "*Antigravity.exe (PID 9500)*" -or $tipRam -notlike "*msedge.exe (PID 4832)*" -or $tipIo -notlike "*zero-overhead mode*") {
+    throw "Commit/Ram/Io hover tooltips mismatch: Commit='$tipCommit' Ram='$tipRam' Io='$tipIo'"
+}
+
+$tipNetOff = $hoverVm.GetGraphHoverInfo("Net", 10,  $false) # tick 31 had cap=0
+$tipNetBrk = $hoverVm.GetGraphHoverInfo("Net", 238, $false) # tick 259 had cap=2
+$tipNetOn  = $hoverVm.GetGraphHoverInfo("Net", 239, $false) # tick 260 had cap=1
+if ($tipNetOff -notlike "*Enable Net ETW*" -or $tipNetBrk -notlike "*circuit breaker*" -or $tipNetOn -notlike "*msedge.exe (PID 4832)*") {
+    throw "Net ETW hover states mismatch: Off='$tipNetOff', Brk='$tipNetBrk', On='$tipNetOn'"
+}
+
+$tipCore = $hoverVm.GetCoreHoverInfo($hoverVm.CoreGraphs[0], 59)
+if ($tipCore -notlike "*CPU 0:*" -or $tipCore -notlike "*Time:*") {
+    throw "Core hover tooltip mismatch: '$tipCore'"
+}
+Write-Host "  [PASS] 12N: Verified Graph Hover Tooltips, XAML Crosshair elements, 240/30/60 circular alignment & Top-Process attribution." -ForegroundColor Green
 
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()

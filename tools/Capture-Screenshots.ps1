@@ -61,6 +61,12 @@ function New-ModernWindowFrame {
         [double]$height
     )
 
+    # Preserve parent Window/Control resources before detaching content
+    $parentResources = $null
+    if ($content.Parent -and $content.Parent.Resources) {
+        $parentResources = $content.Parent.Resources
+    }
+
     # Disconnect from parent window if attached
     if ($content.Parent) {
         if ($content.Parent -is [System.Windows.Window]) {
@@ -79,6 +85,7 @@ function New-ModernWindowFrame {
     $btnFg    = "#475569"
 
     $outerBorder = [System.Windows.Controls.Border]::new()
+    if ($parentResources) { $outerBorder.Resources = $parentResources }
     if ($content.DataContext) { $outerBorder.DataContext = $content.DataContext }
     $outerBorder.Width = $width
     $outerBorder.Height = $height

@@ -33,6 +33,15 @@
         <SolidColorBrush x:Key="ColTint_Net" Color="#1A0284C7"/>
         <SolidColorBrush x:Key="ColTint_PrivateBytes" Color="#28EAB308"/>
         <SolidColorBrush x:Key="ColTint_WorkingSet" Color="#22F97316"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushBadgeBg" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushTargetNodeBg" Color="#E0F2FE"/>
+        <SolidColorBrush x:Key="BrushKillBg" Color="#FEE2E2"/>
+        <SolidColorBrush x:Key="BrushKillFg" Color="#991B1B"/>
+        <SolidColorBrush x:Key="BrushKillBorder" Color="#F87171"/>
+        <SolidColorBrush x:Key="BrushKillTreeBg" Color="#FECACA"/>
+        <SolidColorBrush x:Key="BrushKillTreeFg" Color="#7F1D1D"/>
+        <SolidColorBrush x:Key="BrushKillTreeBorder" Color="#EF4444"/>
 
         <!-- Standard Tabular Text Style -->
         <Style x:Key="RightTabularText" TargetType="TextBlock">
@@ -124,7 +133,7 @@
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#0284C7"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="0,0,0,2"/>
                                 <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
                             </Trigger>
@@ -272,7 +281,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Verified Signer:" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="PropSignature" Grid.Column="1" Text="Click 'Verify' to check Authenticode signature" Foreground="#0284C7" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="PropSignature" Grid.Column="1" Text="Click 'Verify' to check Authenticode signature" Foreground="{DynamicResource BrushAccent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                     <Button x:Name="BtnVerifySig" Grid.Column="2" Content="Verify" Padding="12,2" Margin="6,0,0,0" ToolTip="Verify Authenticode Digital Signature on Target Host"/>
                                 </Grid>
                             </StackPanel>
@@ -422,7 +431,7 @@
 
                                                 <!-- Left: SELECTED Badge + Process Name -->
                                                 <DockPanel LastChildFill="True" VerticalAlignment="Center">
-                                                    <Border DockPanel.Dock="Left" Background="#0284C7" CornerRadius="2" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="{Binding TargetBadgeVisibility}">
+                                                    <Border DockPanel.Dock="Left" Background="{DynamicResource BrushBadgeBg}" CornerRadius="2" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="{Binding TargetBadgeVisibility}">
                                                         <TextBlock Text="SELECTED" Foreground="White" FontSize="9" FontWeight="SemiBold"/>
                                                     </Border>
                                                     <TextBlock Text="{Binding Name}" FontWeight="{Binding NodeFontWeight}" Foreground="{DynamicResource BrushTextPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -521,8 +530,8 @@
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <Button x:Name="BtnPropEndProcess" Content="Kill Process" Width="92" Height="26" Margin="0,0,6,0" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" FontWeight="SemiBold" ToolTip="Kill selected process (Del)"/>
-                <Button x:Name="BtnPropEndTree" Content="Kill Process Tree" Width="116" Height="26" Background="#FECACA" Foreground="#7F1D1D" BorderBrush="#EF4444" FontWeight="SemiBold" ToolTip="Kill selected process and all descendants (Shift+Del)"/>
+                <Button x:Name="BtnPropEndProcess" Content="Kill Process" Width="92" Height="26" Margin="0,0,6,0" Background="{DynamicResource BrushKillBg}" Foreground="{DynamicResource BrushKillFg}" BorderBrush="{DynamicResource BrushKillBorder}" FontWeight="SemiBold" ToolTip="Kill selected process (Del)"/>
+                <Button x:Name="BtnPropEndTree" Content="Kill Process Tree" Width="116" Height="26" Background="{DynamicResource BrushKillTreeBg}" Foreground="{DynamicResource BrushKillTreeFg}" BorderBrush="{DynamicResource BrushKillTreeBorder}" FontWeight="SemiBold" ToolTip="Kill selected process and all descendants (Shift+Del)"/>
             </StackPanel>
 
             <!-- Right: Dialog Management -->

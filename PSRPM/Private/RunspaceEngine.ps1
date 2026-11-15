@@ -63,6 +63,8 @@ function Start-PSRPMEngine {
         IsTreeMode          = $true
         TreeSortNewestFirst = $false
         IsDarkTheme         = $false
+        CurrentTheme        = "Light"
+        ThemePalette        = $null
         EnableCategoryHighlights = $true
         SortProperty        = "PID"
         SortDescending      = $false
@@ -89,6 +91,9 @@ function Start-PSRPMEngine {
         NetEtwEventsPerSec  = 0
         ResetNetBreaker     = $false
         OnNetEtwStateChanged = $null
+        OnTickProcessed      = $null
+        HasBaseline          = $false
+        BaselineSnapshots    = $null
         LastSampleUtcTicks  = 0L
         TelemetryAgeMs      = 0
         FreshnessState      = "Fresh"
@@ -1479,7 +1484,7 @@ function Start-PSRPMEngine {
         }
 
         # Fast Array.Sort helper (avoids PowerShell pipeline Sort-Object overhead)
-        $isNumericSort = $sortProp -in @("PID", "ParentPID", "SessionId", "BasePriority", "CreateTime", "CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+        $isNumericSort = $sortProp -in @("PID", "ParentPID", "SessionId", "BasePriority", "CreateTime", "CPU", "TreeCPU", "PeakCPU", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
         $sortNodes = {
             param($list)
             $cnt = $list.Count
@@ -1489,24 +1494,28 @@ function Start-PSRPMEngine {
                 $keys = [double[]]::new($cnt)
                 $sign = if ($sortDesc) { -1.0 } else { 1.0 }
                 switch ($sortProp) {
-                    "PID"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
-                    "ParentPID"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].ParentPID } }
-                    "SessionId"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].SessionId } }
-                    "BasePriority"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].BasePriority } }
-                    "CreateTime"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].CreateTime } }
-                    "CPU"             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].CPU) + ([double]$arr[$idx].PID * 1e-9) } }
-                    "TreeCPU"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].TreeCPU) + ([double]$arr[$idx].PID * 1e-9) } }
-                    "Threads"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Threads) + ([double]$arr[$idx].PID * 1e-9) } }
-                    "Handles"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Handles) + ([double]$arr[$idx].PID * 1e-9) } }
-                    "NetTotalBps"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTotalBps } }
-                    "TreeNetTotalBps" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetTotalBps } }
-                    "NetRxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetRxBps } }
-                    "NetTxBps"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTxBps } }
-                    "TreeNetRxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetRxBps } }
-                    "TreeNetTxBps"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetTxBps } }
-                    "MemoryBytes"     { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].MemoryBytes } }
-                    "PrivateBytes"    { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PrivateBytes } }
-                    default           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
+                    "PID"               { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
+                    "ParentPID"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].ParentPID } }
+                    "SessionId"         { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].SessionId } }
+                    "BasePriority"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].BasePriority } }
+                    "CreateTime"        { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].CreateTime } }
+                    "CPU"               { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].CPU) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "TreeCPU"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].TreeCPU) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "PeakCPU"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PeakCPU } }
+                    "Threads"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Threads) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "Handles"           { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = ($sign * [double]$arr[$idx].Handles) + ([double]$arr[$idx].PID * 1e-9) } }
+                    "NetTotalBps"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTotalBps } }
+                    "TreeNetTotalBps"   { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetTotalBps } }
+                    "NetRxBps"          { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetRxBps } }
+                    "NetTxBps"          { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].NetTxBps } }
+                    "TreeNetRxBps"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetRxBps } }
+                    "TreeNetTxBps"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].TreeNetTxBps } }
+                    "MemoryBytes"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].MemoryBytes } }
+                    "PrivateBytes"      { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PrivateBytes } }
+                    "PeakPrivateBytes"  { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PeakPrivateBytes } }
+                    "PrivateBytesDelta" { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PrivateBytesDelta } }
+                    "MemoryDelta"       { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].MemoryDelta } }
+                    default             { for ($idx = 0; $idx -lt $cnt; $idx++) { $keys[$idx] = $sign * [double]$arr[$idx].PID } }
                 }
                 [Array]::Sort([Array]$keys, [Array]$arr)
                 if ($sortProp -notin @("PID", "CPU", "TreeCPU", "Threads", "Handles")) {
@@ -2031,6 +2040,7 @@ function Start-PSRPMEngine {
             }
             $telemStats.LastReceivedSeq = $seq
             $isDark = [bool]$stateContainer.IsDarkTheme
+            $currentTheme = if ($stateContainer.ContainsKey('CurrentTheme') -and $stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ($isDark) { "Dark" } else { "Light" }
             $enableCatHighlights = if ($stateContainer.ContainsKey('EnableCategoryHighlights')) { [bool]$stateContainer.EnableCategoryHighlights } else { $true }
             $structureChanged = $false
 
@@ -2172,6 +2182,7 @@ function Start-PSRPMEngine {
                             $pVmItem.Description = if ($newHosted) { "Host Process for Windows Services ($newHosted)" } else { "Host Process for Windows Services" }
                             $pVmItem.OnPropertyChanged('Description')
                         }
+                        $pVmItem.RefreshHoverToolTip()
                     }
                 }
 
@@ -2219,12 +2230,24 @@ function Start-PSRPMEngine {
 
                         $vm.EnableCategoryHighlights = $enableCatHighlights
                         $vm.SetStaticMetadata($m, $isDark)
+                        $vm.SetThemeMode($currentTheme)
                         if ($pidServicesMap.ContainsKey($pidVal)) {
                             $hostedStr = ($pidServicesMap[$pidVal] -join ", ")
                             $vm.HostedServices = $hostedStr
                             if ($vm.Name -eq "svchost.exe" -and $hostedStr) {
                                 $vm.Description = "Host Process for Windows Services ($hostedStr)"
                                 $vm.OnPropertyChanged('Description')
+                            }
+                            $vm.RefreshHoverToolTip()
+                        }
+
+                        if ([bool]$stateContainer.HasBaseline) {
+                            $bSnaps = $stateContainer.BaselineSnapshots
+                            if ($bSnaps -and $bSnaps.ContainsKey($pidVal) -and ([long]$bSnaps[$pidVal].CreateTime -eq [long]$vm.CreateTime)) {
+                                $snap = $bSnaps[$pidVal]
+                                $vm.SetBaselineState($true, $false, [long]$snap.PrivateBytes, [long]$snap.MemoryBytes, [int]$snap.Handles)
+                            } else {
+                                $vm.SetBaselineState($true, $true, 0L, 0L, 0)
                             }
                         }
 
@@ -2370,6 +2393,59 @@ function Start-PSRPMEngine {
                 if ($sysArr.Count -ge 27) {
                     $curSummaryVm.UpdateExtendedTelemetry($sysArr, $data['cores'])
                 }
+                $curSummaryVm.UpdateNetEtwStatus($newNetCap, $newNetEv)
+                $accumNet    = ($newNetCap -eq 1 -and $elapsedSec -ge 0.05 -and $elapsedSec -le 15.0)
+                $needTopScan = ($sysArr.Count -ge 27)
+                if ($accumNet -or $needTopScan) {
+                    $bestCpuPid = 0; $bestCpuName = ""; $bestCpuVal = -1.0
+                    $bestComPid = 0; $bestComName = ""; $bestComVal = -1L
+                    $bestRamPid = 0; $bestRamName = ""; $bestRamVal = -1L
+                    $bestNetPid = 0; $bestNetName = ""; $bestNetTot = 0L; $bestNetRx = 0L; $bestNetTx = 0L
+
+                    foreach ($pVm in $processMap.Values) {
+                        if ($accumNet -and ($pVm.NetRxBps -gt 0L -or $pVm.NetTxBps -gt 0L)) {
+                            $addRx = [long]([double]$pVm.NetRxBps * $elapsedSec)
+                            $addTx = [long]([double]$pVm.NetTxBps * $elapsedSec)
+                            $pVm.AddSessionNetworkBytes($addRx, $addTx)
+                        }
+                        if (-not $needTopScan -or $pVm.PID -le 0 -or $pVm.LifecycleState -eq 2) { continue }
+                        if ($pVm.CPU -gt $bestCpuVal) {
+                            $bestCpuVal  = $pVm.CPU
+                            $bestCpuPid  = $pVm.PID
+                            $bestCpuName = $pVm.Name
+                        }
+                        if ($pVm.PrivateBytes -gt $bestComVal) {
+                            $bestComVal  = $pVm.PrivateBytes
+                            $bestComPid  = $pVm.PID
+                            $bestComName = $pVm.Name
+                        }
+                        if ($pVm.MemoryBytes -gt $bestRamVal) {
+                            $bestRamVal  = $pVm.MemoryBytes
+                            $bestRamPid  = $pVm.PID
+                            $bestRamName = $pVm.Name
+                        }
+                        if ($newNetCap -eq 1 -and $pVm.NetTotalBps -gt $bestNetTot) {
+                            $bestNetTot  = $pVm.NetTotalBps
+                            $bestNetPid  = $pVm.PID
+                            $bestNetName = $pVm.Name
+                            $bestNetRx   = $pVm.NetRxBps
+                            $bestNetTx   = $pVm.NetTxBps
+                        }
+                    }
+
+                    if ($needTopScan) {
+                        if ($bestCpuVal -lt 0.05) { $bestCpuPid = 0; $bestCpuName = ""; $bestCpuVal = 0.0 }
+                        if ($bestComVal -lt 0L)   { $bestComVal = 0L }
+                        if ($bestRamVal -lt 0L)   { $bestRamVal = 0L }
+                        $curSummaryVm.RecordTopProcessSample(
+                            [DateTime]::UtcNow.Ticks,
+                            $bestCpuPid, $bestCpuName, $bestCpuVal,
+                            $bestComPid, $bestComName, $bestComVal,
+                            $bestRamPid, $bestRamName, $bestRamVal,
+                            $bestNetPid, $bestNetName, $bestNetRx, $bestNetTx, $newNetCap
+                        )
+                    }
+                }
 
                 $netTag = if ($curSummaryVm.NetThroughputFormatted -and $curSummaryVm.NetThroughputFormatted -ne "NET: 0.0 KB/s") { " | $($curSummaryVm.NetThroughputFormatted)" } else { "" }
                 $etwTag = switch ($newNetCap) {
@@ -2445,7 +2521,7 @@ function Start-PSRPMEngine {
             }
 
             # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting; deferred while minimized)
-            $dynSortProps = @("CPU", "TreeCPU", "MemoryBytes", "PrivateBytes", "Threads", "Handles", "Status", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+            $dynSortProps = @("CPU", "TreeCPU", "PeakCPU", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "Status", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
             $needsOrderPass = $structureChanged -or ($stateContainer.SortProperty -in $dynSortProps)
             if ($isMinimized) {
                 if ($needsOrderPass -or $ProcessCollection.Count -eq 0 -or ($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
@@ -2457,6 +2533,10 @@ function Start-PSRPMEngine {
                 } elseif (($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
                     & $recalculateTreeCpu
                 }
+            }
+
+            if ($stateContainer.OnTickProcessed) {
+                try { & $stateContainer.OnTickProcessed $elapsedSec $newNetCap } catch {}
             }
         } catch {
             $stateContainer.LastErr = "UI Sync Error: $($_.Exception.Message)"

@@ -30,12 +30,164 @@
         <SolidColorBrush x:Key="BrushMenuBg" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="BrushMenuBorder" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushMenuHover" Color="#F1F5F9"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushBadgeBg" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushSparkGrid" Color="#CBD5E1"/>
+
+        <!-- LogPane & Semantic Action / Swatch Brushes -->
+        <SolidColorBrush x:Key="BrushLogBg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushLogHeaderBg" Color="#1E293B"/>
+        <SolidColorBrush x:Key="BrushLogBorder" Color="#334155"/>
+        <SolidColorBrush x:Key="BrushLogFg" Color="#38BDF8"/>
+        <SolidColorBrush x:Key="BrushLogTitleFg" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BrushLogBtnBg" Color="#334155"/>
+        <SolidColorBrush x:Key="BrushLogBtnFg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushLogTelem1" Color="#38BDF8"/>
+        <SolidColorBrush x:Key="BrushLogTelem2" Color="#A7F3D0"/>
+        <SolidColorBrush x:Key="BrushLogTelem3" Color="#FDE68A"/>
+        <SolidColorBrush x:Key="BrushLogTelem4" Color="#DDD6FE"/>
+        <SolidColorBrush x:Key="BrushTargetNodeBg" Color="#E0F2FE"/>
+        <SolidColorBrush x:Key="BrushKillBg" Color="#FEE2E2"/>
+        <SolidColorBrush x:Key="BrushKillFg" Color="#991B1B"/>
+        <SolidColorBrush x:Key="BrushKillBorder" Color="#F87171"/>
+        <SolidColorBrush x:Key="BrushKillTreeBg" Color="#FECACA"/>
+        <SolidColorBrush x:Key="BrushKillTreeFg" Color="#7F1D1D"/>
+        <SolidColorBrush x:Key="BrushKillTreeBorder" Color="#EF4444"/>
+        <SolidColorBrush x:Key="BrushSwatchSvcBg" Color="#FFE4E6"/>
+        <SolidColorBrush x:Key="BrushSwatchSvcBorder" Color="#FDA4AF"/>
+        <SolidColorBrush x:Key="BrushSwatchSvcFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchOwnBg" Color="#E0E7FF"/>
+        <SolidColorBrush x:Key="BrushSwatchOwnBorder" Color="#A5B4FC"/>
+        <SolidColorBrush x:Key="BrushSwatchOwnFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchPkgBg" Color="#67E8F9"/>
+        <SolidColorBrush x:Key="BrushSwatchPkgBorder" Color="#06B6D4"/>
+        <SolidColorBrush x:Key="BrushSwatchPkgFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchSuspBg" Color="#94A3B8"/>
+        <SolidColorBrush x:Key="BrushSwatchSuspBorder" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushSwatchSuspFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchNewBg" Color="#86EFAC"/>
+        <SolidColorBrush x:Key="BrushSwatchNewBorder" Color="#22C55E"/>
+        <SolidColorBrush x:Key="BrushSwatchNewFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchExitBg" Color="#FCA5A5"/>
+        <SolidColorBrush x:Key="BrushSwatchExitBorder" Color="#EF4444"/>
+        <SolidColorBrush x:Key="BrushSwatchExitFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushNetRxStroke" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushNetRxFill" Color="#440284C7"/>
+        <SolidColorBrush x:Key="BrushNetTxStroke" Color="#EA580C"/>
+        <SolidColorBrush x:Key="BrushNetTxFill" Color="#44EA580C"/>
+        <SolidColorBrush x:Key="BrushDeltaGrowthFg" Color="#B91C1C"/>
+        <SolidColorBrush x:Key="BrushDeltaShrinkFg" Color="#15803D"/>
+        <SolidColorBrush x:Key="BrushDeltaNewFg" Color="#0369A1"/>
+        <SolidColorBrush x:Key="BrushBadgeTcpBg" Color="#E0F2FE"/>
+        <SolidColorBrush x:Key="BrushBadgeTcpFg" Color="#075985"/>
+        <SolidColorBrush x:Key="BrushBadgeUdpBg" Color="#FEF3C7"/>
+        <SolidColorBrush x:Key="BrushBadgeUdpFg" Color="#92400E"/>
+        <SolidColorBrush x:Key="BrushStateEstBg" Color="#DCFCE7"/>
+        <SolidColorBrush x:Key="BrushStateEstFg" Color="#166534"/>
+        <SolidColorBrush x:Key="BrushStateListenBg" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BrushStateListenFg" Color="#334155"/>
 
         <!-- Subtle Column Metric Tints (Process Explorer Classic Column Tints) -->
         <SolidColorBrush x:Key="ColTint_CPU" Color="#2222C55E"/>
         <SolidColorBrush x:Key="ColTint_Net" Color="#1A0284C7"/>
         <SolidColorBrush x:Key="ColTint_PrivateBytes" Color="#28EAB308"/>
         <SolidColorBrush x:Key="ColTint_WorkingSet" Color="#22F97316"/>
+
+        <!-- Interactive Toggle Chip / Segmented Mode Button Style -->
+        <Style x:Key="ChipToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="ChipBd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChipBd" Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ChipBd" Property="Background" Value="{DynamicResource BrushTargetNodeBg}"/>
+                                <Setter TargetName="ChipBd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Selection-Safe Delta Styles (Setter foreground is overridden when DataGridRow.IsSelected is True) -->
+        <Style x:Key="PrivateDeltaTabularStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="4,0,6,0"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{Binding PrivateDeltaBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WsDeltaTabularStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="4,0,6,0"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{Binding MemoryDeltaBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="PrivateDeltaBadgeStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="Foreground" Value="{Binding PrivateDeltaBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WsDeltaBadgeStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="Foreground" Value="{Binding MemoryDeltaBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 
         <!-- Toolbar Button Style with Complete Interactive States -->
         <Style x:Key="ToolbarButtonStyle" TargetType="Button">
@@ -155,7 +307,7 @@
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BrushSurfaceBg}"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#0284C7"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="0,0,0,2"/>
                                 <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
                                 <Setter TargetName="HeaderContent" Property="TextElement.FontWeight" Value="SemiBold"/>
@@ -438,6 +590,8 @@
                     <Separator/>
                     <MenuItem x:Name="MenuThemeLight" Header="_Clean Light Theme (Sysinternals)" IsCheckable="True" IsChecked="True"/>
                     <MenuItem x:Name="MenuThemeDark" Header="_Precision Dark Theme" IsCheckable="True"/>
+                    <MenuItem x:Name="MenuThemeTokyoNight" Header="_Tokyo Night (Dark)" IsCheckable="True"/>
+                    <MenuItem x:Name="MenuThemeTokyoNightLight" Header="Tokyo Night _Light" IsCheckable="True"/>
                     <MenuItem x:Name="MenuThemeClassic" Header="_Sysinternals Classic (Win32 Retro)" IsCheckable="True"/>
                     <MenuItem x:Name="MenuThemeHighContrast" Header="_High-Contrast Monochrome (WCAG AAA)" IsCheckable="True"/>
                 </MenuItem>
@@ -469,6 +623,8 @@
                 <MenuItem x:Name="MenuViewLog" Header="_Activity &amp; Audit Log Pane" InputGestureText="Ctrl+L" IsCheckable="True"/>
                 <Separator/>
                 <MenuItem x:Name="MenuViewSelectColumns" Header="Select _Columns..." FontWeight="SemiBold"/>
+                <MenuItem x:Name="MenuViewBaseline" Header="Set Process _Baseline Snapshot" InputGestureText="Ctrl+B" ToolTip="Capture current Private Bytes, Working Set, and Handles as baseline to highlight growth and new processes"/>
+                <MenuItem x:Name="MenuViewClearBaseline" Header="Clear Process Bas_eline" IsEnabled="False"/>
                 <Separator/>
                 <MenuItem x:Name="MenuViewNetEtw" Header="Per-Process Net_work Monitoring (ETW)" InputGestureText="Ctrl+Shift+N" IsCheckable="True"/>
                 <MenuItem x:Name="MenuColTreeNet" Header="Show Tree Net Colu_mn" IsCheckable="True" IsChecked="True"/>
@@ -525,7 +681,7 @@
             <DockPanel>
                 <Button x:Name="BtnAddHostTab" DockPanel.Dock="Right" Style="{StaticResource ToolbarButtonStyle}" Padding="6,2" Margin="4,0,2,2" ToolTip="Connect to Another Remote Host or Local (Ctrl+Shift+K)" Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="+" FontSize="13" FontWeight="Bold" Foreground="#0284C7" Margin="0,-2,3,0"/>
+                        <TextBlock Text="+" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource BrushAccent}" Margin="0,-2,3,0"/>
                         <TextBlock Text="Add Host" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -579,7 +735,7 @@
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Ellipse x:Name="ConnStatusDot" Width="8" Height="8" Fill="#16A34A" Margin="0,0,6,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtTargetBadge" Text="LOCALHOST" FontWeight="Bold" FontSize="11" VerticalAlignment="Center"/>
-                            <Border Background="#0284C7" CornerRadius="2" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource BrushBadgeBg}" CornerRadius="2" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center">
                                 <TextBlock x:Name="TxtTransportBadge" Text="WINRM" Foreground="White" FontSize="9" FontWeight="Bold"/>
                             </Border>
                             <TextBlock x:Name="TxtLatencyBadge" Text="0 ms" Foreground="{DynamicResource BrushTextMuted}" FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
@@ -587,7 +743,7 @@
                     </Border>
                     <Button x:Name="BtnConnectHost" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Connect / Switch Remote Target (Ctrl+K)" Margin="4,0,0,0">
                         <StackPanel Orientation="Horizontal">
-                            <Path Data="M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z" Fill="#0284C7" Width="14" Height="14" Stretch="Uniform"/>
+                            <Path Data="M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z" Fill="{DynamicResource BrushAccent}" Width="14" Height="14" Stretch="Uniform"/>
                             <TextBlock Text="Connect" FontSize="11" FontWeight="SemiBold" Margin="4,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -596,7 +752,7 @@
                 <!-- Col 1: Sysinternals Quick Action Vector Toolbar -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
                     <Button x:Name="BtnToolbarRefresh" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Refresh Now (F5)">
-                        <Path Data="M12,4V1L8,5l4,4V6c3.31,0,6,2.69,6,6c0,1.01-0.25,1.97-0.7,2.8l1.46,1.46C19.54,15.03,20,13.57,20,12C20,7.58,16.42,4,12,4z M12,18c-3.31,0-6-2.69-6-6c0-1.01,0.25-1.97,0.7-2.8L5.24,7.74C4.46,8.97,4,10.43,4,12c0,4.42,3.58,8,8,8v3l4-4l-4-4V18z" Fill="#0284C7" Width="15" Height="15" Stretch="Uniform"/>
+                        <Path Data="M12,4V1L8,5l4,4V6c3.31,0,6,2.69,6,6c0,1.01-0.25,1.97-0.7,2.8l1.46,1.46C19.54,15.03,20,13.57,20,12C20,7.58,16.42,4,12,4z M12,18c-3.31,0-6-2.69-6-6c0-1.01,0.25-1.97,0.7-2.8L5.24,7.74C4.46,8.97,4,10.43,4,12c0,4.42,3.58,8,8,8v3l4-4l-4-4V18z" Fill="{DynamicResource BrushAccent}" Width="15" Height="15" Stretch="Uniform"/>
                     </Button>
                     <Button x:Name="BtnToolbarPause" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Pause Polling (Space)">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -612,20 +768,20 @@
                         </StackPanel>
                     </Button>
                     <Button x:Name="BtnToolbarProps" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Inspect Process Properties (Enter)">
-                        <Path Data="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-6h2V17z M13,9h-2V7h2V9z" Fill="#0284C7" Width="15" Height="15" Stretch="Uniform"/>
+                        <Path Data="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-6h2V17z M13,9h-2V7h2V9z" Fill="{DynamicResource BrushAccent}" Width="15" Height="15" Stretch="Uniform"/>
                     </Button>
                     <Button x:Name="BtnToolbarKill" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Kill Selected Process(es) (Del)">
-                        <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" Fill="#DC2626" Width="15" Height="15" Stretch="Uniform"/>
+                        <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" Fill="{DynamicResource BrushKillFg}" Width="15" Height="15" Stretch="Uniform"/>
                     </Button>
                     <Button x:Name="BtnToolbarKillTree" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Kill Process Tree(s) (Shift+Del)">
                         <StackPanel Orientation="Horizontal">
-                            <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" Fill="#991B1B" Width="14" Height="14" Stretch="Uniform"/>
-                            <TextBlock Text="Tree" FontSize="10" FontWeight="Bold" Foreground="#991B1B" Margin="2,0,0,0" VerticalAlignment="Center"/>
+                            <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" Fill="{DynamicResource BrushKillFg}" Width="14" Height="14" Stretch="Uniform"/>
+                            <TextBlock Text="Tree" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource BrushKillFg}" Margin="2,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
                     <Button x:Name="BtnFindHandleOrDll" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Find Handle or DLL Substring (Ctrl+Shift+F)">
-                        <Path Data="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14Z" Fill="#0284C7" Width="14" Height="14" Stretch="Uniform"/>
+                        <Path Data="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14Z" Fill="{DynamicResource BrushAccent}" Width="14" Height="14" Stretch="Uniform"/>
                     </Button>
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
                     <Button x:Name="BtnToolbarNetEtw" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Toggle Opt-In Per-Process Kernel Network Monitoring (ETW, Ctrl+Shift+N)">
@@ -635,46 +791,55 @@
                         </StackPanel>
                     </Button>
                     <Button x:Name="BtnToolbarNetRxTx" Style="{StaticResource ToolbarButtonStyle}" Visibility="Collapsed" ToolTip="Show/Hide Net Recv and Net Send Split Columns" Margin="1,0,0,0">
-                        <TextBlock Text="Rx/Tx" FontSize="10.5" FontWeight="SemiBold" Foreground="#0284C7"/>
+                        <TextBlock Text="Rx/Tx" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushAccent}"/>
                     </Button>
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2"/>
-                    <Button x:Name="BtnToolbarTheme" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Cycle Theme: Light / Dark / Classic / High-Contrast (Ctrl+D)">
+                    <Button x:Name="BtnToolbarTheme" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Cycle Theme: Clean Light / Dark / Tokyo Night / Tokyo Night Light / Classic / High-Contrast (Ctrl+D)">
                         <TextBlock x:Name="TxtThemeToggle" Text="Dark Mode" FontSize="11" FontWeight="SemiBold"/>
                     </Button>
                     <Button x:Name="BtnToolbarHelp" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Help, Keyboard Shortcuts &amp; About (F1)" Margin="2,0,0,0">
-                        <Path Data="M11,18h2v-2h-2V18z M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M12,20c-4.41,0-8-3.59-8-8s3.59-8,8-8s8,3.59,8,8S16.41,20,12,20z M12,6c-2.21,0-4,1.79-4,4h2c0-1.1,0.9-2,2-2s2,0.9,2,2c0,2-3,1.75-3,5h2c0-2.25,3-2.5,3-5C16,7.79,14.21,6,12,6z" Fill="#0284C7" Width="14" Height="14" Stretch="Uniform"/>
+                        <Path Data="M11,18h2v-2h-2V18z M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M12,20c-4.41,0-8-3.59-8-8s3.59-8,8-8s8,3.59,8,8S16.41,20,12,20z M12,6c-2.21,0-4,1.79-4,4h2c0-1.1,0.9-2,2-2s2,0.9,2,2c0,2-3,1.75-3,5h2c0-2.25,3-2.5,3-5C16,7.79,14.21,6,12,6z" Fill="{DynamicResource BrushAccent}" Width="14" Height="14" Stretch="Uniform"/>
                     </Button>
+                    <Border x:Name="BadgeBaselineActive" Visibility="Collapsed" Background="{DynamicResource BrushTargetNodeBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="4,0,0,0" VerticalAlignment="Center" ToolTip="Process baseline snapshot active for current host tab (Ctrl+B to update)">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtBaselineLabel" Text="Baseline 00:00" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                            <Button x:Name="BtnClearBaseline" Content="X" FontSize="9" FontWeight="Bold" Background="Transparent" Foreground="{DynamicResource BrushAccent}" BorderThickness="0" Padding="4,0,1,0" Margin="2,0,0,0" Cursor="Hand" ToolTip="Clear active baseline"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- Col 2: Sysinternals Mini Telemetry Sparkline Strip (Double-Click for System Information) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- CPU Sparkline Box -->
-                    <Border x:Name="CardMiniCpu" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,5,0" Cursor="Hand" ToolTip="Double-click to open System Information - CPU (Ctrl+I)">
-                        <Grid Width="86" Height="26" ClipToBounds="True">
-                            <Polygon Points="{Binding CpuFillPoints}" Fill="#3322C55E"/>
-                            <Polyline Points="{Binding CpuPoints}" Stroke="#16A34A" StrokeThickness="1.3"/>
-                            <TextBlock Text="CPU" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="TxtCpuSummary" Text="{Binding CpuSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                    <Border x:Name="CardMiniCpu" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,4,0" Cursor="Hand" ToolTipService.IsEnabled="False">
+                        <Grid x:Name="GridMiniCpu" Width="82" Height="26" ClipToBounds="True" Background="Transparent">
+                            <Polygon Points="{Binding CpuFillPoints}" Fill="#3322C55E" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding CpuPoints}" Stroke="#16A34A" StrokeThickness="1.3" IsHitTestVisible="False"/>
+                            <Line x:Name="CrosshairMiniCpu" X1="0" Y1="0" X2="0" Y2="26" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
+                            <TextBlock Text="CPU" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+                            <TextBlock x:Name="TxtCpuSummary" Text="{Binding CpuSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular" IsHitTestVisible="False"/>
                         </Grid>
                     </Border>
 
                     <!-- Commit Charge Sparkline Box -->
-                    <Border x:Name="CardMiniCommit" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,5,0" Cursor="Hand" ToolTip="Double-click to open System Information - Commit &amp; Memory (Ctrl+I)">
-                        <Grid Width="90" Height="26" ClipToBounds="True">
-                            <Polygon Points="{Binding CommitFillPoints}" Fill="#33EAB308"/>
-                            <Polyline Points="{Binding CommitPoints}" Stroke="#CA8A04" StrokeThickness="1.3"/>
-                            <TextBlock Text="Commit" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="TxtCommitSummary" Text="{Binding CommitSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                    <Border x:Name="CardMiniCommit" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,4,0" Cursor="Hand" ToolTipService.IsEnabled="False">
+                        <Grid x:Name="GridMiniCommit" Width="86" Height="26" ClipToBounds="True" Background="Transparent">
+                            <Polygon Points="{Binding CommitFillPoints}" Fill="#33EAB308" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding CommitPoints}" Stroke="#CA8A04" StrokeThickness="1.3" IsHitTestVisible="False"/>
+                            <Line x:Name="CrosshairMiniCommit" X1="0" Y1="0" X2="0" Y2="26" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
+                            <TextBlock Text="Commit" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+                            <TextBlock x:Name="TxtCommitSummary" Text="{Binding CommitSummaryFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular" IsHitTestVisible="False"/>
                         </Grid>
                     </Border>
 
                     <!-- Physical RAM Sparkline Box -->
-                    <Border x:Name="CardMiniRam" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,8,0" Cursor="Hand" ToolTip="Double-click to open System Information - Physical Memory (Ctrl+I)">
-                        <Grid Width="96" Height="26" ClipToBounds="True">
-                            <Polygon Points="{Binding RamFillPoints}" Fill="#33F97316"/>
-                            <Polyline Points="{Binding RamPoints}" Stroke="#EA580C" StrokeThickness="1.3"/>
-                            <TextBlock Text="Phys RAM" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left"/>
-                            <TextBlock x:Name="TxtRamSummary" Text="{Binding RamPctFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
+                    <Border x:Name="CardMiniRam" CornerRadius="4" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" Background="{DynamicResource BrushSparkBg}" Margin="0,0,6,0" Cursor="Hand" ToolTipService.IsEnabled="False">
+                        <Grid x:Name="GridMiniRam" Width="92" Height="26" ClipToBounds="True" Background="Transparent">
+                            <Polygon Points="{Binding RamFillPoints}" Fill="#33F97316" IsHitTestVisible="False"/>
+                            <Polyline Points="{Binding RamPoints}" Stroke="#EA580C" StrokeThickness="1.3" IsHitTestVisible="False"/>
+                            <Line x:Name="CrosshairMiniRam" X1="0" Y1="0" X2="0" Y2="26" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
+                            <TextBlock Text="Phys RAM" FontSize="9" Foreground="{DynamicResource BrushTextMuted}" Margin="3,1,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+                            <TextBlock x:Name="TxtRamSummary" Text="{Binding RamPctFormatted}" FontSize="10" FontWeight="SemiBold" Margin="0,1,3,0" VerticalAlignment="Top" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular" IsHitTestVisible="False"/>
                         </Grid>
                     </Border>
 
@@ -691,16 +856,16 @@
                     </StackPanel>
 
                     <!-- Live Hardware Throughput (Network & Storage) Tabular Pill -->
-                    <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="3,0,0,0" VerticalAlignment="Center">
+                    <Border x:Name="BorderTelemNetRate" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="3,0,0,0" VerticalAlignment="Center" Cursor="Hand" ToolTip="Real-Time Network &amp; Storage Throughput (Double-click to open System Information - Network)">
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock x:Name="TxtTelemNetRate" Text="{Binding NetThroughputFormatted}" Foreground="#0284C7" FontSize="9.5" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" ToolTip="Real-Time Network Interface Throughput (Rx / Tx)"/>
+                            <TextBlock x:Name="TxtTelemNetRate" Text="{Binding NetThroughputFormatted}" Foreground="{DynamicResource BrushAccent}" FontSize="9.5" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" ToolTip="Real-Time Network Interface Throughput (Rx / Tx - Double-click for Network Graph)"/>
                             <TextBlock x:Name="TxtTelemDiskRate" Text="{Binding DiskActivityFormatted}" Foreground="{DynamicResource BrushTextSecondary}" FontSize="9.5" Typography.NumeralAlignment="Tabular" Margin="0,1,0,0" ToolTip="Real-Time Storage &amp; System I/O Activity (Throughput &amp; IOPS)"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
 
                 <!-- Col 3: Right-Docked Instant Search / Filter Box -->
-                <Border Grid.Column="3" Width="260" MinWidth="220" MaxWidth="360" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="3" VerticalAlignment="Center" Height="26">
+                <Border Grid.Column="3" Width="200" MinWidth="150" MaxWidth="260" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="3" VerticalAlignment="Center" Height="26" Margin="6,0,0,0">
                     <DockPanel>
                         <Path DockPanel.Dock="Left" Data="M15.5,14h-0.79l-0.28-0.27C15.41,12.59,16,11.11,16,9.5C16,5.91,13.09,3,9.5,3S3,5.91,3,9.5S5.91,16,9.5,16c1.61,0,3.09-0.59,4.23-1.57l0.27,0.28v0.79l5,4.99L20.49,19L15.5,14z M9.5,14C7.01,14,5,11.99,5,9.5S7.01,5,9.5,5S14,7.01,14,9.5S11.99,14,9.5,14z"
                               Fill="{DynamicResource BrushTextMuted}" Width="12" Height="12" Stretch="Uniform" Margin="6,0,2,0" VerticalAlignment="Center"/>
@@ -718,7 +883,7 @@
                 <ItemsPanelTemplate>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MaxWidth="440"/>
+                            <ColumnDefinition Width="Auto" MaxWidth="520"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
@@ -746,17 +911,17 @@
                         <Button x:Name="BtnLegendService" Content="Services" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#FFE4E6" Foreground="#0F172A" BorderBrush="#FDA4AF" BorderThickness="1" Cursor="Hand" ToolTip="Filter Service Processes (Click to toggle)"/>
                         <Button x:Name="BtnLegendOwn" Content="Own / User" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#E0E7FF" Foreground="#0F172A" BorderBrush="#A5B4FC" BorderThickness="1" Cursor="Hand" ToolTip="Filter User Session Processes (Click to toggle)"/>
                         <Button x:Name="BtnLegendPackaged" Content="Packaged / WebView" FontSize="10" Padding="6,1" Margin="0,0,4,0" Background="#67E8F9" Foreground="#0F172A" BorderBrush="#06B6D4" BorderThickness="1" Cursor="Hand" ToolTip="Filter Packaged / WebView2 Processes (Click to toggle)"/>
-                        <Button x:Name="BtnLegendClear" Content="Clear Filter" FontSize="9" FontWeight="Bold" Padding="5,1" Margin="2,0,6,0" Background="#FEE2E2" Foreground="#991B1B" BorderBrush="#F87171" BorderThickness="1" Cursor="Hand" Visibility="Collapsed" ToolTip="Clear active category filter and show all processes"/>
+                        <Button x:Name="BtnLegendClear" Content="Clear Filter" FontSize="9" FontWeight="Bold" Padding="5,1" Margin="2,0,6,0" Background="{DynamicResource BrushKillBg}" Foreground="{DynamicResource BrushKillFg}" BorderBrush="{DynamicResource BrushKillBorder}" BorderThickness="1" Cursor="Hand" Visibility="Collapsed" ToolTip="Clear active category filter and show all processes"/>
                         <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
                         <TextBlock Text="Lifecycle Badges:" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextMuted}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                        <Border Background="#94A3B8" BorderBrush="#64748B" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
-                            <TextBlock Text="Suspended" Foreground="#0F172A" FontSize="10"/>
+                        <Border Background="{DynamicResource BrushSwatchSuspBg}" BorderBrush="{DynamicResource BrushSwatchSuspBorder}" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
+                            <TextBlock Text="Suspended" Foreground="{DynamicResource BrushSwatchSuspFg}" FontSize="10"/>
                         </Border>
-                        <Border Background="#86EFAC" BorderBrush="#22C55E" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
-                            <TextBlock Text="New" Foreground="#0F172A" FontSize="10"/>
+                        <Border Background="{DynamicResource BrushSwatchNewBg}" BorderBrush="{DynamicResource BrushSwatchNewBorder}" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,4,0">
+                            <TextBlock Text="New" Foreground="{DynamicResource BrushSwatchNewFg}" FontSize="10"/>
                         </Border>
-                        <Border Background="#FCA5A5" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="2" Padding="5,1">
-                            <TextBlock Text="Exiting" Foreground="#0F172A" FontSize="10"/>
+                        <Border Background="{DynamicResource BrushSwatchExitBg}" BorderBrush="{DynamicResource BrushSwatchExitBorder}" BorderThickness="1" CornerRadius="2" Padding="5,1">
+                            <TextBlock Text="Exiting" Foreground="{DynamicResource BrushSwatchExitFg}" FontSize="10"/>
                         </Border>
                         <Button x:Name="BtnToggleHighlights" Content="Colors: Standard" FontSize="9.5" FontWeight="SemiBold" Padding="5,1" Margin="6,0,0,0" Background="{DynamicResource BrushToolbarBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Cursor="Hand" ToolTip="Toggle static category coloring on/off (New &amp; Exiting flashes remain active)"/>
                     </StackPanel>
@@ -774,7 +939,7 @@
         </StatusBar>
 
         <!-- 4. Collapsible Audit & Telemetry Log Console Pane -->
-        <Border x:Name="LogPane" DockPanel.Dock="Bottom" Background="#0F172A" Height="175" MinHeight="85" Visibility="Collapsed" BorderBrush="#334155" BorderThickness="0,1,0,0">
+        <Border x:Name="LogPane" DockPanel.Dock="Bottom" Background="{DynamicResource BrushLogBg}" Height="175" MinHeight="85" Visibility="Collapsed" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -784,23 +949,23 @@
                 <Thumb x:Name="LogPaneResizer" Grid.Row="0" Height="6" Cursor="SizeNS" ToolTip="Drag vertically to resize Audit &amp; Telemetry Console (max 2/3 window height; double-click to reset)">
                     <Thumb.Template>
                         <ControlTemplate TargetType="Thumb">
-                            <Border x:Name="ResizeBarBd" Background="#1E293B" BorderBrush="#334155" BorderThickness="0,0,0,1">
-                                <Border x:Name="ResizeGripPill" Width="36" Height="2" CornerRadius="1" Background="#475569" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Border x:Name="ResizeBarBd" Background="{DynamicResource BrushLogHeaderBg}" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="0,0,0,1">
+                                <Border x:Name="ResizeGripPill" Width="36" Height="2" CornerRadius="1" Background="{DynamicResource BrushTextMuted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ResizeBarBd" Property="Background" Value="#26354D"/>
-                                    <Setter TargetName="ResizeGripPill" Property="Background" Value="#38BDF8"/>
+                                    <Setter TargetName="ResizeBarBd" Property="Background" Value="{DynamicResource BrushLogBtnBg}"/>
+                                    <Setter TargetName="ResizeGripPill" Property="Background" Value="{DynamicResource BrushAccent}"/>
                                 </Trigger>
                                 <Trigger Property="IsDragging" Value="True">
-                                    <Setter TargetName="ResizeBarBd" Property="Background" Value="#26354D"/>
-                                    <Setter TargetName="ResizeGripPill" Property="Background" Value="#38BDF8"/>
+                                    <Setter TargetName="ResizeBarBd" Property="Background" Value="{DynamicResource BrushLogBtnBg}"/>
+                                    <Setter TargetName="ResizeGripPill" Property="Background" Value="{DynamicResource BrushAccent}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Thumb.Template>
                 </Thumb>
-                <Border Grid.Row="1" Background="#1E293B" Padding="8,4" BorderBrush="#334155" BorderThickness="0,0,0,1">
+                <Border Grid.Row="1" Background="{DynamicResource BrushLogHeaderBg}" Padding="8,4" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="0,0,0,1">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -809,7 +974,7 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Left: Console Title -->
-                        <TextBlock Grid.Column="0" Text="Audit Trail &amp; Network Telemetry" Foreground="#F8FAFC" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Grid.Column="0" Text="Audit Trail &amp; Network Telemetry" Foreground="{DynamicResource BrushLogTitleFg}" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
                         <!-- Center: Fixed 4-Column Live Telemetry Grid Eliminating Horizontal Jitter Across Ticks -->
                         <Grid Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
@@ -820,31 +985,31 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <Border Grid.Column="0" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Transport Mode, Round-Trip Latency &amp; Average Latency">
-                                <TextBlock x:Name="TxtTelemTransport" Text="Mode: Initializing..." Foreground="#38BDF8" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Column="0" Background="{DynamicResource BrushLogBg}" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Transport Mode, Round-Trip Latency &amp; Average Latency">
+                                <TextBlock x:Name="TxtTelemTransport" Text="Mode: Initializing..." Foreground="{DynamicResource BrushLogTelem1}" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
                             </Border>
-                            <Border Grid.Column="1" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Differential Compressed Wire Payload vs Uncompressed Raw JSON">
-                                <TextBlock x:Name="TxtTelemPayload" Text="Wire: 0.00 KB (0% GZIP)" Foreground="#A7F3D0" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Column="1" Background="{DynamicResource BrushLogBg}" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Differential Compressed Wire Payload vs Uncompressed Raw JSON">
+                                <TextBlock x:Name="TxtTelemPayload" Text="Wire: 0.00 KB (0% GZIP)" Foreground="{DynamicResource BrushLogTelem2}" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
                             </Border>
-                            <Border Grid.Column="2" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Real-Time Network Bandwidth &amp; Cumulative Wire Transfer (RX)">
-                                <TextBlock x:Name="TxtTelemNetwork" Text="BW: 0.00 KB/s | RX: 0.0 KB" Foreground="#FDE68A" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Column="2" Background="{DynamicResource BrushLogBg}" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="0,0,4,0" ToolTip="Real-Time Network Bandwidth &amp; Cumulative Wire Transfer (RX)">
+                                <TextBlock x:Name="TxtTelemNetwork" Text="BW: 0.00 KB/s | RX: 0.0 KB" Foreground="{DynamicResource BrushLogTelem3}" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
                             </Border>
-                            <Border Grid.Column="3" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" Padding="4,1" ToolTip="Telemetry Sync Sequence &amp; Differential Process Delta (Dyn / +Meta / -Exit)">
-                                <TextBlock x:Name="TxtTelemDelta" Text="Seq #0 | Dyn: 0 (+0/-0)" Foreground="#DDD6FE" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                            <Border Grid.Column="3" Background="{DynamicResource BrushLogBg}" BorderBrush="{DynamicResource BrushLogBorder}" BorderThickness="1" CornerRadius="2" Padding="4,1" ToolTip="Telemetry Sync Sequence &amp; Differential Process Delta (Dyn / +Meta / -Exit)">
+                                <TextBlock x:Name="TxtTelemDelta" Text="Seq #0 | Dyn: 0 (+0/-0)" Foreground="{DynamicResource BrushLogTelem4}" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
                             </Border>
                         </Grid>
 
                         <!-- Right: Action Controls -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <CheckBox x:Name="ChkStreamTicks" Content="Stream Ticks" IsChecked="True" Foreground="#CBD5E1" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand" ToolTip="Stream per-tick differential payload and network metrics"/>
-                            <CheckBox x:Name="ChkLogAutoScroll" Content="Auto-Scroll" IsChecked="True" Foreground="#CBD5E1" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand" ToolTip="Automatically scroll to newest log entries (unchecks when scrolled up; re-checks when scrolled to bottom)"/>
-                            <Button x:Name="BtnCopyLog" Content="Copy" Padding="7,1" FontSize="10" Margin="0,0,5,0" Background="#334155" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Copy Console Log to Clipboard"/>
-                            <Button x:Name="BtnClearLog" Content="Clear" Padding="7,1" FontSize="10" Margin="0,0,5,0" Background="#334155" Foreground="White" BorderThickness="0" Cursor="Hand"/>
-                            <Button x:Name="BtnToggleLogPane" Content="Close [X]" Padding="6,1" FontSize="10" Background="#475569" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                            <CheckBox x:Name="ChkStreamTicks" Content="Stream Ticks" IsChecked="True" Foreground="{DynamicResource BrushLogTitleFg}" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand" ToolTip="Stream per-tick differential payload and network metrics"/>
+                            <CheckBox x:Name="ChkLogAutoScroll" Content="Auto-Scroll" IsChecked="True" Foreground="{DynamicResource BrushLogTitleFg}" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand" ToolTip="Automatically scroll to newest log entries (unchecks when scrolled up; re-checks when scrolled to bottom)"/>
+                            <Button x:Name="BtnCopyLog" Content="Copy" Padding="7,1" FontSize="10" Margin="0,0,5,0" Background="{DynamicResource BrushLogBtnBg}" Foreground="{DynamicResource BrushLogBtnFg}" BorderThickness="0" Cursor="Hand" ToolTip="Copy Console Log to Clipboard"/>
+                            <Button x:Name="BtnClearLog" Content="Clear" Padding="7,1" FontSize="10" Margin="0,0,5,0" Background="{DynamicResource BrushLogBtnBg}" Foreground="{DynamicResource BrushLogBtnFg}" BorderThickness="0" Cursor="Hand"/>
+                            <Button x:Name="BtnToggleLogPane" Content="Close [X]" Padding="6,1" FontSize="10" Background="{DynamicResource BrushLogBtnBg}" Foreground="{DynamicResource BrushLogBtnFg}" BorderThickness="0" Cursor="Hand"/>
                         </StackPanel>
                     </Grid>
                 </Border>
-                <TextBox x:Name="TxtLogConsole" Grid.Row="2" Background="#0F172A" Foreground="#38BDF8" FontFamily="Consolas" FontSize="11" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" BorderThickness="0" Padding="8,4" TextWrapping="NoWrap"/>
+                <TextBox x:Name="TxtLogConsole" Grid.Row="2" Background="{DynamicResource BrushLogBg}" Foreground="{DynamicResource BrushLogFg}" FontFamily="Consolas" FontSize="11" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" BorderThickness="0" Padding="8,4" TextWrapping="NoWrap"/>
             </Grid>
         </Border>
 
@@ -940,7 +1105,7 @@
                                                ToolTipService.ShowDuration="60000">
                                         <DockPanel.ToolTip>
                                             <ToolTip Placement="Mouse" HorizontalOffset="20" VerticalOffset="8" MaxWidth="750" Padding="8,6">
-                                                <TextBlock Text="{Binding CommandLineToolTip}"
+                                                <TextBlock Text="{Binding ProcessHoverToolTip}"
                                                            FontFamily="Consolas, Segoe UI Mono, Lucida Console, Courier New"
                                                            FontSize="11"
                                                            Foreground="{DynamicResource BrushTextPrimary}"
@@ -984,7 +1149,7 @@
                         <DataGridTemplateColumn x:Name="ColCpu" Header="CPU" SortMemberPath="CPU" Width="70">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource ColTint_CPU}" Height="22">
+                                    <Border Background="{DynamicResource ColTint_CPU}" Height="22" ToolTip="{Binding CpuCellToolTip}">
                                         <TextBlock Text="{Binding CPUFormatted}" Style="{StaticResource RightTabularText}"/>
                                     </Border>
                                 </DataTemplate>
@@ -1026,23 +1191,51 @@
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
 
-                        <!-- Column 4: Private Bytes (Right-Aligned Tabular + Subtle Cream Column Tint) -->
+                        <!-- Column 4: Private Bytes (Right-Aligned Tabular + Subtle Cream Column Tint + Inline Baseline Badge) -->
                         <DataGridTemplateColumn x:Name="ColPrivateBytes" Header="Private Bytes" SortMemberPath="PrivateBytes" Width="98">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource ColTint_PrivateBytes}" Height="22">
-                                        <TextBlock Text="{Binding PrivateBytesFormatted}" Style="{StaticResource RightTabularText}"/>
+                                    <Border Background="{DynamicResource ColTint_PrivateBytes}" Height="22" ToolTip="{Binding PrivateCellToolTip}">
+                                        <DockPanel LastChildFill="True">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding PrivateBytesFormatted}" Style="{StaticResource RightTabularText}"/>
+                                            <TextBlock Text="{Binding PrivateDeltaBadgeText}" Visibility="{Binding PrivateDeltaBadgeVisibility}" Style="{StaticResource PrivateDeltaBadgeStyle}"/>
+                                        </DockPanel>
                                     </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Column 5: Working Set (Right-Aligned Tabular + Subtle Peach Column Tint) -->
+                        <!-- Column 5: Working Set (Right-Aligned Tabular + Subtle Peach Column Tint + Inline Baseline Badge) -->
                         <DataGridTemplateColumn x:Name="ColWorkingSet" Header="Working Set" SortMemberPath="MemoryBytes" Width="98">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource ColTint_WorkingSet}" Height="22">
-                                        <TextBlock Text="{Binding MemoryFormatted}" Style="{StaticResource RightTabularText}"/>
+                                    <Border Background="{DynamicResource ColTint_WorkingSet}" Height="22" ToolTip="{Binding WsCellToolTip}">
+                                        <DockPanel LastChildFill="True">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding MemoryFormatted}" Style="{StaticResource RightTabularText}"/>
+                                            <TextBlock Text="{Binding WsDeltaBadgeText}" Visibility="{Binding WsDeltaBadgeVisibility}" Style="{StaticResource WsDeltaBadgeStyle}"/>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Opt-In Session Peak & Baseline Diff Columns (Collapsed by Default, Placed After Working Set) -->
+                        <DataGridTextColumn x:Name="ColPeakCpu" Header="Peak CPU" Binding="{Binding PeakCPUFormatted}" SortMemberPath="PeakCPU" Width="76" Visibility="Collapsed" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTextColumn x:Name="ColPeakPrivate" Header="Peak Private" Binding="{Binding PeakPrivateBytesFormatted}" SortMemberPath="PeakPrivateBytes" Width="102" Visibility="Collapsed" ElementStyle="{StaticResource RightTabularText}"/>
+                        <DataGridTemplateColumn x:Name="ColPrivateDelta" Header="Private Delta" SortMemberPath="PrivateBytesDelta" Width="102" Visibility="Collapsed">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Background="Transparent" Height="22" ToolTip="{Binding PrivateCellToolTip}">
+                                        <TextBlock Text="{Binding PrivateDeltaFormatted}" Style="{StaticResource PrivateDeltaTabularStyle}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn x:Name="ColWorkingSetDelta" Header="WS Delta" SortMemberPath="MemoryDelta" Width="98" Visibility="Collapsed">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Background="Transparent" Height="22" ToolTip="{Binding WsCellToolTip}">
+                                        <TextBlock Text="{Binding MemoryDeltaFormatted}" Style="{StaticResource WsDeltaTabularStyle}"/>
                                     </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -1060,8 +1253,14 @@
                         <!-- Column 9: User Account -->
                         <DataGridTextColumn x:Name="ColUser" Header="User" Binding="{Binding User}" SortMemberPath="User" Width="145" ElementStyle="{StaticResource EllipsisCellText}"/>
 
-                        <!-- Column 10: Handles (Right-Aligned Tabular) -->
-                        <DataGridTextColumn x:Name="ColHandles" Header="Handles" Binding="{Binding HandlesFormatted}" SortMemberPath="Handles" Width="72" ElementStyle="{StaticResource RightTabularText}"/>
+                        <!-- Column 10: Handles (Right-Aligned Tabular + Session Peak/Delta ToolTip) -->
+                        <DataGridTextColumn x:Name="ColHandles" Header="Handles" Binding="{Binding HandlesFormatted}" SortMemberPath="Handles" Width="72">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource RightTabularText}">
+                                    <Setter Property="ToolTip" Value="{Binding HandlesCellToolTip}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
 
                         <!-- Opt-In Columns (Collapsed by Default, Zero Collector Overhead) -->
                         <DataGridTextColumn x:Name="ColVersion" Header="Version" Binding="{Binding FileVersion}" SortMemberPath="FileVersion" Width="105" Visibility="Collapsed" ElementStyle="{StaticResource EllipsisCellText}"/>
@@ -1259,6 +1458,346 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                     </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- Tab 3: Network Activity (TCPView Active Sockets & ETW Activity Stream) -->
+            <TabItem x:Name="TabNetworkActivity" Header="Network Activity">
+                <DockPanel Background="{DynamicResource BrushSurfaceBg}">
+                    <!-- Top Sub-Mode, Quick Filter Chips & Action Toolbar -->
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,0,0,1" Padding="6,4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <ToggleButton x:Name="BtnNetModeSockets" Content="Active Sockets" Style="{StaticResource ChipToggleStyle}" IsChecked="True" ToolTip="Live TCP/UDP endpoint table (Sysinternals TCPView style, auto-refreshes every 2s while visible)"/>
+                                <ToggleButton x:Name="BtnNetModeTimeline" Content="ETW Activity Stream" Style="{StaticResource ChipToggleStyle}" Margin="0" ToolTip="Procmon-style per-process network burst stream (uses existing ETW telemetry)"/>
+
+                                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
+
+                                <Button x:Name="BtnNetRefreshSockets" Content="Refresh" Style="{StaticResource ToolbarButtonStyle}" FontWeight="SemiBold" ToolTip="Query live TCP/UDP endpoints across all processes on target host"/>
+                                <ToggleButton x:Name="ChkNetAutoRefresh" Content="Auto (2s)" Style="{StaticResource ChipToggleStyle}" IsChecked="True" Margin="2,0,0,0" ToolTip="Refresh active endpoints every 2 seconds while Active Sockets is visible"/>
+                                <Button x:Name="BtnNetCloseConn" Content="Close Conn" Style="{StaticResource ToolbarButtonStyle}" IsEnabled="False" Margin="2,0,0,0" ToolTip="Close selected IPv4 TCP connection via SetTcpEntry (Administrator required)"/>
+
+                                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
+
+                                <!-- Sockets Filter Chips (TCPView Protocol & State Toggles) -->
+                                <StackPanel x:Name="PanelNetSocketFilters" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ToggleButton x:Name="ChipNetTcp4" Content="TCP v4" Style="{StaticResource ChipToggleStyle}" IsChecked="True"/>
+                                    <ToggleButton x:Name="ChipNetTcp6" Content="TCP v6" Style="{StaticResource ChipToggleStyle}" IsChecked="True"/>
+                                    <ToggleButton x:Name="ChipNetUdp4" Content="UDP v4" Style="{StaticResource ChipToggleStyle}" IsChecked="True"/>
+                                    <ToggleButton x:Name="ChipNetUdp6" Content="UDP v6" Style="{StaticResource ChipToggleStyle}" IsChecked="True"/>
+                                    <ToggleButton x:Name="ChipNetEstablished" Content="Established" Style="{StaticResource ChipToggleStyle}"/>
+                                    <ToggleButton x:Name="ChipNetListening" Content="Listening" Style="{StaticResource ChipToggleStyle}"/>
+                                    <ToggleButton x:Name="ChipNetSynSent" Content="Syn Sent" Style="{StaticResource ChipToggleStyle}"/>
+                                    <ToggleButton x:Name="ChipNetTimeWait" Content="Time/Close Wait" Style="{StaticResource ChipToggleStyle}" Margin="0"/>
+                                </StackPanel>
+
+                                <!-- Timeline Filter Chips -->
+                                <StackPanel x:Name="PanelNetTimelineFilters" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                                    <ToggleButton x:Name="ChipNetRecv" Content="Recv" Style="{StaticResource ChipToggleStyle}"/>
+                                    <ToggleButton x:Name="ChipNetSend" Content="Send" Style="{StaticResource ChipToggleStyle}" Margin="0"/>
+                                </StackPanel>
+
+                                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,2"/>
+
+                                <Button x:Name="BtnNetClear" Content="Clear" Style="{StaticResource ToolbarButtonStyle}" Visibility="Collapsed" ToolTip="Clear captured ETW timeline entries"/>
+                                <Button x:Name="BtnNetExportCsv" Content="Export CSV" Style="{StaticResource ToolbarButtonStyle}" ToolTip="Export currently visible network rows to CSV"/>
+                            </StackPanel>
+
+                            <!-- Right-Docked Network Search Box -->
+                            <Border Grid.Column="1" Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushSparkBorder}" BorderThickness="1" CornerRadius="2" VerticalAlignment="Center" Height="24">
+                                <DockPanel>
+                                    <Path DockPanel.Dock="Left" Data="M15.5,14h-0.79l-0.28-0.27C15.41,12.59,16,11.11,16,9.5C16,5.91,13.09,3,9.5,3S3,5.91,3,9.5S5.91,16,9.5,16c1.61,0,3.09-0.59,4.23-1.57l0.27,0.28v0.79l5,4.99L20.49,19L15.5,14z M9.5,14C7.01,14,5,11.99,5,9.5S7.01,5,9.5,5S14,7.01,14,9.5S11.99,14,9.5,14z"
+                                          Fill="{DynamicResource BrushTextMuted}" Width="11" Height="11" Stretch="Uniform" Margin="6,0,2,0" VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnClearSearchNetwork" DockPanel.Dock="Right" Content="X" Width="18" Background="Transparent" BorderThickness="0" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Cursor="Hand" ToolTip="Clear Network Filter (Esc)"/>
+                                    <TextBox x:Name="TxtSearchNetwork" Width="155" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}" VerticalContentAlignment="Center" Padding="4,0" ToolTip="Filter by Process, PID, Protocol, Address, Port, State, or Module Name (Ctrl+F)"/>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Teachable Inline Guidance Banner (ETW Disabled / Tier 1 Non-Admin Notice) -->
+                    <Border x:Name="NetTabNoticeBanner" DockPanel.Dock="Top" Visibility="Collapsed" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="0,0,0,1" Padding="10,6">
+                        <DockPanel LastChildFill="True">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="BtnNetBannerEnableEtw" Content="Enable Net ETW" Padding="8,2" FontSize="11" FontWeight="SemiBold" Margin="0,0,6,0" Background="{DynamicResource BrushSurfaceBg}" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" Cursor="Hand"/>
+                                <Button x:Name="BtnNetBannerSwitchSockets" Content="View Active Sockets" Padding="8,2" FontSize="11" Background="Transparent" Foreground="{DynamicResource BrushTextPrimary}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" Cursor="Hand"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource BrushTargetNodeBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" CornerRadius="2" Padding="5,1" Margin="0,0,8,0">
+                                    <TextBlock x:Name="TxtNetBannerTitle" Text="INFO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource BrushAccent}"/>
+                                </Border>
+                                <TextBlock x:Name="TxtNetBannerDetail" Text="Per-process ETW telemetry is currently turned off." FontSize="11" Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- TCPView-Style Bottom Network Summary Strip -->
+                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="0,1,0,0" Padding="10,4">
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="TxtNetActivitySummary" DockPanel.Dock="Right" Text="Visit tab to load active sockets" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TxtNetStatusCounts" Text="Endpoints: 0  |  Established: 0  |  Listening: 0  |  Time Wait: 0  |  Close Wait: 0" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource BrushTextPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Typography.NumeralAlignment="Tabular"/>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- DataGrids Container + Empty State Overlay -->
+                    <Grid>
+                        <!-- Sub-Mode A: System-Wide Active Sockets Grid -->
+                        <DataGrid x:Name="GridNetworkSockets"
+                                  AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
+                                  Background="{DynamicResource BrushSurfaceBg}"
+                                  Foreground="{DynamicResource BrushTextPrimary}"
+                                  RowHeaderWidth="0" RowHeight="22" BorderThickness="0"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  EnableRowVirtualization="True">
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{DynamicResource BrushHeaderBg}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Setter Property="FontSize" Value="11"/>
+                                    <Setter Property="Padding" Value="6,3"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Setter Property="Height" Value="22"/>
+                                    <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                    <Setter Property="FontWeight" Value="Normal"/>
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding LifecycleState}" Value="New">
+                                            <Setter Property="Background" Value="{DynamicResource BrushNetRowNewBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushNetRowNewFg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LifecycleState}" Value="Mod">
+                                            <Setter Property="Background" Value="{DynamicResource BrushNetRowModBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushNetRowModFg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LifecycleState}" Value="Del">
+                                            <Setter Property="Background" Value="{DynamicResource BrushNetRowDelBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushNetRowDelFg}"/>
+                                        </DataTrigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell">
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LifecycleState}" Value="New">
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushNetRowNewFg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LifecycleState}" Value="Mod">
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushNetRowModFg}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LifecycleState}" Value="Del">
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushNetRowDelFg}"/>
+                                        </DataTrigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.CellStyle>
+
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="Process Name" SortMemberPath="ProcessName" Width="155">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,4,0">
+                                                <Image Source="{Binding IconSource}" Width="14" Height="14" Margin="0,0,5,0" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                <TextBlock Text="{Binding ProcessName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTextColumn Header="Process ID" Binding="{Binding PIDDisplay}" SortMemberPath="PID" Width="68" ElementStyle="{StaticResource RightTabularText}"/>
+
+                                <DataGridTemplateColumn Header="Protocol" SortMemberPath="Protocol" Width="60">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{Binding ProtocolBg}" CornerRadius="2" Padding="5,1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Protocol}" Foreground="{Binding ProtocolFg}" FontSize="10.5" FontWeight="SemiBold"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Header="State" SortMemberPath="State" Width="90">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{Binding StateBg}" CornerRadius="2" Padding="5,1" HorizontalAlignment="Left" Margin="4,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding State}" Foreground="{Binding StateFg}" FontSize="10.5" FontWeight="SemiBold"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTextColumn Header="Local Address" Binding="{Binding LocalAddress}" SortMemberPath="LocalAddress" Width="108" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Local Port" Binding="{Binding LocalPortDisplay}" SortMemberPath="LocalPort" Width="66" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Remote Address" Binding="{Binding RemoteAddress}" SortMemberPath="RemoteAddress" Width="118" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Remote Port" Binding="{Binding RemotePortDisplay}" SortMemberPath="RemotePort" Width="74" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Create Time" Binding="{Binding CreateTime}" SortMemberPath="CreateTimestamp" Width="136" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Module Name" Binding="{Binding ModuleName}" SortMemberPath="ModuleName" Width="112" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Sent Packets" Binding="{Binding SentPacketsFormatted}" SortMemberPath="SentPackets" Width="76" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Recv Packets" Binding="{Binding RecvPacketsFormatted}" SortMemberPath="RecvPackets" Width="76" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Sent Bytes" Binding="{Binding SentBytesFormatted}" SortMemberPath="SentBytes" Width="74" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Recv Bytes" Binding="{Binding RecvBytesFormatted}" SortMemberPath="RecvBytes" Width="74" ElementStyle="{StaticResource RightTabularText}"/>
+                            </DataGrid.Columns>
+
+                            <DataGrid.ContextMenu>
+                                <ContextMenu Style="{StaticResource ContextMenuStyle}">
+                                    <MenuItem x:Name="CtxNetSockCloseConn" Header="Close Connection..." IsEnabled="False"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="CtxNetSockFilterProc" Header="Filter to Selected Process"/>
+                                    <MenuItem x:Name="CtxNetSockFilterRemote" Header="Filter to Remote Address"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="CtxNetSockGoToProcess" Header="Select Process in Tree"/>
+                                    <MenuItem x:Name="CtxNetSockPropsTcp" Header="Process Properties (TCP/IP Tab)..." FontWeight="Bold"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="CtxNetSockCopyDetails" Header="Copy Details"/>
+                                    <MenuItem x:Name="CtxNetSockCopyLocal" Header="Copy Local Endpoint"/>
+                                    <MenuItem x:Name="CtxNetSockCopyRemote" Header="Copy Remote Endpoint"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                        </DataGrid>
+
+                        <!-- Sub-Mode B: Client ETW Activity Stream Grid -->
+                        <DataGrid x:Name="GridNetworkTimeline" Visibility="Collapsed"
+                                  AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="{DynamicResource BrushBorderSubtle}"
+                                  Background="{DynamicResource BrushSurfaceBg}"
+                                  Foreground="{DynamicResource BrushTextPrimary}"
+                                  RowHeaderWidth="0" RowHeight="22" BorderThickness="0"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  EnableRowVirtualization="True">
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{DynamicResource BrushHeaderBg}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Setter Property="FontSize" Value="11"/>
+                                    <Setter Property="Padding" Value="6,3"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource BrushBorderSubtle}"/>
+                                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Setter Property="Height" Value="22"/>
+                                    <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                    <Setter Property="FontWeight" Value="Normal"/>
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BrushRowHover}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell">
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BrushRowSelectedBg}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushRowSelectedFg}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.CellStyle>
+
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" SortMemberPath="TimestampTicks" Width="96" ElementStyle="{StaticResource RightTabularText}"/>
+
+                                <DataGridTemplateColumn Header="Process" SortMemberPath="ProcessName" Width="180">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,4,0">
+                                                <Image Source="{Binding IconSource}" Width="14" Height="14" Margin="0,0,5,0" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                <TextBlock Text="{Binding ProcessName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTextColumn Header="PID" Binding="{Binding PID}" SortMemberPath="PID" Width="62" ElementStyle="{StaticResource RightTabularText}"/>
+
+                                <DataGridTemplateColumn Header="Operation" SortMemberPath="Operation" Width="108">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{Binding OperationBg}" CornerRadius="2" Padding="6,1" HorizontalAlignment="Left" Margin="4,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Operation}" Foreground="{Binding OperationFg}" FontSize="10.5" FontWeight="SemiBold"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTextColumn Header="Detail" Binding="{Binding Detail}" SortMemberPath="Detail" Width="250" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="Rate" Binding="{Binding RateFormatted}" SortMemberPath="RateBps" Width="92" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Tree Rate" Binding="{Binding TreeRateFormatted}" SortMemberPath="TreeRateBps" Width="92" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Session Total" Binding="{Binding SessionTotalFormatted}" SortMemberPath="SessionBytes" Width="98" ElementStyle="{StaticResource RightTabularText}"/>
+                                <DataGridTextColumn Header="Category" Binding="{Binding Category}" SortMemberPath="Category" Width="84" ElementStyle="{StaticResource EllipsisCellText}"/>
+                                <DataGridTextColumn Header="User" Binding="{Binding User}" SortMemberPath="User" Width="*" MinWidth="110" ElementStyle="{StaticResource EllipsisCellText}"/>
+                            </DataGrid.Columns>
+
+                            <DataGrid.ContextMenu>
+                                <ContextMenu Style="{StaticResource ContextMenuStyle}">
+                                    <MenuItem x:Name="CtxNetTimeFilterProc" Header="Filter to Selected Process"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="CtxNetTimeGoToProcess" Header="Select Process in Tree"/>
+                                    <MenuItem x:Name="CtxNetTimePropsTcp" Header="Process Properties (TCP/IP Tab)..." FontWeight="Bold"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="CtxNetTimeCopyDetails" Header="Copy Details"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                        </DataGrid>
+
+                        <!-- Centered Teachable Empty-State Overlay -->
+                        <Border x:Name="NetEmptyStateOverlay" Visibility="Collapsed" IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="18,12" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4">
+                            <StackPanel HorizontalAlignment="Center" MaxWidth="420">
+                                <TextBlock x:Name="TxtNetEmptyTitle" Text="No network rows match your filter" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="TxtNetEmptyHint" Text="Click Refresh or adjust your quick filter chips and search term." FontSize="11" Foreground="{DynamicResource BrushTextMuted}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </DockPanel>
             </TabItem>
         </TabControl>

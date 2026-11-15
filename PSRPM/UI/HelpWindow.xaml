@@ -20,6 +20,27 @@
         <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
         <SolidColorBrush x:Key="BrushTextSecondary" Color="#334155"/>
         <SolidColorBrush x:Key="BrushTextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushAccent" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushBadgeBg" Color="#0284C7"/>
+        <SolidColorBrush x:Key="BrushKillFg" Color="#DC2626"/>
+        <SolidColorBrush x:Key="BrushSwatchSvcBg" Color="#FFE4E6"/>
+        <SolidColorBrush x:Key="BrushSwatchSvcBorder" Color="#FDA4AF"/>
+        <SolidColorBrush x:Key="BrushSwatchSvcFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchOwnBg" Color="#E0E7FF"/>
+        <SolidColorBrush x:Key="BrushSwatchOwnBorder" Color="#A5B4FC"/>
+        <SolidColorBrush x:Key="BrushSwatchOwnFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchPkgBg" Color="#67E8F9"/>
+        <SolidColorBrush x:Key="BrushSwatchPkgBorder" Color="#06B6D4"/>
+        <SolidColorBrush x:Key="BrushSwatchPkgFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchSuspBg" Color="#94A3B8"/>
+        <SolidColorBrush x:Key="BrushSwatchSuspBorder" Color="#64748B"/>
+        <SolidColorBrush x:Key="BrushSwatchSuspFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchNewBg" Color="#86EFAC"/>
+        <SolidColorBrush x:Key="BrushSwatchNewBorder" Color="#22C55E"/>
+        <SolidColorBrush x:Key="BrushSwatchNewFg" Color="#0F172A"/>
+        <SolidColorBrush x:Key="BrushSwatchExitBg" Color="#FCA5A5"/>
+        <SolidColorBrush x:Key="BrushSwatchExitBorder" Color="#EF4444"/>
+        <SolidColorBrush x:Key="BrushSwatchExitFg" Color="#0F172A"/>
 
         <!-- Key Combo Badge Style -->
         <Style x:Key="KeyBadge" TargetType="Border">
@@ -50,7 +71,7 @@
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="#0284C7"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushAccent}"/>
             <Setter Property="Margin" Value="0,8,0,4"/>
         </Style>
 
@@ -88,14 +109,14 @@
         <!-- Top Header Bar with Icon, Title and Version Badge -->
         <Border Grid.Row="0" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
-                <Border DockPanel.Dock="Right" Background="#0284C7" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.10.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                <Border DockPanel.Dock="Right" Background="{DynamicResource BrushBadgeBg}" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.11.0" Foreground="White" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
                     <Grid Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center">
                         <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12C20,14.4 18.9,16.5 17.2,17.9L15.8,16.5C17.2,15.3 18,13.7 18,12A6,6 0 0,0 12,6A6,6 0 0,0 6,12C6,13.7 6.8,15.3 8.2,16.5L6.8,17.9C5.1,16.5 4,14.4 4,12A8,8 0 0,1 12,4M12,8A4,4 0 0,0 8,12C8,13.1 8.5,14.1 9.3,14.7L13.4,10.6C13.2,10.2 13,9.8 13,9.4A1.4,1.4 0 0,1 14.4,8C14.8,8 15.2,8.2 15.6,8.4L17,7C15.6,5.8 13.9,5 12,5V8Z"
-                              Fill="#0284C7" Stretch="Uniform"/>
+                              Fill="{DynamicResource BrushAccent}" Stretch="Uniform"/>
                     </Grid>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="PSRPM - PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
@@ -284,7 +305,7 @@
                         <!-- Card 2: Ultra-Low Remote Target Overhead -->
                         <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
-                                <TextBlock Text="Ultra-Low Target Impact (&lt; 0.25% CPU, 2-10 ms Collection)" FontWeight="Bold" FontSize="13" Foreground="#0284C7"/>
+                                <TextBlock Text="Ultra-Low Target Impact (&lt; 0.25% CPU, 2-10 ms Collection)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource BrushAccent}"/>
                                 <TextBlock Text="- Queries ntdll!NtQuerySystemInformation(5) and kernel32!GlobalMemoryStatusEx in a single kernel transition into persistent 512 KB unmanaged memory.&#x0a;- Zero WmiPrvSE.exe CPU spikes, zero N+1 CIM GetOwner() roundtrips, and zero 5-second UI hangs from $p.Responding.&#x0a;- Dead process tokens, CPU baselines, and state maps are synchronously evicted every tick to eliminate memory growth."
                                            Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
@@ -311,7 +332,7 @@
                         <!-- Card 5: Safe Bulk Handle Enumeration -->
                         <Border Background="{DynamicResource BrushSurfaceBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="10">
                             <StackPanel>
-                                <TextBlock Text="Kernel Named-Pipe Deadlock Prevention" FontWeight="Bold" FontSize="13" Foreground="#DC2626"/>
+                                <TextBlock Text="Kernel Named-Pipe Deadlock Prevention" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource BrushKillFg}"/>
                                 <TextBlock Text="- When inspecting open kernel handles, synchronous File and Named-Pipe objects are bypassed during NtQueryObject(ObjectNameInformation) calls.&#x0a;- Completely prevents kernel deadlocks and frozen runspaces on Chromium / msedgewebview2.exe Mojo IPC pipes."
                                            Foreground="{DynamicResource BrushTextPrimary}" TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="18"/>
                             </StackPanel>
@@ -367,22 +388,22 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <Border Grid.Row="0" Grid.Column="0" Background="#FFE4E6" BorderBrush="#FDA4AF" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Services" FontSize="11" FontWeight="SemiBold" Foreground="#0F172A"/></Border>
+                                <Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource BrushSwatchSvcBg}" BorderBrush="{DynamicResource BrushSwatchSvcBorder}" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Services" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushSwatchSvcFg}"/></Border>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="Processes hosting Windows background services (svchost.exe, services.exe)" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="1" Grid.Column="0" Background="#E0E7FF" BorderBrush="#A5B4FC" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Own / User" FontSize="11" FontWeight="SemiBold" Foreground="#0F172A"/></Border>
+                                <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource BrushSwatchOwnBg}" BorderBrush="{DynamicResource BrushSwatchOwnBorder}" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Own / User" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushSwatchOwnFg}"/></Border>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="Interactive processes running within the operator's logon session" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="2" Grid.Column="0" Background="#67E8F9" BorderBrush="#06B6D4" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Packaged / WebView" FontSize="11" FontWeight="SemiBold" Foreground="#0F172A"/></Border>
+                                <Border Grid.Row="2" Grid.Column="0" Background="{DynamicResource BrushSwatchPkgBg}" BorderBrush="{DynamicResource BrushSwatchPkgBorder}" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Packaged / WebView" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushSwatchPkgFg}"/></Border>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="AppContainer, UWP, and Chromium msedgewebview2.exe child processes" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="3" Grid.Column="0" Background="#CBD5E1" BorderBrush="#94A3B8" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Suspended" FontSize="11" FontWeight="SemiBold" Foreground="#0F172A"/></Border>
+                                <Border Grid.Row="3" Grid.Column="0" Background="{DynamicResource BrushSwatchSuspBg}" BorderBrush="{DynamicResource BrushSwatchSuspBorder}" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Suspended" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushSwatchSuspFg}"/></Border>
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="Processes whose threads are suspended (WaitReason == Suspended)" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="4" Grid.Column="0" Background="#86EFAC" BorderBrush="#22C55E" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="New (1 Tick)" FontSize="11" FontWeight="SemiBold" Foreground="#0F172A"/></Border>
+                                <Border Grid.Row="4" Grid.Column="0" Background="{DynamicResource BrushSwatchNewBg}" BorderBrush="{DynamicResource BrushSwatchNewBorder}" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="New (1 Tick)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushSwatchNewFg}"/></Border>
                                 <TextBlock Grid.Row="4" Grid.Column="1" Text="Newly spawned process (flashes lime green for one refresh tick)" Style="{StaticResource ShortcutDescText}"/>
 
-                                <Border Grid.Row="5" Grid.Column="0" Background="#FCA5A5" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Exiting (1 Tick)" FontSize="11" FontWeight="SemiBold" Foreground="#0F172A"/></Border>
+                                <Border Grid.Row="5" Grid.Column="0" Background="{DynamicResource BrushSwatchExitBg}" BorderBrush="{DynamicResource BrushSwatchExitBorder}" BorderThickness="1" CornerRadius="2" Padding="6,1" Margin="0,2,8,2"><TextBlock Text="Exiting (1 Tick)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushSwatchExitFg}"/></Border>
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="Terminated process before removal from tree (flashes crimson for one tick)" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </GroupBox>
@@ -407,19 +428,19 @@
                                 <!-- App Vector Logo -->
                                 <Grid Grid.Column="0" Width="48" Height="48" HorizontalAlignment="Left" VerticalAlignment="Top">
                                     <Path Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12C20,14.4 18.9,16.5 17.2,17.9L15.8,16.5C17.2,15.3 18,13.7 18,12A6,6 0 0,0 12,6A6,6 0 0,0 6,12C6,13.7 6.8,15.3 8.2,16.5L6.8,17.9C5.1,16.5 4,14.4 4,12A8,8 0 0,1 12,4M12,8A4,4 0 0,0 8,12C8,13.1 8.5,14.1 9.3,14.7L13.4,10.6C13.2,10.2 13,9.8 13,9.4A1.4,1.4 0 0,1 14.4,8C14.8,8 15.2,8.2 15.6,8.4L17,7C15.6,5.8 13.9,5 12,5V8Z"
-                                          Fill="#0284C7" Stretch="Uniform"/>
+                                          Fill="{DynamicResource BrushAccent}" Stretch="Uniform"/>
                                 </Grid>
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
-                                        <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.10.0" Foreground="#0284C7" FontSize="11" FontWeight="Bold"/>
+                                        <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.11.0" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,4"/>
                                     <TextBlock Text="Copyright (c) 2026 exh555. Licensed under the MIT License." Foreground="{DynamicResource BrushTextMuted}" FontSize="10.5"/>
-                                    <TextBlock Text="Project &amp; Documentation: https://github.com/exh555/psrpm" Foreground="#0284C7" FontSize="10.5" Margin="0,2,0,0"/>
+                                    <TextBlock Text="Project &amp; Documentation: https://github.com/exh555/psrpm" Foreground="{DynamicResource BrushAccent}" FontSize="10.5" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </Grid>
                         </Border>

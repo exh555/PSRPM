@@ -15,13 +15,13 @@ $script:PSRPMActionScriptBlock = {
         [long]$ExpectedStartTime = 0L
     )
 
-    if (-not ('PSRPM.NativeActionsV3' -as [type])) {
+    if (-not ('PSRPM.NativeActionsV4' -as [type])) {
         $dynAsm = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
-            [System.Reflection.AssemblyName]::new("PSRPMNativeActionsV3Asm"),
+            [System.Reflection.AssemblyName]::new("PSRPMNativeActionsV4Asm"),
             [System.Reflection.Emit.AssemblyBuilderAccess]::Run
         )
-        $dynMod = $dynAsm.DefineDynamicModule("PSRPMNativeActionsV3Mod")
-        $tb = $dynMod.DefineType("PSRPM.NativeActionsV3", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
+        $dynMod = $dynAsm.DefineDynamicModule("PSRPMNativeActionsV4Mod")
+        $tb = $dynMod.DefineType("PSRPM.NativeActionsV4", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
 
         $dllImpCtor = [System.Runtime.InteropServices.DllImportAttribute].GetConstructor(@([string]))
         $fSetLast   = [System.Runtime.InteropServices.DllImportAttribute].GetField("SetLastError")
@@ -57,6 +57,7 @@ $script:PSRPMActionScriptBlock = {
         &$addPInvoke "NtResumeProcess"            "ntdll.dll"    ([int])    @([IntPtr])
         &$addPInvoke "NtQuerySystemInformation"  "ntdll.dll"    ([int])    @([int], [IntPtr], [int], [int].MakeByRefType())
         &$addPInvoke "MiniDumpWriteDump"          "dbghelp.dll"  ([int])    @([IntPtr], [uint32], [IntPtr], [int], [IntPtr], [IntPtr], [IntPtr])
+        &$addPInvoke "SetTcpEntry"                "iphlpapi.dll" ([int])    @([IntPtr])
 
         [void]$tb.CreateType()
     }
@@ -74,7 +75,7 @@ $script:PSRPMActionScriptBlock = {
         param([IntPtr]$hTarget, [int]$procId, [long]$expStart, [string]$expImgName)
         if ($expStart -gt 0L) {
             $ftC = 0L; $ftE = 0L; $ftK = 0L; $ftU = 0L
-            if ([PSRPM.NativeActionsV3]::GetProcessTimes($hTarget, [ref]$ftC, [ref]$ftE, [ref]$ftK, [ref]$ftU) -eq 0) {
+            if ([PSRPM.NativeActionsV4]::GetProcessTimes($hTarget, [ref]$ftC, [ref]$ftE, [ref]$ftK, [ref]$ftU) -eq 0) {
                 $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                 throw "PID $procId identity verification failed: unable to query CreationTime (Win32 Error: $err). Aborting action."
             }
@@ -85,7 +86,7 @@ $script:PSRPMActionScriptBlock = {
         if (-not [string]::IsNullOrWhiteSpace($expImgName)) {
             $sbImg = [System.Text.StringBuilder]::new(1024)
             $imgCap = $sbImg.Capacity
-            if ([PSRPM.NativeActionsV3]::QueryFullProcessImageNameW($hTarget, 0, $sbImg, [ref]$imgCap) -eq 0) {
+            if ([PSRPM.NativeActionsV4]::QueryFullProcessImageNameW($hTarget, 0, $sbImg, [ref]$imgCap) -eq 0) {
                 $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                 throw "PID $procId identity verification failed: unable to query executable image name (Win32 Error: $err). Aborting action."
             }
@@ -106,14 +107,14 @@ $script:PSRPMActionScriptBlock = {
                 }
                 $needsIdentityCheck = ($ExpectedStartTime -gt 0L) -or (-not [string]::IsNullOrWhiteSpace($ExpectedName))
                 # Open with PROCESS_QUERY_LIMITED_INFORMATION (0x1000) | PROCESS_TERMINATE (0x0001)
-                $hProc = [PSRPM.NativeActionsV3]::OpenProcess(0x1001, 0, $TargetPid)
+                $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x1001, 0, $TargetPid)
                 if ($hProc -eq [IntPtr]::Zero) {
                     if ($needsIdentityCheck) {
                         $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                         throw "PID $TargetPid identity verification failed: cannot open with query+terminate access (Win32 Error: $err)."
                     }
                     # Fallback to PROCESS_TERMINATE (0x0001) only when no identity expectations were supplied
-                    $hProc = [PSRPM.NativeActionsV3]::OpenProcess(0x0001, 0, $TargetPid)
+                    $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x0001, 0, $TargetPid)
                 }
                 if ($hProc -eq [IntPtr]::Zero) {
                     $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
@@ -121,7 +122,7 @@ $script:PSRPMActionScriptBlock = {
                 }
                 try {
                     &$verifyProcessIdentity $hProc $TargetPid $ExpectedStartTime $ExpectedName
-                    if ([PSRPM.NativeActionsV3]::TerminateProcess($hProc, 1) -eq 0) {
+                    if ([PSRPM.NativeActionsV4]::TerminateProcess($hProc, 1) -eq 0) {
                         $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                         throw "TerminateProcess failed on PID $TargetPid (Win32 Error: $err)."
                     }
@@ -129,7 +130,7 @@ $script:PSRPMActionScriptBlock = {
                     $res.Status  = "Success"
                     $res.Message = "Terminated process '$ExpectedName' (PID: $TargetPid)."
                 } finally {
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($hProc)
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hProc)
                 }
             }
 
@@ -147,7 +148,7 @@ $script:PSRPMActionScriptBlock = {
                 try {
                     $sysBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysBufSize)
                     $retLen = 0
-                    $status = [PSRPM.NativeActionsV3]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
+                    $status = [PSRPM.NativeActionsV4]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
                     $reallocAttempts = 0
                     while ($status -eq -1073741820 -and $reallocAttempts -lt 6 -and $sysBufSize -lt 67108864) { # STATUS_INFO_LENGTH_MISMATCH
                         $reallocAttempts++
@@ -155,7 +156,7 @@ $script:PSRPMActionScriptBlock = {
                         $sysBufPtr = [IntPtr]::Zero
                         $sysBufSize = [Math]::Min(67108864, [Math]::Max($sysBufSize * 2, $retLen + 65536))
                         $sysBufPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($sysBufSize)
-                        $status = [PSRPM.NativeActionsV3]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
+                        $status = [PSRPM.NativeActionsV4]::NtQuerySystemInformation(5, $sysBufPtr, $sysBufSize, [ref]$retLen)
                     }
 
                     if ($status -ne 0) {
@@ -244,10 +245,10 @@ $script:PSRPMActionScriptBlock = {
                     foreach ($pIdVal in $orderedTree) {
                         if ($pIdVal -le 4) { continue }
                         # Open with PROCESS_SUSPEND_RESUME (0x0800) | PROCESS_QUERY_LIMITED_INFORMATION (0x1000) | PROCESS_TERMINATE (0x0001)
-                        $h = [PSRPM.NativeActionsV3]::OpenProcess(0x1801, 0, $pIdVal)
+                        $h = [PSRPM.NativeActionsV4]::OpenProcess(0x1801, 0, $pIdVal)
                         if ($h -eq [IntPtr]::Zero) {
                             # Fallback without suspend, keeping query + terminate rights
-                            $h = [PSRPM.NativeActionsV3]::OpenProcess(0x1001, 0, $pIdVal)
+                            $h = [PSRPM.NativeActionsV4]::OpenProcess(0x1001, 0, $pIdVal)
                         }
                         if ($h -ne [IntPtr]::Zero) {
                             $expTimeForPid = if ($pIdVal -eq $TargetPid -and $ExpectedStartTime -gt 0L) {
@@ -271,7 +272,7 @@ $script:PSRPMActionScriptBlock = {
                             } catch {
                                 $verified = $false
                                 if ($pIdVal -eq $TargetPid) {
-                                    [void][PSRPM.NativeActionsV3]::CloseHandle($h)
+                                    [void][PSRPM.NativeActionsV4]::CloseHandle($h)
                                     $h = [IntPtr]::Zero
                                     throw
                                 }
@@ -280,7 +281,7 @@ $script:PSRPMActionScriptBlock = {
                                 $openHandles[$pIdVal] = $h
                             } else {
                                 if ($h -ne [IntPtr]::Zero) {
-                                    [void][PSRPM.NativeActionsV3]::CloseHandle($h)
+                                    [void][PSRPM.NativeActionsV4]::CloseHandle($h)
                                     $h = [IntPtr]::Zero
                                 }
                                 $failedPids.Add($pIdVal)
@@ -293,7 +294,7 @@ $script:PSRPMActionScriptBlock = {
                     # Phase 1: Top-Down Suspend (Freezes supervisors & watchdogs so they cannot respawn workers)
                     foreach ($pIdVal in $orderedTree) {
                         if ($openHandles.ContainsKey($pIdVal)) {
-                            [void][PSRPM.NativeActionsV3]::NtSuspendProcess($openHandles[$pIdVal])
+                            [void][PSRPM.NativeActionsV4]::NtSuspendProcess($openHandles[$pIdVal])
                         }
                     }
 
@@ -302,7 +303,7 @@ $script:PSRPMActionScriptBlock = {
                     for ($i = $orderedTree.Count - 1; $i -ge 0; $i--) {
                         $killId = $orderedTree[$i]
                         if ($openHandles.ContainsKey($killId)) {
-                            $ok = [PSRPM.NativeActionsV3]::TerminateProcess($openHandles[$killId], 1)
+                            $ok = [PSRPM.NativeActionsV4]::TerminateProcess($openHandles[$killId], 1)
                             if ($ok -ne 0) {
                                 $killedCount++
                             } else {
@@ -322,8 +323,8 @@ $script:PSRPMActionScriptBlock = {
                 } finally {
                     # Phase 3: Guaranteed Cleanup & Resumption (Resume any survivors, close all pinned handles)
                     foreach ($h in $openHandles.Values) {
-                        try { [void][PSRPM.NativeActionsV3]::NtResumeProcess($h) } catch {}
-                        try { [void][PSRPM.NativeActionsV3]::CloseHandle($h) } catch {}
+                        try { [void][PSRPM.NativeActionsV4]::NtResumeProcess($h) } catch {}
+                        try { [void][PSRPM.NativeActionsV4]::CloseHandle($h) } catch {}
                     }
                 }
             }
@@ -333,19 +334,19 @@ $script:PSRPMActionScriptBlock = {
                     throw "Cannot suspend critical system process (PID $TargetPid)."
                 }
                 # PROCESS_SUSPEND_RESUME (0x0800) | PROCESS_QUERY_LIMITED_INFORMATION (0x1000)
-                $hProc = [PSRPM.NativeActionsV3]::OpenProcess(0x1800, 0, $TargetPid)
+                $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x1800, 0, $TargetPid)
                 if ($hProc -eq [IntPtr]::Zero) {
                     $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                     throw "Access denied opening PID $TargetPid for PROCESS_SUSPEND_RESUME | QUERY (Win32 Error: $err)."
                 }
                 try {
                     &$verifyProcessIdentity $hProc $TargetPid $ExpectedStartTime $ExpectedName
-                    $ntStatus = [PSRPM.NativeActionsV3]::NtSuspendProcess($hProc)
+                    $ntStatus = [PSRPM.NativeActionsV4]::NtSuspendProcess($hProc)
                     if ($ntStatus -ne 0) {
                         throw "NtSuspendProcess failed with NTSTATUS 0x$($ntStatus.ToString('X8'))."
                     }
                 } finally {
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($hProc)
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hProc)
                 }
                 if ($script:LastDynState -and $script:ActivePidToKey -and $script:ActivePidToKey.ContainsKey($TargetPid)) {
                     $script:LastDynState.Remove($script:ActivePidToKey[$TargetPid])
@@ -360,19 +361,19 @@ $script:PSRPMActionScriptBlock = {
                     throw "Cannot resume critical system process (PID $TargetPid)."
                 }
                 # PROCESS_SUSPEND_RESUME (0x0800) | PROCESS_QUERY_LIMITED_INFORMATION (0x1000)
-                $hProc = [PSRPM.NativeActionsV3]::OpenProcess(0x1800, 0, $TargetPid)
+                $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x1800, 0, $TargetPid)
                 if ($hProc -eq [IntPtr]::Zero) {
                     $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                     throw "Access denied opening PID $TargetPid for PROCESS_SUSPEND_RESUME | QUERY (Win32 Error: $err)."
                 }
                 try {
                     &$verifyProcessIdentity $hProc $TargetPid $ExpectedStartTime $ExpectedName
-                    $ntStatus = [PSRPM.NativeActionsV3]::NtResumeProcess($hProc)
+                    $ntStatus = [PSRPM.NativeActionsV4]::NtResumeProcess($hProc)
                     if ($ntStatus -ne 0) {
                         throw "NtResumeProcess failed with NTSTATUS 0x$($ntStatus.ToString('X8'))."
                     }
                 } finally {
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($hProc)
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hProc)
                 }
                 if ($script:LastDynState -and $script:ActivePidToKey -and $script:ActivePidToKey.ContainsKey($TargetPid)) {
                     $script:LastDynState.Remove($script:ActivePidToKey[$TargetPid])
@@ -398,7 +399,7 @@ $script:PSRPMActionScriptBlock = {
                 $targetHandle = [IntPtr]$hValLong
 
                 # Open target process with PROCESS_QUERY_LIMITED_INFORMATION (0x1000) | PROCESS_DUP_HANDLE (0x0040)
-                $hProc = [PSRPM.NativeActionsV3]::OpenProcess(0x1040, 0, $TargetPid)
+                $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x1040, 0, $TargetPid)
                 if ($hProc -eq [IntPtr]::Zero) {
                     $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                     throw "Failed to open target process (PID $TargetPid) with PROCESS_DUP_HANDLE | QUERY (Win32 Error: $err)."
@@ -409,23 +410,23 @@ $script:PSRPMActionScriptBlock = {
 
                     # Dual-Phase Verification: Probe handle validity first with DUPLICATE_SAME_ACCESS (0x02)
                     $dupProbe = [IntPtr]::Zero
-                    $hCurrentProc = [PSRPM.NativeActionsV3]::GetCurrentProcess()
+                    $hCurrentProc = [PSRPM.NativeActionsV4]::GetCurrentProcess()
                     try {
-                        $probeRet = [PSRPM.NativeActionsV3]::DuplicateHandle($hProc, $targetHandle, $hCurrentProc, [ref]$dupProbe, 0, 0, 2)
+                        $probeRet = [PSRPM.NativeActionsV4]::DuplicateHandle($hProc, $targetHandle, $hCurrentProc, [ref]$dupProbe, 0, 0, 2)
                         if ($probeRet -eq 0) {
                             $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                             throw "Handle verification failed: Handle $HandleId in process (PID: $TargetPid) is invalid or already closed (Win32 Error: $err)."
                         }
                     } finally {
                         if ($dupProbe -ne [IntPtr]::Zero) {
-                            [void][PSRPM.NativeActionsV3]::CloseHandle($dupProbe)
+                            [void][PSRPM.NativeActionsV4]::CloseHandle($dupProbe)
                             $dupProbe = [IntPtr]::Zero
                         }
                     }
 
                     # Execution Phase: Close source handle via DUPLICATE_CLOSE_SOURCE (0x01)
                     $dup = [IntPtr]::Zero
-                    $ret = [PSRPM.NativeActionsV3]::DuplicateHandle($hProc, $targetHandle, [IntPtr]::Zero, [ref]$dup, 0, 0, 1)
+                    $ret = [PSRPM.NativeActionsV4]::DuplicateHandle($hProc, $targetHandle, [IntPtr]::Zero, [ref]$dup, 0, 0, 1)
                     if ($ret -eq 0) {
                         $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                         throw "DuplicateHandle(DUPLICATE_CLOSE_SOURCE) failed with Win32 error code: $err."
@@ -434,7 +435,7 @@ $script:PSRPMActionScriptBlock = {
                     $res.Status  = "Success"
                     $res.Message = "Closed handle $HandleId in process (PID: $TargetPid)."
                 } finally {
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($hProc)
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hProc)
                 }
             }
 
@@ -444,7 +445,7 @@ $script:PSRPMActionScriptBlock = {
                 }
 
                 # Open process first with PROCESS_QUERY_INFORMATION (0x0400) | PROCESS_VM_READ (0x0010) and verify identity
-                $hProc = [PSRPM.NativeActionsV3]::OpenProcess(0x0410, 0, $TargetPid)
+                $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x0410, 0, $TargetPid)
                 if ($hProc -eq [IntPtr]::Zero) {
                     $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                     throw "Failed to open process (PID $TargetPid) for memory dump (Win32 error: $err)."
@@ -544,7 +545,7 @@ $script:PSRPMActionScriptBlock = {
                     )
                     try {
                         $hFile = $fs.SafeFileHandle.DangerousGetHandle()
-                        $ok = [PSRPM.NativeActionsV3]::MiniDumpWriteDump($hProc, [uint32]$TargetPid, $hFile, $dumpTypeFlags, [IntPtr]::Zero, [IntPtr]::Zero, [IntPtr]::Zero)
+                        $ok = [PSRPM.NativeActionsV4]::MiniDumpWriteDump($hProc, [uint32]$TargetPid, $hFile, $dumpTypeFlags, [IntPtr]::Zero, [IntPtr]::Zero, [IntPtr]::Zero)
                         if ($ok -eq 0) {
                             $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                             throw "MiniDumpWriteDump failed (Win32 error: $err)."
@@ -568,7 +569,7 @@ $script:PSRPMActionScriptBlock = {
                     $res.ElapsedMs     = $sw.ElapsedMilliseconds
                 } finally {
                     if ($p) { $p.Dispose() }
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($hProc)
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hProc)
                 }
             }
 
@@ -580,7 +581,7 @@ $script:PSRPMActionScriptBlock = {
                 if ($Priority -notin $allowedPriorities) {
                     throw "Refused priority '$Priority': allowed values are $($allowedPriorities -join ', ')."
                 }
-                $hId = [PSRPM.NativeActionsV3]::OpenProcess(0x1000, 0, $TargetPid) # PROCESS_QUERY_LIMITED_INFORMATION
+                $hId = [PSRPM.NativeActionsV4]::OpenProcess(0x1000, 0, $TargetPid) # PROCESS_QUERY_LIMITED_INFORMATION
                 if ($hId -eq [IntPtr]::Zero) {
                     $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
                     throw "PID $TargetPid identity verification failed opening process (Win32 Error: $err)."
@@ -592,7 +593,7 @@ $script:PSRPMActionScriptBlock = {
                     $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$Priority
                 } finally {
                     if ($p) { $p.Dispose() }
-                    [void][PSRPM.NativeActionsV3]::CloseHandle($hId)
+                    [void][PSRPM.NativeActionsV4]::CloseHandle($hId)
                 }
                 $res.Success = $true
                 $res.Status  = "Success"
@@ -643,6 +644,67 @@ $script:PSRPMActionScriptBlock = {
                 $res.Success = $true
                 $res.Status  = "Success"
                 $res.Message = "Service '$ServiceName' action '$op' completed successfully."
+            }
+
+            "CloseTcpConnection" {
+                if ([string]::IsNullOrWhiteSpace($HandleId)) {
+                    throw "HandleId is required to close a TCP connection (expected 'LocalIP|LocalPort|RemoteIP|RemotePort')."
+                }
+                $epParts = $HandleId.Split('|')
+                if ($epParts.Count -ne 4) {
+                    throw "Invalid TCP endpoint specification '$HandleId'."
+                }
+                $locIpObj = $null
+                $remIpObj = $null
+                if (-not [System.Net.IPAddress]::TryParse($epParts[0], [ref]$locIpObj) -or
+                    -not [System.Net.IPAddress]::TryParse($epParts[2], [ref]$remIpObj)) {
+                    throw "Invalid IPv4 address in endpoint '$HandleId'."
+                }
+                if ($locIpObj.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or
+                    $remIpObj.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+                    throw "Windows SetTcpEntry API supports closing IPv4 TCP connections only."
+                }
+                $locPort = 0
+                $remPort = 0
+                if (-not [int]::TryParse($epParts[1], [ref]$locPort) -or
+                    -not [int]::TryParse($epParts[3], [ref]$remPort) -or
+                    $locPort -lt 1 -or $locPort -gt 65535 -or $remPort -lt 0 -or $remPort -gt 65535) {
+                    throw "Invalid TCP port range in endpoint '$HandleId'."
+                }
+
+                $locBytes = $locIpObj.GetAddressBytes()
+                $remBytes = $remIpObj.GetAddressBytes()
+                $locPortNet = (($locPort -band 0xFF) -shl 8) -bor (($locPort -shr 8) -band 0xFF)
+                $remPortNet = (($remPort -band 0xFF) -shl 8) -bor (($remPort -shr 8) -band 0xFF)
+
+                $rowPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(20)
+                try {
+                    # MIB_TCPROW: +0 dwState (12 = MIB_TCP_STATE_DELETE_TCB), +4 dwLocalAddr, +8 dwLocalPort, +12 dwRemoteAddr, +16 dwRemotePort
+                    [System.Runtime.InteropServices.Marshal]::WriteInt32($rowPtr, 0, 12)
+                    [System.Runtime.InteropServices.Marshal]::Copy($locBytes, 0, [IntPtr]($rowPtr.ToInt64() + 4), 4)
+                    [System.Runtime.InteropServices.Marshal]::WriteInt32($rowPtr, 8, $locPortNet)
+                    [System.Runtime.InteropServices.Marshal]::Copy($remBytes, 0, [IntPtr]($rowPtr.ToInt64() + 12), 4)
+                    [System.Runtime.InteropServices.Marshal]::WriteInt32($rowPtr, 16, $remPortNet)
+
+                    $setRet = [PSRPM.NativeActionsV4]::SetTcpEntry($rowPtr)
+                    if ($setRet -ne 0) {
+                        if ($setRet -eq 5 -or $setRet -eq 740) {
+                            throw "Access denied closing TCP connection $($epParts[0]):$locPort -> $($epParts[2]):$remPort (Administrator privileges required; Win32 error $setRet)."
+                        }
+                        if ($setRet -eq 317 -or $setRet -eq 87 -or $setRet -eq 1168) {
+                            throw "TCP connection $($epParts[0]):$locPort -> $($epParts[2]):$remPort could not be closed or no longer exists (Win32 error $setRet)."
+                        }
+                        throw "SetTcpEntry failed for $($epParts[0]):$locPort -> $($epParts[2]):$remPort (Win32 error $setRet)."
+                    }
+                    $res.Success = $true
+                    $res.Status  = "Success"
+                    $res.Message = "Closed TCP connection $($epParts[0]):$locPort -> $($epParts[2]):$remPort."
+                } finally {
+                    if ($rowPtr -ne [IntPtr]::Zero) {
+                        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($rowPtr)
+                        $rowPtr = [IntPtr]::Zero
+                    }
+                }
             }
 
             default {

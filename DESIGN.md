@@ -33,45 +33,50 @@
 ## 3. Complete Color Token Palette
 
 ### A. Surface & Structural Chrome
-| Token Name | Clean Light | Precision Dark | Visual Role |
-| :--- | :--- | :--- | :--- |
-| `BrushWindowBg` | `#F8FAFC` | `#0B0F17` | Window background and outer frame |
-| `BrushToolbarBg` | `#F1F5F9` | `#111827` | Toolbar, command bar, and summary strip |
-| `BrushSurfaceBg` | `#FFFFFF` | `#0F172A` | DataGrid background and dialog surfaces |
-| `BrushHeaderBg` | `#E2E8F0` | `#1E293B` | Menu bar, column headers, and status bar |
-| `BrushBorderSubtle` | `#CBD5E1` | `#26334D` | 1px dividers, grid lines, and panel borders |
-| `BrushTreeLine` | `#64748B` | `#64748B` | Pixel-snapped parent-child tree vectors |
-| `BrushTextPrimary` | `#0F172A` | `#F8FAFC` | Primary data, process names, headings |
-| `BrushTextSecondary` | `#334155` | `#CBD5E1` | Descriptions, company names, secondary values |
-| `BrushTextMuted` | `#64748B` | `#94A3B8` | Watermarks, zero values, dimmed filter ancestors |
-| `BrushMenuBg` | `#FFFFFF` | `#161F30` | Dropdown menu and context menu popup background |
-| `BrushMenuBorder` | `#CBD5E1` | `#334155` | Menu popup 1px perimeter border |
-| `BrushMenuHover` | `#F1F5F9` | `#26354D` | Menu and context item interactive hover background |
+| Token Name | Clean Light | Precision Dark | Tokyo Night | Tokyo Night Light | Visual Role |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `BrushWindowBg` | `#F8FAFC` | `#0B0F17` | `#16161E` | `#D6D8DF` | Window background and outer frame |
+| `BrushToolbarBg` | `#F1F5F9` | `#111827` | `#16161E` | `#DADCE3` | Toolbar, command bar, and summary strip |
+| `BrushSurfaceBg` | `#FFFFFF` | `#0F172A` | `#1A1B26` | `#E6E7ED` | DataGrid background and dialog surfaces |
+| `BrushHeaderBg` | `#E2E8F0` | `#1E293B` | `#1F2335` | `#D0D2DA` | Menu bar, column headers, and status bar |
+| `BrushBorderSubtle` | `#CBD5E1` | `#26334D` | `#292E42` | `#C1C2C7` | 1px dividers, grid lines, and panel borders |
+| `BrushTreeLine` | `#64748B` | `#64748B` | `#565F89` | `#707280` | Pixel-snapped parent-child tree vectors |
+| `BrushTextPrimary` | `#0F172A` | `#F8FAFC` | `#C0CAF5` | `#343B59` | Primary data, process names, headings |
+| `BrushTextSecondary` | `#334155` | `#CBD5E1` | `#A9B1D6` | `#40434F` | Descriptions, company names, secondary values |
+| `BrushTextMuted` | `#64748B` | `#94A3B8` | `#7E85A8` | `#5A607D` | Watermarks, zero values, dimmed filter ancestors |
+| `BrushAccent` | `#0284C7` | `#38BDF8` | `#7AA2F7` | `#2959AA` | Selected tab indicator, toolbar icons, dialog highlights |
+| `BrushBadgeBg` | `#0284C7` | `#0284C7` | `#3D59A1` | `#2959AA` | Transport and target badge fill backgrounds |
+| `BrushSparkGrid` | `#CBD5E1` | `#334155` | `#292E42` | `#C1C2C7` | System Information chart gridline stroke |
+| `BrushMenuBg` | `#FFFFFF` | `#161F30` | `#16161E` | `#D6D8DF` | Dropdown menu and context menu popup background |
+| `BrushMenuBorder` | `#CBD5E1` | `#334155` | `#292E42` | `#C1C2C7` | Menu popup 1px perimeter border |
+| `BrushMenuHover` | `#F1F5F9` | `#26354D` | `#202330` | `#E1E2E8` | Menu and context item interactive hover background |
+| `BrushLogBg` | `#0F172A` | `#090D16` | `#16161E` | `#E6E7ED` | Audit & Network Telemetry console background |
 
 ### B. Process Explorer Semantic Row Categories
 Semantic row coloring matches Sysinternals Process Explorer conventions, ordered by strict precedence:
 
-| Category | Precedence | Clean Light | Precision Dark | Operational Meaning |
-| :--- | :---: | :--- | :--- | :--- |
-| **New Process** | 1 (Highest) | `#86EFAC` | `#14532D` | Process spawned in the current tick (1-tick Lime Green flash) |
-| **Exiting Process** | 2 | `#FCA5A5` | `#7F1D1D` | Process exited in the current tick (1-tick Crimson Red flash) |
-| **Suspended** | 3 | `#CBD5E1` | `#334155` | All threads suspended (`WaitReason == Suspended`) |
-| **High CPU (>50%)** | 4 | `#FDE68A` | `#451A03` | Process consuming > 50% CPU |
-| **Packaged / WebView2**| 5 | `#A5F3FC` | `#0E3A47` | AppContainer / UWP / `msedgewebview2` / `RuntimeBroker` |
-| **Service Process** | 6 | `#FFE4E6` | `#3B1824` | Hosts Windows Services (`svchost.exe`, `services.exe`) |
-| **Own / User Process** | 7 | `#E0E7FF` | `#1E2646` | Process running in operator's interactive user session |
-| **System / Kernel** | 8 (Default) | `#FFFFFF` | `#0F172A` | System / Kernel Session 0 background process |
+| Category | Precedence | Clean Light | Precision Dark | Tokyo Night | Tokyo Night Light | Operational Meaning |
+| :--- | :---: | :--- | :--- | :--- | :--- | :--- |
+| **New Process** | 1 (Highest) | `#86EFAC` | `#14532D` | `#1C382E` | `#CFE3CC` | Process spawned in the current tick (1-tick flash) |
+| **Exiting Process** | 2 | `#FCA5A5` | `#7F1D1D` | `#3D1F2B` | `#EDD0D5` | Process exited in the current tick (1-tick flash) |
+| **Suspended** | 3 | `#94A3B8` | `#334155` | `#292E42` | `#CFD2DC` | All threads suspended (`WaitReason == Suspended`) |
+| **High CPU (>50%)** | 4 | `#FDE68A` | `#451A03` | `#362A1C` | `#EBE0C5` | Process consuming > 50% CPU |
+| **Packaged / WebView2**| 5 | `#67E8F9` | `#0E3A47` | `#172D3A` | `#CDE3EA` | AppContainer / UWP / `msedgewebview2` / `RuntimeBroker` |
+| **Service Process** | 6 | `#FFE4E6` | `#3B1824` | `#2C1F35` | `#EBD8E4` | Hosts Windows Services (`svchost.exe`, `services.exe`) |
+| **Own / User Process** | 7 | `#E0E7FF` | `#1E2646` | `#202A46` | `#D6DDF0` | Process running in operator's interactive user session |
+| **System / Kernel** | 8 (Default) | `#FFFFFF` | `#0F172A` | `#1A1B26` | `#E6E7ED` | System / Kernel Session 0 background process |
 
 ### C. Vertical Column Metric Tints
 Vertical column highlights provide immediate peripheral vision for resource utilization:
-- **`ColTint_CPU`**: `#2222C55E` (Light) / `#1422C55E` (Dark) -- Soft Emerald Green
-- **`ColTint_PrivateBytes`**: `#28EAB308` (Light) / `#14EAB308` (Dark) -- Soft Amber Yellow
-- **`ColTint_WorkingSet`**: `#22F97316` (Light) / `#14F97316` (Dark) -- Soft Tangerine Orange
+- **`ColTint_CPU`**: `#2222C55E` (Light) / `#1422C55E` (Dark) / `#149ECE6A` (Tokyo Night) / `#1F385F0D` (Tokyo Night Light) -- Soft Emerald Green
+- **`ColTint_Net`**: `#1A0284C7` (Light) / `#120284C7` (Dark) / `#147AA2F7` (Tokyo Night) / `#1A2959AA` (Tokyo Night Light) -- Soft Sky / Tokyo Blue
+- **`ColTint_PrivateBytes`**: `#28EAB308` (Light) / `#14EAB308` (Dark) / `#14E0AF68` (Tokyo Night) / `#228F5E15` (Tokyo Night Light) -- Soft Amber Yellow
+- **`ColTint_WorkingSet`**: `#22F97316` (Light) / `#14F97316` (Dark) / `#14FF9E64` (Tokyo Night) / `#1F965027` (Tokyo Night Light) -- Soft Tangerine Orange
 
 ### D. Interactive States
-- **Row Selected**: `BrushRowSelectedBg` (`#006CBE` Light / `#0369A1` Dark) with `BrushRowSelectedFg = #FFFFFF` across all cells.
-- **Row Hover**: `BrushRowHover` (`#220284C7` Light / `#330284C7` Dark).
-- **Sparkline Canvas**: `BrushSparkBg` (`#FFFFFF` Light / `#090D16` Dark) with `BrushSparkBorder` (`#94A3B8` Light / `#334155` Dark).
+- **Row Selected**: `BrushRowSelectedBg` (`#006CBE` Light / `#0369A1` Dark / `#3D59A1` Tokyo Night / `#2959AA` Tokyo Night Light) with `BrushRowSelectedFg = #FFFFFF` across all cells.
+- **Row Hover**: `BrushRowHover` (`#220284C7` Light / `#330284C7` Dark / `#202330` Tokyo Night / `#DCDEE3` Tokyo Night Light).
+- **Sparkline Canvas**: `BrushSparkBg` (`#FFFFFF` Light / `#090D16` Dark / `#16161E` Tokyo Night / `#E6E7ED` Tokyo Night Light) with `BrushSparkBorder` (`#94A3B8` Light / `#334155` Dark / `#292E42` Tokyo Night / `#C1C2C7` Tokyo Night Light).
 
 ---
 
