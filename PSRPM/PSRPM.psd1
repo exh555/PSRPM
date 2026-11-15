@@ -3,10 +3,10 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.13.0'
+    ModuleVersion     = '1.13.1'
 
     # Supported PSEditions
-    CompatiblePSEditions = @('Desktop', 'Core')
+    CompatiblePSEditions = @('Desktop')
 
     # ID used to uniquely identify this module
     GUID              = '8f4d9a2c-51b7-4e63-9c1e-3a7f2b8d9014'
@@ -78,10 +78,11 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Zero-arg Local Mode and non-blocking STA background launch by default (-Wait to block, -Defaults to skip saved preferences)
-- Added CPUDelta baseline diff column (31-column catalog) with BaselineCPU tracking and numeric sorting
-- Full 6-theme WCAG 2.1 AA (>=4.5:1) contrast tokens and UIA AutomationProperties.Name accessibility across all 8 XAML windows
-- UX hardening: opt-in unsaved preferences cue, responsive toolbar wrap, empty-state filter overlays, Space focus isolation, Network row Enter/double-click navigation, inline ConnectDialog validation, cancellable Find Handle search, and actionable Win32/SCM Hint errors
+- Multi-tab resync recovery, stale process/service pruning on full snapshots, and CloseTabSession NextTabId routing
+- Self-PID protection in KillTree and SuspendProcess, plus host-switch rebinding for FindHandleWindow and SystemInfoWindow
+- Live CPUDelta sorting, >24h CPU time formatting, persisted TCP EStats fallback state, and elapsed-time I/O & Disk KB/s rate accuracy
+- Windows PowerShell 5.1 (Desktop) edition guard (PSRPM.psd1 + Start-PSRPM) and updated documentation
+- Global Ctrl+D theme cycling across all 7 child windows and dark-theme TabControl/TabItem/CheckBox/GroupBox contrast fixes
 '@
         }
     }

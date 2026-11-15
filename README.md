@@ -1,12 +1,12 @@
 # PSRPM — PowerShell Remote Process Manager
 
-[![Version: 1.13.0](https://img.shields.io/badge/version-1.13.0-0284c7.svg)](CHANGELOG.md)
-[![PowerShell 5.1 | 7+](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-5391FE.svg)](PSRPM/PSRPM.psd1)
+[![Version: 1.13.1](https://img.shields.io/badge/version-1.13.1-0284c7.svg)](CHANGELOG.md)
+[![Windows PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1%20Desktop-5391FE.svg)](PSRPM/PSRPM.psd1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **Sysinternals Process Explorer, TCPView-style socket inspection, and Services/Handle forensics over a single persistent WinRM `PSSession` — zero remote agents, zero temporary files on disk, and `< 0.25%` remote CPU.**
 
-Built natively for Windows PowerShell 5.1 and PowerShell 7+ using WPF and pure in-memory `.NET Reflection.Emit`, PSRPM gives systems administrators, SREs, and incident responders high-density process diagnostics both locally (zero-argument default / `-LocalOnly`) and on remote servers (`-ComputerName`).
+Built natively for Windows PowerShell 5.1 (`Desktop` edition) using WPF and pure in-memory `.NET Reflection.Emit`, PSRPM gives systems administrators, SREs, and incident responders high-density process diagnostics both locally (zero-argument default / `-LocalOnly`) and on remote servers (`-ComputerName`).
 
 ![PSRPM Main Window — Hierarchical Process Tree, Semantic Highlighting, and Live Telemetry Sparklines](docs/screenshots/01_process_tree_light.png)
 *Clean Light theme showing the vector Process Tree-Grid, Multi-Host Tabbed Session Bar, toolbar CPU/Commit/RAM sparklines, and live semantic status pills. See all captures in the **[Screenshot Tour](docs/screenshots/README.md)** (Dark, Tokyo Night, High-Contrast, Classic themes, and `Network Activity` use the same shared theme token engine).*
@@ -30,7 +30,7 @@ psrpm -ComputerName "SRV-PROD-01" -Credential (Get-Credential)
 psrpm -ComputerName "SRV-PROD-01" -Theme TokyoNight -Wait
 ```
 
-> **Prerequisites**: Windows desktop session (WPF) running Windows PowerShell 5.1 or PowerShell 7+ (`Desktop` or `Core`). Remote monitoring uses WinRM ports `5985` (HTTP) or `5986` (HTTPS).
+> **Prerequisites**: Windows desktop session (WPF) running Windows PowerShell 5.1 (`Desktop` edition). Remote monitoring uses WinRM ports `5985` (HTTP) or `5986` (HTTPS).
 
 ---
 
@@ -45,7 +45,7 @@ Remote Windows diagnostics have historically forced engineers into an awkward co
 
 **PSRPM solves all four constraints at once** by executing `ntdll!NtQuerySystemInformation` and native IP Helper / ETW collectors entirely in memory via `.NET Reflection.Emit` over your existing WinRM session—delivering Process Explorer + TCPView workflows at **`< 0.25%` remote CPU** and **`~1.1 - 1.8 KB/s`** steady-state bandwidth.
 
-| Metric / Capability | Standard Task Manager | PowerShell (`Get-CimInstance` / `.NET Process`) | Sysinternals over SMB / RPC | **PSRPM (`v1.13.0`)** |
+| Metric / Capability | Standard Task Manager | PowerShell (`Get-CimInstance` / `.NET Process`) | Sysinternals over SMB / RPC | **PSRPM (`v1.13.1`)** |
 | :--- | :--- | :--- | :--- | :--- |
 | **Remote Collector Engine** | N/A (Local UI) | WMI / DCOM RPC (`WmiPrvSE.exe`) | Remote binary + service / RPC | **Single `ntdll!NtQuerySystemInformation(5)` syscall** |
 | **Remote CPU Overhead** | N/A | `12% - 25%` RPC spikes | Low once running | **`< 0.25%` CPU (`2 - 8 ms` per tick)** |
@@ -246,7 +246,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-ReleaseReadines
 - **[`Tests/`](Tests/)** — 12-suite engine verification (`Test-PSRPMEngine.ps1`), 44-check extended QA (`Test-PSRPMExtendedQA.ps1`, `QA_Report.md`), GZIP benchmark (`Test-GzipPerformance.ps1`), and release readiness checker (`Test-ReleaseReadiness.ps1`).
 - **[`docs/`](docs/)** — **[Operator User Guide](docs/USER_GUIDE.md)**, **[Telemetry & Wire Protocol](docs/TELEMETRY_AND_PROTOCOL.md)**, **[Engineering Playbook](docs/ENGINEERING_PLAYBOOK.md)**, **[Visual Design System](DESIGN.md)**, **[Product Spec](PRODUCT.md)**, and **[Screenshot Tour](docs/screenshots/README.md)**.
 - **[`tools/`](tools/)** — Screenshot automation (`Capture-Screenshots.ps1`), workload simulator (`Simulate-Workload.ps1`), and release helper (`Set-ReleaseVersion.ps1`).
-- **[`CHANGELOG.md`](CHANGELOG.md)** — Full version history following Keep a Changelog & SemVer (`1.13.0`).
+- **[`CHANGELOG.md`](CHANGELOG.md)** — Full version history following Keep a Changelog & SemVer (`1.13.1`).
 - **[`LICENSE`](LICENSE)** — MIT License.
 
 ---

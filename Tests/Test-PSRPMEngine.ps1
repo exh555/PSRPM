@@ -2548,6 +2548,521 @@ foreach ($hintCode in @('5', '87', '299', '1053', '1060', '1062')) {
 }
 Write-Host "  [PASS] 12P: Verified 6-theme WCAG AA contrast (>=4.5:1), 8-XAML UIA labels, Space/Enter isolation, zero-arg Local Mode, opt-in prefs cue & Win32 Hint enrichment." -ForegroundColor Green
 
+# 12Q: Code Review Remediation Regression Suite (#1-#10)
+Write-Host "`n[TEST 12Q] Verifying Code Review Remediations (Resync Pruning, CPUDelta Sort, Self-PID KillTree/Suspend, >24h CPU, EStats, I/O Rate & Desktop Guard)..." -ForegroundColor Yellow
+
+# 12Q.1: RunspaceEngine Resync Pruning (#1, #8), TabNeedsResync/CloseTabSession (#1), and Live CPUDelta Re-Sort (#6)
+$win12q     = [System.Windows.Window]::new()
+$procCol12q = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$svcCol12q  = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$sumVm12q   = [SystemSummaryViewModel]::new()
+$eng12q = Start-PSRPMEngine `
+    -PSSession $null `
+    -Window $win12q `
+    -ProcessCollection $procCol12q `
+    -ServicesCollection $svcCol12q `
+    -SummaryViewModel $sumVm12q `
+    -CollectorScript $script:PSRPMCollectorScriptBlock `
+    -InspectorScript $script:PSRPMDeepInspectorScriptBlock `
+    -ActionScript $script:PSRPMActionScriptBlock `
+    -IntervalMs 60 `
+    -IsLocal $true `
+    -TargetName "LOCAL-12Q" `
+    -InitialTabId "tab_0"
+
+try {
+    # Wait for initial background tick to settle before switching to deterministic paused injection
+    $dl12q = [DateTime]::UtcNow.AddSeconds(4.0)
+    while ([DateTime]::UtcNow -lt $dl12q -and $eng12q.TelemStats.LastReceivedSeq -lt 1) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{})
+        Start-Sleep -Milliseconds 30
+    }
+    if ($eng12q.TelemStats.LastReceivedSeq -lt 1) {
+        throw "12Q engine did not complete initial snapshot within timeout."
+    }
+
+    $eng12q.StateContainer.IsPaused = $true
+    Start-Sleep -Milliseconds 90
+    [System.Threading.Monitor]::Enter($eng12q.StateContainer.SyncRoot)
+    try {
+        $eng12q.StateContainer.Payload       = $null
+        $eng12q.StateContainer.ForceFullSync = $false
+    } finally {
+        [System.Threading.Monitor]::Exit($eng12q.StateContainer.SyncRoot)
+    }
+
+    $eng12q.StateContainer.ClearHostMaps = $true
+    $clrDl12q = [DateTime]::UtcNow.AddSeconds(2.0)
+    while ([DateTime]::UtcNow -lt $clrDl12q -and ($eng12q.StateContainer.ClearHostMaps -or $eng12q.ProcessMap.Count -gt 0)) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{})
+        Start-Sleep -Milliseconds 25
+    }
+    if ($eng12q.ProcessMap.Count -ne 0 -or $eng12q.ServicesMap.Count -ne 0) {
+        throw "12Q failed to reset ProcessMap/ServicesMap cleanly before synthetic tick tests."
+    }
+
+    $tickState12q = @{ Count = 0 }
+    $eng12q.StateContainer.OnTickProcessed = {
+        param($elapsedSec, $netCap)
+        $tickState12q.Count++
+    }.GetNewClosure()
+
+    $pushTick12q = {
+        param([hashtable]$payloadObj, [string]$tabId = "tab_0")
+        $prevCount = $tickState12q.Count
+        $jsonPayload = $jss.Serialize($payloadObj)
+        [System.Threading.Monitor]::Enter($eng12q.StateContainer.SyncRoot)
+        try {
+            $eng12q.StateContainer.Payload      = $jsonPayload
+            $eng12q.StateContainer.PayloadTabId = $tabId
+            $eng12q.StateContainer.PayloadBytes = $jsonPayload.Length
+            $eng12q.StateContainer.PollLatencyMs = 5
+        } finally {
+            [System.Threading.Monitor]::Exit($eng12q.StateContainer.SyncRoot)
+        }
+        $tDl = [DateTime]::UtcNow.AddSeconds(2.5)
+        while ([DateTime]::UtcNow -lt $tDl -and $tickState12q.Count -eq $prevCount) {
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{})
+            Start-Sleep -Milliseconds 20
+        }
+        if ($tickState12q.Count -eq $prevCount) {
+            throw "12Q synthetic tick (seq=$($payloadObj['seq']), tab=$tabId) was not processed within timeout."
+        }
+    }
+
+    $mkMeta12q = {
+        param([int]$procId, [string]$name)
+        return @{
+            id    = $procId
+            ct    = [long](133000000000000000L + $procId)
+            n     = $name
+            p     = 0
+            u     = "NT AUTHORITY\SYSTEM"
+            arch  = "x64"
+            path  = "C:\Windows\System32\$name"
+            cmd   = $name
+            desc  = $name
+            comp  = "Microsoft"
+            ver   = "1.0"
+            start = "12:00:00"
+            sid   = 1
+            prio  = 8
+            cat   = "System"
+        }
+    }
+    $mkSvc12q = {
+        param([string]$sName, [int]$sPid, [string]$st)
+        return @{
+            n   = $sName
+            d   = $sName
+            p   = $sPid
+            st  = $st
+            sm  = "Auto"
+            u   = "LocalSystem"
+            dep = ""
+            rev = ""
+            dsc = ""
+            bin = "C:\Windows\System32\svchost.exe"
+        }
+    }
+
+    # Tick seq=1: Baseline full snapshot with 3 processes + 2 services
+    &$pushTick12q @{
+        ver     = 1
+        seq     = 1
+        full    = 1
+        svcFull = 1
+        meta    = @( (&$mkMeta12q 1001 "alpha.exe"), (&$mkMeta12q 1002 "beta.exe"), (&$mkMeta12q 1003 "ghost.exe") )
+        dyn     = @( @(1001, 10.0, 10485760L, 8388608L, 4, 50, 0), @(1002, 5.0, 10485760L, 8388608L, 4, 50, 0), @(1003, 1.0, 10485760L, 8388608L, 2, 20, 0) )
+        dead    = @()
+        svc     = @( (&$mkSvc12q "SvcLive" 1001 "Running"), (&$mkSvc12q "SvcOrphan" 1003 "Running") )
+        svcDead = @()
+    }
+    if ($eng12q.ProcessMap.Count -ne 3 -or $eng12q.ServicesMap.Count -ne 2 -or $svcCol12q.Count -ne 2) {
+        throw "12Q Tick 1 baseline mismatch: Procs=$($eng12q.ProcessMap.Count), SvcsMap=$($eng12q.ServicesMap.Count), SvcCol=$($svcCol12q.Count)."
+    }
+
+    # Test mismatched-tab payload marks TabNeedsResync['tab_other'] = $true
+    [System.Threading.Monitor]::Enter($eng12q.StateContainer.SyncRoot)
+    try {
+        $eng12q.StateContainer.Payload      = $jss.Serialize(@{ ver = 1; seq = 2; full = 0; dyn = @(); dead = @(); meta = @(); svc = @(); svcDead = @() })
+        $eng12q.StateContainer.PayloadTabId = "tab_other"
+        $eng12q.StateContainer.PayloadBytes = 64
+    } finally {
+        [System.Threading.Monitor]::Exit($eng12q.StateContainer.SyncRoot)
+    }
+    $misDl = [DateTime]::UtcNow.AddSeconds(2.0)
+    while ([DateTime]::UtcNow -lt $misDl -and -not $eng12q.StateContainer.TabNeedsResync.ContainsKey("tab_other")) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{})
+        Start-Sleep -Milliseconds 20
+    }
+    if (-not $eng12q.StateContainer.TabNeedsResync["tab_other"]) {
+        throw "12Q expected TabNeedsResync['tab_other'] to be marked when a mismatched tab payload was dropped."
+    }
+
+    # Test AddTabSession + SelectTabSession preserves pending ForceFullSync and honors TabNeedsResync,
+    # and CloseTabSession honors NextTabId / NextForceFullSync and cleans TabNeedsResync
+    $eng12q.StateContainer.TabNeedsResync["tab_other"] = $true
+    $sendCmdWait12q = {
+        param([hashtable]$cmdObj)
+        $cb12q = @{ Fired = $false; Result = $null }
+        & $eng12q.SendCommand $cmdObj ({
+            param($r)
+            $cb12q.Result = $r
+            $cb12q.Fired  = $true
+        }.GetNewClosure())
+        $cdl = [DateTime]::UtcNow.AddSeconds(3.0)
+        while ([DateTime]::UtcNow -lt $cdl -and -not $cb12q.Fired) {
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{})
+            Start-Sleep -Milliseconds 20
+        }
+        if (-not $cb12q.Fired -or -not $cb12q.Result.Success) {
+            throw "12Q command '$($cmdObj.CommandType)' failed or timed out."
+        }
+        return $cb12q.Result
+    }
+    [void](&$sendCmdWait12q @{ CommandType = "AddTabSession"; TabId = "tab_other"; ComputerName = "localhost"; IsLocal = $true; Credential = $null; Port = 0; UseSSL = $false })
+    [void](&$sendCmdWait12q @{ CommandType = "SelectTabSession"; TabId = "tab_other"; ForceFullSync = $false })
+    if (-not $eng12q.StateContainer.ForceFullSync) {
+        throw "12Q SelectTabSession failed to trigger ForceFullSync when TabNeedsResync['tab_other'] was set."
+    }
+    # Clear ForceFullSync then ensure CloseTabSession restores explicit NextTabId='tab_0' without forcing resync when clean
+    [System.Threading.Monitor]::Enter($eng12q.StateContainer.SyncRoot)
+    try { $eng12q.StateContainer.ForceFullSync = $false } finally { [System.Threading.Monitor]::Exit($eng12q.StateContainer.SyncRoot) }
+    [void](&$sendCmdWait12q @{ CommandType = "CloseTabSession"; TabId = "tab_other"; NextTabId = "tab_0"; NextForceFullSync = $false })
+    if ($eng12q.StateContainer.ActiveTabId -ne "tab_0" -or $eng12q.StateContainer.TabNeedsResync.ContainsKey("tab_other") -or $eng12q.StateContainer.ForceFullSync) {
+        throw "12Q CloseTabSession state mismatch: ActiveTabId=$($eng12q.StateContainer.ActiveTabId), TabOtherInResync=$($eng12q.StateContainer.TabNeedsResync.ContainsKey('tab_other')), ForceFullSync=$($eng12q.StateContainer.ForceFullSync)."
+    }
+
+    # Test sequence gap detection (seq=1 -> seq=5) marks TabNeedsResync['tab_0'] & ForceFullSync = $true
+    &$pushTick12q @{
+        ver     = 1
+        seq     = 5
+        full    = 0
+        svcFull = 0
+        meta    = @()
+        dyn     = @( @(1001, 11.0, 10485760L, 8388608L, 4, 50, 0), @(1002, 6.0, 10485760L, 8388608L, 4, 50, 0) )
+        dead    = @()
+        svc     = @()
+        svcDead = @()
+    }
+    if (-not $eng12q.StateContainer.ForceFullSync -or -not $eng12q.StateContainer.TabNeedsResync["tab_0"]) {
+        throw "12Q sequence gap (1 -> 5) did not raise ForceFullSync and TabNeedsResync['tab_0']."
+    }
+    # Verify SelectTabSession with ForceFullSync=$false does NOT wipe already-pending ForceFullSync
+    [void](&$sendCmdWait12q @{ CommandType = "SelectTabSession"; TabId = "tab_0"; ForceFullSync = $false })
+    if (-not $eng12q.StateContainer.ForceFullSync) {
+        throw "12Q SelectTabSession(ForceFullSync=$false) cleared pre-existing pending ForceFullSync."
+    }
+
+    # Tick seq=6: Recovery full snapshot omitting exited PID 1003 ('ghost.exe') and removed service 'SvcOrphan'
+    &$pushTick12q @{
+        ver     = 1
+        seq     = 6
+        full    = 1
+        svcFull = 1
+        meta    = @( (&$mkMeta12q 1001 "alpha.exe"), (&$mkMeta12q 1002 "beta.exe") )
+        dyn     = @( @(1001, 12.0, 10485760L, 8388608L, 4, 50, 0), @(1002, 7.0, 10485760L, 8388608L, 4, 50, 0) )
+        dead    = @()
+        svc     = @( (&$mkSvc12q "SvcLive" 1001 "Running") )
+        svcDead = @()
+    }
+    if ($eng12q.StateContainer.TabNeedsResync.ContainsKey("tab_0")) {
+        throw "12Q full snapshot (seq=6) did not clear TabNeedsResync['tab_0']."
+    }
+    if ($eng12q.ServicesMap.Count -ne 1 -or $svcCol12q.Count -ne 1 -or -not $eng12q.ServicesMap.ContainsKey("SvcLive")) {
+        throw "12Q full service resync (svcFull=1) failed to prune stale 'SvcOrphan' (Map=$($eng12q.ServicesMap.Count), Col=$($svcCol12q.Count))."
+    }
+    $has1003 = $eng12q.ProcessMap.ContainsKey(1003)
+    $lc1003  = if ($has1003) { [string]$eng12q.ProcessMap[1003].LifecycleState } else { "<missing>" }
+    if (-not $has1003 -or $eng12q.ProcessMap[1003].LifecycleState -ne 2) {
+        throw "12Q full process resync should mark stale PID 1003 as LifecycleState=2 (Has1003=$has1003, LC=$lc1003, MapCount=$($eng12q.ProcessMap.Count), LastSeq=$($eng12q.TelemStats.LastReceivedSeq), LastErr='$($eng12q.StateContainer.LastErr)')."
+    }
+
+    # Tick seq=7: Next differential tick completes 1-tick exit flash and evicts PID 1003
+    &$pushTick12q @{
+        ver     = 1
+        seq     = 7
+        full    = 0
+        svcFull = 0
+        meta    = @()
+        dyn     = @( @(1001, 12.0, 10485760L, 8388608L, 4, 50, 0), @(1002, 7.0, 10485760L, 8388608L, 4, 50, 0) )
+        dead    = @()
+        svc     = @()
+        svcDead = @()
+    }
+    if ($eng12q.ProcessMap.ContainsKey(1003) -or $procCol12q.Count -ne 2) {
+        throw "12Q failed to evict resync-pruned PID 1003 on tick N+1 (MapContains1003=$($eng12q.ProcessMap.ContainsKey(1003)), ColCount=$($procCol12q.Count))."
+    }
+
+    # Test #6: Live CPUDelta sorting in RunspaceEngine without spawn/exit structural changes
+    $eng12q.ProcessMap[1001].SetBaselineState($true, $false, 8388608L, 10485760L, 50, 5.0)
+    $eng12q.ProcessMap[1002].SetBaselineState($true, $false, 8388608L, 10485760L, 50, 5.0)
+    $eng12q.StateContainer.IsTreeMode     = $false
+    $eng12q.StateContainer.SortProperty   = "CPUDelta"
+    $eng12q.StateContainer.SortDescending = $true
+
+    &$pushTick12q @{
+        ver = 1; seq = 8; full = 0; svcFull = 0; meta = @(); dead = @(); svc = @(); svcDead = @()
+        dyn = @( @(1001, 6.0, 10485760L, 8388608L, 4, 50, 0), @(1002, 25.0, 10485760L, 8388608L, 4, 50, 0) )
+    }
+    if ($procCol12q[0].PID -ne 1002 -or $procCol12q[1].PID -ne 1001) {
+        throw "12Q CPUDelta initial descending sort failed (top PID=$($procCol12q[0].PID), expected 1002)."
+    }
+
+    # Differential tick flips CPUDelta leader (1001 -> +40.0, 1002 -> +5.0) with ZERO meta/dead
+    &$pushTick12q @{
+        ver = 1; seq = 9; full = 0; svcFull = 0; meta = @(); dead = @(); svc = @(); svcDead = @()
+        dyn = @( @(1001, 45.0, 10485760L, 8388608L, 4, 50, 0), @(1002, 10.0, 10485760L, 8388608L, 4, 50, 0) )
+    }
+    if ($procCol12q[0].PID -ne 1001 -or $procCol12q[1].PID -ne 1002) {
+        throw "12Q live CPUDelta differential re-sort regression (top PID=$($procCol12q[0].PID), expected 1001 without spawn/exit)."
+    }
+} finally {
+    $eng12q.Timer.Stop()
+    $eng12q.StateContainer.IsStopping = $true
+    [void]$eng12q.StateContainer.WakeEvent.Set()
+    Start-Sleep -Milliseconds 60
+    $eng12q.PowerShell.Dispose()
+    $eng12q.Runspace.Close()
+    $eng12q.Runspace.Dispose()
+    try { $win12q.Close() } catch {}
+}
+Write-Host "  Verified 12Q.1: RunspaceEngine resync pruning (procs + services), TabNeedsResync/CloseTabSession, and live CPUDelta re-sort." -ForegroundColor Gray
+
+# 12Q.2: Self-PID SuspendProcess refusal + Self-PID KillTree non-hang (#2)
+$suspSelfJson12q = & $script:PSRPMActionScriptBlock "SuspendProcess" $PID "powershell" "" "Normal" "" "" 0L
+$suspSelfRes12q  = $jss.DeserializeObject($suspSelfJson12q)
+if ($suspSelfRes12q['Success'] -ne $false -or $suspSelfRes12q['Status'] -ne "Refused" -or $suspSelfRes12q['ErrorId'] -ne "PSRPM.Process.Refused") {
+    throw "12Q SuspendProcess on own PID should return Status='Refused' / ErrorId='PSRPM.Process.Refused' (got Status='$($suspSelfRes12q['Status'])', Success=$($suspSelfRes12q['Success']))."
+}
+
+$actFileEsc12q = (Join-Path $privDir "ProcessActions.ps1").Replace("'", "''")
+$selfKillScript12q = @"
+`$ErrorActionPreference = 'Stop'
+. '$actFileEsc12q'
+`$kid = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList @('-n','60','127.0.0.1') -WindowStyle Hidden -PassThru
+[Console]::Out.WriteLine('KID:' + `$kid.Id)
+[Console]::Out.Flush()
+Start-Sleep -Milliseconds 120
+[void](& `$script:PSRPMActionScriptBlock 'KillTree' `$PID 'powershell' '' 'Normal' '' '' 0L)
+"@
+$selfKillBytes12q = [System.Text.Encoding]::Unicode.GetBytes($selfKillScript12q)
+$selfKillB6412q   = [Convert]::ToBase64String($selfKillBytes12q)
+$psi12q = [System.Diagnostics.ProcessStartInfo]::new("$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe")
+$psi12q.Arguments              = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $selfKillB6412q"
+$psi12q.UseShellExecute        = $false
+$psi12q.CreateNoWindow         = $true
+$psi12q.RedirectStandardOutput = $true
+$treeProc12q = $null
+$kidPid12q   = 0
+try {
+    $treeProc12q = [System.Diagnostics.Process]::Start($psi12q)
+    $exitedInTime12q = $treeProc12q.WaitForExit(5000)
+    $stdOut12q = $treeProc12q.StandardOutput.ReadToEnd()
+    if ($stdOut12q -match 'KID:(\d+)') {
+        $kidPid12q = [int]$Matches[1]
+    }
+    if (-not $exitedInTime12q) {
+        throw "12Q KillTree containing own PID hung (>5s self-suspend deadlock regression)."
+    }
+    if ($kidPid12q -gt 0) {
+        Start-Sleep -Milliseconds 150
+        $kidStillAlive = $false
+        try {
+            $kp12q = [System.Diagnostics.Process]::GetProcessById($kidPid12q)
+            $kidStillAlive = (-not $kp12q.HasExited)
+        } catch {
+            $kidStillAlive = $false
+        }
+        if ($kidStillAlive) {
+            throw "12Q KillTree exited self without terminating descendant ping.exe (PID $kidPid12q)."
+        }
+    }
+} finally {
+    if ($treeProc12q -and -not $treeProc12q.HasExited) {
+        try { $treeProc12q.Kill() } catch {}
+    }
+    if ($treeProc12q) { try { $treeProc12q.Dispose() } catch {} }
+    if ($kidPid12q -gt 0) {
+        try { Stop-Process -Id $kidPid12q -Force -ErrorAction SilentlyContinue } catch {}
+    }
+}
+Write-Host "  Verified 12Q.2: SuspendProcess refuses self-PID; KillTree containing own PID terminates descendants and self cleanly (<5s)." -ForegroundColor Gray
+
+# 12Q.3: >24h CPU Time Formatting (#10) & EStats Flag Container Persistence (#7)
+$inspPerfRaw12q = & $script:PSRPMDeepInspectorScriptBlock $PID $false "Performance"
+$inspPerf12q    = $jss.DeserializeObject($inspPerfRaw12q)
+if ([string]$inspPerf12q['Performance']['TotalCpuTime'] -notmatch '^\d{2,}:\d{2}:\d{2}\.\d{3}$') {
+    throw "12Q DeepInspector TotalCpuTime unexpected format: '$($inspPerf12q['Performance']['TotalCpuTime'])'."
+}
+$inspSrc12q = [System.IO.File]::ReadAllText((Join-Path $privDir "DeepInspector.ps1"))
+if ($inspSrc12q -match 'hh\\:mm\\:ss') {
+    throw "12Q DeepInspector.ps1 still contains hh\:mm\:ss TimeSpan truncation."
+}
+$mFmt12q = [regex]::Match($inspSrc12q, '(?s)\$formatCpuTime\s*=\s*\{(.*?return[^\r\n]+)\s*\}')
+if (-not $mFmt12q.Success) {
+    throw "12Q could not locate `$formatCpuTime helper in DeepInspector.ps1."
+}
+$fmtSb12q = [scriptblock]::Create($mFmt12q.Value + "`n`$formatCpuTime")
+$fnFmt12q = & $fmtSb12q
+$fmt30h   = & $fnFmt12q ([TimeSpan]::FromHours(30) + [TimeSpan]::FromMinutes(15) + [TimeSpan]::FromSeconds(42) + [TimeSpan]::FromMilliseconds(123))
+$fmt105h  = & $fnFmt12q ([TimeSpan]::FromHours(105))
+$fmtNeg   = & $fnFmt12q ([TimeSpan]::FromSeconds(-5))
+if ($fmt30h -ne "30:15:42.123" -or $fmt105h -ne "105:00:00.000" -or $fmtNeg -ne "00:00:00.000") {
+    throw "12Q >24h CPU formatter mismatch: 30h='$fmt30h', 105h='$fmt105h', neg='$fmtNeg'."
+}
+if ($inspSrc12q -match '\$estatsSetBlocked\s*=\s*\$true' -or $inspSrc12q -notmatch '\$estatsState\s*=\s*@\{\s*SetBlocked\s*=\s*\$false\s*\}') {
+    throw "12Q DeepInspector.ps1 EStats permission-denial persistence must use `$estatsState hashtable container."
+}
+Write-Host "  Verified 12Q.3: >24h CPU time formatter ('$fmt30h', '$fmt105h') and persisted EStats flag container." -ForegroundColor Gray
+
+# 12Q.4: Elapsed-Time I/O Rate Division (#9) & DataCollector Disk KB/s Decoupling (#9)
+$ioVm12q = [SystemSummaryViewModel]::new()
+$sysIo12q = [double[]]::new(32)
+$sysIo12q[0]  = 12.0;  $sysIo12q[1]  = 8000L;     $sysIo12q[2]  = 16000L;    $sysIo12q[3] = 100
+$sysIo12q[4]  = 1000;  $sysIo12q[5]  = 30000;     $sysIo12q[6]  = 8000L;     $sysIo12q[7] = 16000L
+$sysIo12q[24] = 786432L; $sysIo12q[25] = 262144L; $sysIo12q[26] = 0L # Total 1,048,576 B = 1.0 MB
+$coresIo12q = @( @(12.0, 1.0) )
+
+$ioVm12q.UpdateExtendedTelemetry($sysIo12q, $coresIo12q, 2.0)
+$hist2s = $ioVm12q.GetIoTotalHistory240()
+$last2s = $hist2s[$hist2s.Count - 1]
+if ($ioVm12q.IoTotalRateFormatted -ne "512.0 KB/s" -or $ioVm12q.IoGaugeText -ne "512.0 KB/s" -or [Math]::Abs($last2s - 524288.0) -gt 1.0 -or $ioVm12q.IoReadDeltaFormatted -ne "768.0 KB" -or $ioVm12q.IoSessionTotalFormatted -ne "1.0 MB") {
+    throw "12Q I/O rate 2.0s elapsed division mismatch: Rate='$($ioVm12q.IoTotalRateFormatted)', Gauge='$($ioVm12q.IoGaugeText)', Hist='$last2s', ReadD='$($ioVm12q.IoReadDeltaFormatted)', Sess='$($ioVm12q.IoSessionTotalFormatted)'."
+}
+$ioVm12q.UpdateExtendedTelemetry($sysIo12q, $coresIo12q, 0.5)
+$ioVm12q.RecordTopProcessSample([DateTime]::UtcNow.Ticks, 0, "", 0.0, 0, "", 0L, 0, "", 0L, 0, "", 0L, 0L, 0)
+$histHalf = $ioVm12q.GetIoTotalHistory240()
+$lastHalf = $histHalf[$histHalf.Count - 1]
+$ioHover12q = $ioVm12q.GetGraphHoverInfo("Io", 239, $false)
+if ($ioVm12q.IoTotalRateFormatted -ne "2.0 MB/s" -or [Math]::Abs($lastHalf - 2097152.0) -gt 1.0 -or $ioVm12q.IoSessionTotalFormatted -ne "2.0 MB" -or $ioHover12q -notlike "*2.0 MB/s*") {
+    throw "12Q I/O rate 0.5s elapsed division mismatch: Rate='$($ioVm12q.IoTotalRateFormatted)', Hist='$lastHalf', Sess='$($ioVm12q.IoSessionTotalFormatted)', Hover='$ioHover12q'."
+}
+$ioVm12q.UpdateExtendedTelemetry($sysIo12q, $coresIo12q)
+if ($ioVm12q.IoTotalRateFormatted -ne "1.0 MB/s") {
+    throw "12Q 2-arg UpdateExtendedTelemetry backward-compatible 1.0s default mismatch: Rate='$($ioVm12q.IoTotalRateFormatted)'."
+}
+$dcSrc12q = [System.IO.File]::ReadAllText((Join-Path $privDir "DataCollector.ps1"))
+if ($dcSrc12q -notmatch 'ioSec\s*=\s*\[Math\]::Max\(0\.1,\s*\(\$nowTicks\s*-\s*\$script:LastSnapTicks\)\s*/\s*10000000\.0\)' -or $dcSrc12q -notmatch '\$script:LastSnapTicks\s*=\s*\$nowTicks') {
+    throw "12Q DataCollector.ps1 missing elapsed `$ioSec calculation / `$script:LastSnapTicks decoupling for Disk KB/s."
+}
+Write-Host "  Verified 12Q.4: Elapsed-time I/O rate scaling (512.0 KB/s @ 2s, 2.0 MB/s @ 0.5s) and DataCollector Disk KB/s decoupling." -ForegroundColor Gray
+
+# 12Q.5: Host-Switch Window Rebinding (#3, #4) & Windows PowerShell Desktop Guard (#5)
+if ($psm1Src12 -notmatch '\$script:ResetFindHandleForHostChange' -or $psm1Src12 -notmatch '\$script:RebindActiveSysInfoWindow' -or $psm1Src12 -notmatch '\$localState\.TabId\s*-ne\s*\$localTabId' -or $psm1Src12 -notmatch 'PSRPM - Host Mismatch') {
+    throw "12Q PSRPM.psm1 missing FindHandle/SysInfo host-switch rebinding guards."
+}
+$compEd12q = @($manifestData['CompatiblePSEditions'])
+if ($compEd12q.Count -ne 1 -or $compEd12q[0] -ne 'Desktop') {
+    throw "12Q PSRPM.psd1 CompatiblePSEditions expected @('Desktop'), got: $($compEd12q -join ', ')."
+}
+if ($psm1Src12 -notmatch '\$PSVersionTable\.PSEdition\s*-ne\s*''Desktop''') {
+    throw "12Q PSRPM.psm1 Start-PSRPM missing Windows PowerShell Desktop edition guard."
+}
+Write-Host "  [PASS] 12Q: Verified all Code Review Remediation regression checks (#1-#10)." -ForegroundColor Green
+
+# 12R: Global Ctrl+D Theme Cycling Across All Modal/Modeless Child Windows
+if ($psm1Src12 -notmatch '\$activeChildDialogs\s*=' -or $psm1Src12 -notmatch '\$getActiveChildWindows\s*=' -or $psm1Src12 -notmatch '\$registerChildWindow\s*=') {
+    throw "12R PSRPM.psm1 missing `$activeChildDialogs / `$getActiveChildWindows / `$registerChildWindow helper."
+}
+if ($psm1Src12 -notmatch '\$childWin\.add_PreviewKeyDown' -or $psm1Src12 -notmatch 'Key\]::D\)\s*\{\s*&\$localCycleTheme') {
+    throw "12R PSRPM.psm1 `$registerChildWindow missing PreviewKeyDown Ctrl+D theme cycling handler."
+}
+if ($psm1Src12 -notmatch '\$childWin\.add_Closed\(\{[^}]*\$localDialogList\.Remove\(\$localWinRef\)') {
+    throw "12R PSRPM.psm1 `$registerChildWindow missing Closed cleanup handler."
+}
+if ($psm1Src12 -match '@\(\$script:ActiveFindHandleWin,\s*\$script:ActivePropWin,\s*\$script:ActiveSysInfoWin\)\)\s*\{\s*if\s*\(\$activeModal') {
+    throw "12R PSRPM.psm1 still has legacy hardcoded 3-window modal loop instead of `&$getActiveChildWindows."
+}
+if ($psm1Src12 -notmatch 'foreach\s*\(\$activeModal\s+in\s+\(&\$getActiveChildWindows\)\)\s*\{\s*if\s*\(\$activeModal\s+-and\s+\$activeModal\.IsLoaded\)\s*\{\s*&\$syncDialogThemeBrushes\s+\$activeModal') {
+    throw "12R PSRPM.psm1 `$applyTheme does not iterate `&$getActiveChildWindows for live theme sync."
+}
+if ($psm1Src12 -notmatch 'foreach\s*\(\$activeModal\s+in\s+\(&\$getActiveChildWindows\)\)\s*\{\s*if\s*\(\$activeModal\s+-and\s+\$activeModal\.IsLoaded\)\s*\{\s*\$activeModal\.Topmost\s*=\s*\$enable') {
+    throw "12R PSRPM.psm1 `$setAlwaysOnTop does not iterate `&$getActiveChildWindows."
+}
+if ($psm1Src12 -notmatch '\$registerDialogRenderFlush\s*=\s*\{[\s\S]*?&\$registerChildWindow\s+\$dlg') {
+    throw "12R PSRPM.psm1 `$registerDialogRenderFlush does not delegate to `&$registerChildWindow."
+}
+foreach ($childRegCheck in @(
+    @{ Name = 'SelectColumnsWindow'; Pattern = '&\$registerDialogRenderFlush\s+\$scWin' },
+    @{ Name = 'ServiceDetailWindow'; Pattern = '&\$registerDialogRenderFlush\s+\$svcWin' },
+    @{ Name = 'PropertiesWindow';    Pattern = '&\$registerChildWindow\s+\$propWin' },
+    @{ Name = 'ConnectDialog';       Pattern = '&\$registerDialogRenderFlush\s+\$connWin' },
+    @{ Name = 'SystemInfoWindow';    Pattern = '&\$registerDialogRenderFlush\s+\$sysWin' },
+    @{ Name = 'HelpWindow';          Pattern = '&\$registerDialogRenderFlush\s+\$helpWin' },
+    @{ Name = 'FindHandleWindow';    Pattern = '&\$registerDialogRenderFlush\s+\$findWin' }
+)) {
+    if ($psm1Src12 -notmatch $childRegCheck.Pattern) {
+        throw "12R PSRPM.psm1 $($childRegCheck.Name) is not registered with child window Ctrl+D / tracking helper ($($childRegCheck.Pattern))."
+    }
+}
+$probeWin12r = [System.Windows.Window]::new()
+$probeTb12r  = [System.Windows.Controls.TextBlock]::new()
+$probeTb12r.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, "BrushTextPrimary")
+$probeWin12r.Content = $probeTb12r
+$lightPal12r = [PSRPMThemeRegistry]::GetPalette("Light")
+$darkPal12r  = [PSRPMThemeRegistry]::GetPalette("Dark")
+$probeWin12r.Resources["BrushTextPrimary"] = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString([string]$lightPal12r.Brushes["BrushTextPrimary"]))
+$cLight12r = ([System.Windows.Media.SolidColorBrush]$probeTb12r.Foreground).Color.ToString()
+$probeWin12r.Resources["BrushTextPrimary"] = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString([string]$darkPal12r.Brushes["BrushTextPrimary"]))
+$cDark12r = ([System.Windows.Media.SolidColorBrush]$probeTb12r.Foreground).Color.ToString()
+if ($cLight12r -eq $cDark12r) {
+    throw "12R DynamicResource brush update on child Window failed to change Foreground ($cLight12r vs $cDark12r)."
+}
+$probeWin12r.Close()
+Write-Host "  [PASS] 12R: Verified global Ctrl+D registration across all 7 child windows and live theme brush propagation." -ForegroundColor Green
+
+# 12S: Dark-Theme Child Window Foreground & TabControl/TabItem Style Audit (SystemInfoWindow & HelpWindow)
+foreach ($darkAuditSpec in @(
+    @{ File = "SystemInfoWindow.xaml"; TabControl = "SysInfoTabControl"; RequiredStyles = @([System.Windows.Controls.CheckBox], [System.Windows.Controls.GroupBox], [System.Windows.Controls.TabItem], [System.Windows.Controls.TabControl]) },
+    @{ File = "HelpWindow.xaml";       TabControl = "HelpTabControl";    RequiredStyles = @([System.Windows.Controls.GroupBox], [System.Windows.Controls.TabItem], [System.Windows.Controls.TabControl]) }
+)) {
+    $xamlBytes12s = [System.IO.File]::ReadAllBytes((Join-Path $repoRoot ("PSRPM\UI\" + $darkAuditSpec.File)))
+    $ms12s = [System.IO.MemoryStream]::new($xamlBytes12s)
+    $w12s = [System.Windows.Markup.XamlReader]::Load($ms12s)
+    $ms12s.Close()
+    $pal12s = [PSRPMThemeRegistry]::GetPalette("TokyoNight")
+    $bc12s = [System.Windows.Media.BrushConverter]::new()
+    foreach ($kv12s in $pal12s.Brushes.GetEnumerator()) {
+        $w12s.Resources[$kv12s.Key] = $bc12s.ConvertFromString([string]$kv12s.Value)
+    }
+    foreach ($reqType in $darkAuditSpec.RequiredStyles) {
+        if (-not $w12s.Resources.Contains($reqType)) {
+            throw "12S $($darkAuditSpec.File) missing implicit dark-theme-aware Style for $($reqType.Name)."
+        }
+    }
+    $tc12s = $w12s.FindName($darkAuditSpec.TabControl)
+    if (-not $tc12s -or -not $tc12s.Style) {
+        throw "12S $($darkAuditSpec.File) $($darkAuditSpec.TabControl) missing custom TabControl style."
+    }
+    $chkPerCpu12s = $w12s.FindName("ChkPerCpuGraph")
+    if ($chkPerCpu12s) {
+        $chkBrush = $chkPerCpu12s.Foreground -as [System.Windows.Media.SolidColorBrush]
+        if (-not $chkBrush -or $chkBrush.Color.ToString() -ne "#FFC0CAF5") {
+            throw "12S SystemInfoWindow.xaml ChkPerCpuGraph expected TokyoNight Foreground '#FFC0CAF5', got '$($chkPerCpu12s.Foreground)'."
+        }
+    }
+    $logicalQueue = [System.Collections.Generic.Queue[System.Object]]::new()
+    $logicalQueue.Enqueue($tc12s)
+    while ($logicalQueue.Count -gt 0) {
+        $curNode = $logicalQueue.Dequeue()
+        if ($curNode -is [System.Windows.Controls.TextBlock] -and $curNode.Visibility -eq 'Visible') {
+            $fgB = $curNode.Foreground -as [System.Windows.Media.SolidColorBrush]
+            if ($fgB -and $fgB.Color.R -lt 40 -and $fgB.Color.G -lt 40 -and $fgB.Color.B -lt 40) {
+                throw "12S $($darkAuditSpec.File) has near-black TextBlock Foreground '$($fgB.Color)' on TokyoNight for text '$($curNode.Text)'."
+            }
+        }
+        if ($curNode -is [System.Windows.DependencyObject]) {
+            foreach ($childObj in [System.Windows.LogicalTreeHelper]::GetChildren($curNode)) {
+                if ($childObj) { $logicalQueue.Enqueue($childObj) }
+            }
+        }
+    }
+    $w12s.Close()
+}
+Write-Host "  [PASS] 12S: Verified dark-theme TabControl/TabItem/CheckBox/GroupBox styles and foreground luminance in SystemInfoWindow and HelpWindow." -ForegroundColor Green
+
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()
 foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {

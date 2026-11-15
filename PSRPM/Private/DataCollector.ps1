@@ -2257,12 +2257,19 @@ $script:PSRPMCollectorScriptBlock = {
 
     # C. psapi.dll!GetPerformanceInfo counters already computed natively in Section 6
 
-    # D. Extended Hardware Counters (iphlpapi!GetIfTable2 64-bit Network & Storage Activity)
+    # D. Extended Hardware Counters (Storage I/O Rates + iphlpapi!GetIfTable2 64-bit Network Activity)
     $netRxKBs       = 0.0
     $netTxKBs       = 0.0
     $diskReadKBs    = 0.0
     $diskWriteKBs   = 0.0
     $diskQueueDepth = 0.0
+
+    if ($script:LastSnapTicks -gt 0L) {
+        $ioSec = [Math]::Max(0.1, ($nowTicks - $script:LastSnapTicks) / 10000000.0)
+        $diskReadKBs    = [Math]::Round(($ioReadDelta / 1024.0) / $ioSec, 1)
+        $diskWriteKBs   = [Math]::Round(($ioWriteDelta / 1024.0) / $ioSec, 1)
+        $diskQueueDepth = [Math]::Round(($ioOpsDelta / $ioSec), 1)
+    }
 
     try {
         [IntPtr]$tblPtr = [IntPtr]::Zero
@@ -2300,9 +2307,6 @@ $script:PSRPMCollectorScriptBlock = {
                     } else {
                         $netTxKBs = [Math]::Round(($totTx / 1024.0) / $netSec, 1)
                     }
-                    $diskReadKBs    = [Math]::Round(($ioReadDelta / 1024.0) / $netSec, 1)
-                    $diskWriteKBs   = [Math]::Round(($ioWriteDelta / 1024.0) / $netSec, 1)
-                    $diskQueueDepth = [Math]::Round(($ioOpsDelta / $netSec), 1)
                 }
                 $script:LastNetRx    = $totRx
                 $script:LastNetTx    = $totTx
@@ -2334,7 +2338,7 @@ $script:PSRPMCollectorScriptBlock = {
     $metaPendCnt  = $script:PendingMetaMap.Count
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.13.0","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.13.1","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"colMs":').Append($colMs)
     [void]$sb.Append(',"svcMs":').Append($svcMs)

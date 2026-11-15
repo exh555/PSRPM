@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-11-15
+
+### Changed
+- **Windows PowerShell 5.1 (`Desktop`) Support Clarification (`PSRPM.psd1`, `PSRPM.psm1`, `README.md`, `PRODUCT.md`, `docs/FEATURE_PROPOSAL_MASTER_PLAN.md`)**:
+  - Updated `CompatiblePSEditions` in `PSRPM.psd1` from `@('Desktop', 'Core')` to `@('Desktop')` and aligned documentation with Windows PowerShell 5.1 requirements (`Add-Type -AssemblyName System.Web.Extensions` and desktop WPF UI).
+  - Added an early `$PSVersionTable.PSEdition -ne 'Desktop'` runtime guard in `Start-PSRPM` (also covering `Start-RemoteProcessManager`) for clear failure diagnostics on unsupported PowerShell editions.
+
+### Fixed
+- **Multi-Tab Sync, Sequence-Gap Recovery & Full-Resync Pruning (`RunspaceEngine.ps1`, `PSRPM.psm1`)**:
+  - Tracked dropped background/mismatched/sequence-gapped payloads per tab via `TabNeedsResync`, preserved pending `ForceFullSync` during `SelectTabSession` and `CloseTabSession`, and routed explicit `NextTabId` and `NextForceFullSync` from UI tab teardown.
+  - Pruned stale cached processes missing from full recovery snapshots (`full = 1`) via a 1-tick exit flash (`LifecycleState = 2`, `[Resync Pruned]`) followed by next-tick eviction, and pruned stale cached services on `svcFull = 1`.
+- **Self-PID Process Tree Termination & Suspend Protection (`ProcessActions.ps1`)**:
+  - Prevented self-deadlock in `KillTree` by skipping Phase 1 `NtSuspendProcess` when `$orderedTree` includes PSRPM's own host `$PID`, terminating descendant and sibling processes bottom-up first, closing handles, and terminating `$PID` last.
+  - Added an explicit refusal guard in `SuspendProcess` when targeting PSRPM's own host `$PID` (`Status = "Refused"`, `ErrorId = "PSRPM.Process.Refused"`).
+- **Host-Switch Window Binding (`PSRPM.psm1`)**:
+  - Updated `$actionSelectHostTab` and `$syncTargetSwitchUi` to reset/re-scope `FindHandleWindow` (`$script:ResetFindHandleForHostChange`, `TabId`/`Host` stamping on results, and mismatch guards on async completion, `CloseHandle`, and `GoToProcess`) and dynamically rebind an open `SystemInfoWindow` (`$script:RebindActiveSysInfoWindow`, dynamic `$sysWin.DataContext` lookup).
+- **Global `Ctrl+D` Theme Cycling Across Child Windows (`PSRPM.psm1`)**:
+  - Added `$activeChildDialogs`, `$getActiveChildWindows`, and `$registerChildWindow` so pressing `Ctrl+D` cycles themes directly from any modal or modeless child window (`SystemInfoWindow`, `PropertiesWindow`, `FindHandleWindow`, `ServiceDetailWindow`, `SelectColumnsWindow`, `ConnectDialog`, and `HelpWindow`), while keeping all open child windows, active hover tooltips (`$syncHoverTipBrushes`), and `Topmost` state synchronized.
+- **Dark-Theme Contrast & Tab Control Styling (`SystemInfoWindow.xaml`, `HelpWindow.xaml`, `FindHandleWindow.xaml`)**:
+  - Fixed black text on dark themes in `SystemInfoWindow.xaml` (card titles, vertical gauge percentages, `GroupBox` headers, and the `Show one graph per CPU` `CheckBox`) and `HelpWindow.xaml` by adding `BrushRowHover` fallback brushes along with theme-aware `TabControl`, `TabItem`, `GroupBox`, and `CheckBox` styles overriding WPF Aero defaults, and added an explicit unselected cell `Foreground` setter to `FindHandleWindow.xaml`.
+- **Live Sorting, Inspector State, >24h CPU Formatting & I/O Rate Accuracy (`RunspaceEngine.ps1`, `DeepInspector.ps1`, `ViewModelClasses.ps1`, `DataCollector.ps1`)**:
+  - Added `"CPUDelta"` to `$dynSortProps` in `RunspaceEngine.ps1` so live flat/sorted views re-sort dynamically on every differential tick.
+  - Persisted TCP EStats access-denied state across connections in `DeepInspector.ps1` using a reference hashtable (`$estatsState = @{ SetBlocked = $false }`) and formatted >24-hour CPU times (`UserTime`, `KernelTime`, `TotalCpuTime`) using `[Math]::Floor($ts.TotalHours)` instead of `hh\:mm\:ss\.fff`.
+  - Passed actual `$elapsedSec` to 3-argument `UpdateExtendedTelemetry` in `ViewModelClasses.ps1` (retaining the 2-arg `1.0`s overload) so `IoTotalHistory240`, `IoWriteHistory240`, `IoGaugeText`, and `IoTotalRateFormatted` report accurate per-second byte rates, and decoupled `DiskReadKBs`, `DiskWriteKBs`, and `DiskQueueDepth` in `DataCollector.ps1` from network `GetIfTable2` availability using elapsed collector tick intervals (`$ioSec`).
+- **Regression Test Coverage (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added Tests `12Q`, `12R`, and `12S` covering RunspaceEngine resync pruning (processes + services), `TabNeedsResync`/`CloseTabSession`, live `CPUDelta` re-sort, self-PID `SuspendProcess` refusal and self-PID `KillTree` non-hang, >24h CPU formatting, `$estatsState` persistence, elapsed-time I/O rate scaling, DataCollector Disk KB/s decoupling, host-switch window hooks, the `Desktop` edition guard, global `Ctrl+D` child-window registration, and dark-theme visual foreground compliance in `SystemInfoWindow.xaml` and `HelpWindow.xaml`.
+
 ## [1.13.0] - 2026-11-15
 
 ### Added

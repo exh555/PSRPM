@@ -296,17 +296,29 @@ $script:PSRPMActionScriptBlock = {
                         }
                     }
 
-                    # Phase 1: Top-Down Suspend (Freezes supervisors & watchdogs so they cannot respawn workers)
-                    foreach ($pIdVal in $orderedTree) {
-                        if ($openHandles.ContainsKey($pIdVal)) {
-                            [void][PSRPM.NativeActionsV4]::NtSuspendProcess($openHandles[$pIdVal])
+                    $selfPid = [int]$PID
+                    $treeContainsSelf = $orderedTree.Contains($selfPid)
+
+                    # Phase 1: Top-Down Suspend (skip when tree contains host $PID to avoid self-deadlock before termination)
+                    if (-not $treeContainsSelf) {
+                        foreach ($pIdVal in $orderedTree) {
+                            if ($openHandles.ContainsKey($pIdVal)) {
+                                [void][PSRPM.NativeActionsV4]::NtSuspendProcess($openHandles[$pIdVal])
+                            }
                         }
                     }
 
-                    # Phase 2: Bottom-Up Termination (Leaves first, root last, using the pinned handles)
+                    # Phase 2: Bottom-Up Termination (Leaves first, root last; defer host $PID until last)
                     $killedCount = 0
+                    $deferSelfKill = $false
                     for ($i = $orderedTree.Count - 1; $i -ge 0; $i--) {
                         $killId = $orderedTree[$i]
+                        if ($killId -eq $selfPid) {
+                            if ($openHandles.ContainsKey($killId)) {
+                                $deferSelfKill = $true
+                            }
+                            continue
+                        }
                         if ($openHandles.ContainsKey($killId)) {
                             $ok = [PSRPM.NativeActionsV4]::TerminateProcess($openHandles[$killId], 1)
                             if ($ok -ne 0) {
@@ -314,6 +326,23 @@ $script:PSRPMActionScriptBlock = {
                             } else {
                                 $failedPids.Add($killId)
                             }
+                        }
+                    }
+
+                    if ($deferSelfKill -and $openHandles.ContainsKey($selfPid)) {
+                        $hSelf = $openHandles[$selfPid]
+                        [void]$openHandles.Remove($selfPid)
+                        foreach ($hOther in $openHandles.Values) {
+                            try { [void][PSRPM.NativeActionsV4]::NtResumeProcess($hOther) } catch {}
+                            try { [void][PSRPM.NativeActionsV4]::CloseHandle($hOther) } catch {}
+                        }
+                        $openHandles.Clear()
+                        $okSelf = [PSRPM.NativeActionsV4]::TerminateProcess($hSelf, 1)
+                        try { [void][PSRPM.NativeActionsV4]::CloseHandle($hSelf) } catch {}
+                        if ($okSelf -ne 0) {
+                            $killedCount++
+                        } else {
+                            $failedPids.Add($selfPid)
                         }
                     }
 
@@ -337,6 +366,9 @@ $script:PSRPMActionScriptBlock = {
             "SuspendProcess" {
                 if ($TargetPid -le 4) {
                     throw "Cannot suspend critical system process (PID $TargetPid)."
+                }
+                if ($TargetPid -eq [int]$PID) {
+                    throw "Cannot suspend PSRPM's own host process (PID $TargetPid)."
                 }
                 # PROCESS_SUSPEND_RESUME (0x0800) | PROCESS_QUERY_LIMITED_INFORMATION (0x1000)
                 $hProc = [PSRPM.NativeActionsV4]::OpenProcess(0x1800, 0, $TargetPid)

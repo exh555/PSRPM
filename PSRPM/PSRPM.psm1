@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.13.0"
+$script:AppVersion = "1.13.1"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -527,6 +527,10 @@ function Start-PSRPM {
         [switch]$Defaults
     )
 
+    if ($PSVersionTable.PSEdition -ne 'Desktop') {
+        throw "PSRPM requires Windows PowerShell 5.1 ('Desktop' edition). Current PowerShell edition is '$($PSVersionTable.PSEdition)' ($($PSVersionTable.PSVersion)). Please launch PSRPM from powershell.exe."
+    }
+
     $hasExplicitWinRmTarget = $PSBoundParameters.ContainsKey("ComputerName") -or
         $PSBoundParameters.ContainsKey("Credential") -or
         ($Port -gt 0) -or
@@ -849,6 +853,18 @@ function Start-PSRPM {
     $stateContainer.CurrentTheme = "Light"
     $stateContainer.ThemePalette = [PSRPMThemeRegistry]::GetPalette("Light")
 
+    $activeChildDialogs = [System.Collections.Generic.List[System.Windows.Window]]::new()
+    $getActiveChildWindows = {
+        $seen = [System.Collections.Generic.List[System.Windows.Window]]::new()
+        foreach ($w in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
+            if ($w -and -not $seen.Contains($w)) { [void]$seen.Add($w) }
+        }
+        foreach ($w in @($activeChildDialogs)) {
+            if ($w -and -not $seen.Contains($w)) { [void]$seen.Add($w) }
+        }
+        $seen.ToArray()
+    }
+
     $applyTheme = {
         param($themeArg)
         $themeMode = if ($themeArg -is [bool]) { if ($themeArg) { "Dark" } else { "Light" } } else { [string]$themeArg }
@@ -899,9 +915,16 @@ function Start-PSRPM {
             &$script:RefreshNetworkThemeBrushes
         }
 
-        foreach ($activeModal in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
+        foreach ($activeModal in (&$getActiveChildWindows)) {
             if ($activeModal -and $activeModal.IsLoaded) {
                 &$syncDialogThemeBrushes $activeModal
+            }
+        }
+        if ($syncHoverTipBrushes) {
+            foreach ($hoverSt in @($mainHoverState, $script:ActiveSysHoverState)) {
+                if ($hoverSt -and $hoverSt.ToolTip -and $hoverSt.ResourceWindow -and $hoverSt.ResourceWindow.IsLoaded) {
+                    &$syncHoverTipBrushes $hoverSt.ToolTip $hoverSt.ResourceWindow
+                }
             }
         }
         if ($prevTheme -ne $resolvedMode) {
@@ -937,6 +960,34 @@ function Start-PSRPM {
     $btnToolbarTheme = $window.FindName("BtnToolbarTheme")
     if ($btnToolbarTheme) {
         $btnToolbarTheme.add_Click({ &$cycleTheme })
+    }
+
+    $registerChildWindow = {
+        param([System.Windows.Window]$childWin)
+        if (-not $childWin) { return }
+        $childWin.Topmost = [bool]$window.Topmost
+        if ($activeChildDialogs.Contains($childWin)) { return }
+        [void]$activeChildDialogs.Add($childWin)
+
+        $localDialogList = $activeChildDialogs
+        $localWinRef = $childWin
+        $childWin.add_Closed({
+            param($s, $e)
+            [void]$localDialogList.Remove($localWinRef)
+        }.GetNewClosure())
+
+        $localCycleTheme = $cycleTheme
+        $childWin.add_PreviewKeyDown({
+            param($s, $e)
+            $mods = [System.Windows.Input.Keyboard]::Modifiers
+            $isCtrl = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
+            $isAlt = ($mods -band [System.Windows.Input.ModifierKeys]::Alt) -ne 0
+            $isShift = ($mods -band [System.Windows.Input.ModifierKeys]::Shift) -ne 0
+            if ($isCtrl -and -not $isAlt -and -not $isShift -and $e.Key -eq [System.Windows.Input.Key]::D) {
+                &$localCycleTheme
+                $e.Handled = $true
+            }
+        }.GetNewClosure())
     }
 
     $initialTheme = if ($Dark.IsPresent) {
@@ -1006,7 +1057,7 @@ function Start-PSRPM {
         $stateContainer.AlwaysOnTop = $enable
         $window.Topmost = $enable
         if ($menuAlwaysOnTop) { $menuAlwaysOnTop.IsChecked = $enable }
-        foreach ($activeModal in @($script:ActiveFindHandleWin, $script:ActivePropWin, $script:ActiveSysInfoWin)) {
+        foreach ($activeModal in (&$getActiveChildWindows)) {
             if ($activeModal -and $activeModal.IsLoaded) {
                 $activeModal.Topmost = $enable
             }
@@ -2297,6 +2348,7 @@ function Start-PSRPM {
             $btnColOk.add_Click({ $scWin.DialogResult = $true })
         }
 
+        &$registerDialogRenderFlush $scWin
         if ($scWin.ShowDialog() -eq $true) {
             $script:UserVisibleCols.Clear()
             [void]$script:UserVisibleCols.Add("Process")
@@ -3244,7 +3296,7 @@ function Start-PSRPM {
     $registerDialogRenderFlush = {
         param([System.Windows.Window]$dlg)
         if (-not $dlg) { return }
-        $dlg.Topmost = [bool]$window.Topmost
+        &$registerChildWindow $dlg
         $dlg.add_ContentRendered({
             param($s, $e)
             if ($s -is [System.Windows.UIElement]) {
@@ -4235,7 +4287,7 @@ function Start-PSRPM {
         $propWin.FindName("BtnCloseProp").add_Click({ $propWin.Close() })
 
         # Trigger Initial On-Demand Core Inspection on ContentRendered (prevents D3D9 partial dirty-rect race during ShowDialog)
-        $propWin.Topmost = [bool]$window.Topmost
+        &$registerChildWindow $propWin
         $coreInspectState = @{ InitialCoreFired = $false }
         $propWin.add_ContentRendered({
             param($s, $e)
@@ -4382,10 +4434,12 @@ function Start-PSRPM {
         }
         if ($script:RestoreActiveTabFeatureState) { &$script:RestoreActiveTabFeatureState $targetTabVm }
 
-        # 6. Update Window Title
+        # 6. Update Window Title & Sync Open Modeless Tool Windows
         if ($window) {
             $window.Title = "PSRPM - PowerShell Remote Process Manager [$($targetTabVm.Title)]"
         }
+        if ($script:ResetFindHandleForHostChange) { &$script:ResetFindHandleForHostChange }
+        if ($script:RebindActiveSysInfoWindow)   { &$script:RebindActiveSysInfoWindow $targetTabVm }
 
         # 7. Refresh Tree View instantly (< 2ms)
         if ($engine -and $engine.RefreshTree) {
@@ -4394,10 +4448,15 @@ function Start-PSRPM {
 
         # 8. Notify Runspace to switch active poll target
         if ($engine -and $engine.SendCommand) {
+            $needSelectSync = ($targetTabVm.ProcessMap.Count -eq 0) -or (
+                $stateContainer.ContainsKey('TabNeedsResync') -and
+                $null -ne $stateContainer.TabNeedsResync -and
+                [bool]$stateContainer.TabNeedsResync[[string]$targetTabVm.TabId]
+            )
             $cmdSelect = @{
                 CommandType        = "SelectTabSession"
                 TabId              = $targetTabVm.TabId
-                ForceFullSync      = ($targetTabVm.ProcessMap.Count -eq 0)
+                ForceFullSync      = $needSelectSync
                 EnableNetEtw       = [bool]$targetTabVm.EnableNetEtw
                 NetEtwCap          = [int]$stateContainer.NetEtwCap
                 NetEtwEventsPerSec = [int]$stateContainer.NetEtwEventsPerSec
@@ -4419,17 +4478,31 @@ function Start-PSRPM {
         $wasActive = ($tabToClose -eq $script:ActiveHostTab)
         $tabId = $tabToClose.TabId
 
+        $newActive = $null
+        if ($wasActive) {
+            $nextCandidateIdx = if ($closeIdx -lt ($hostTabsCollection.Count - 1)) { $closeIdx + 1 } else { $closeIdx - 1 }
+            if ($nextCandidateIdx -ge 0 -and $nextCandidateIdx -lt $hostTabsCollection.Count) {
+                $newActive = $hostTabsCollection[$nextCandidateIdx]
+            }
+        }
+
         $cmdClose = @{
             CommandType = "CloseTabSession"
             TabId       = $tabId
+        }
+        if ($newActive) {
+            $cmdClose.NextTabId = $newActive.TabId
+            $cmdClose.NextForceFullSync = ($newActive.ProcessMap.Count -eq 0) -or (
+                $stateContainer.ContainsKey('TabNeedsResync') -and
+                $null -ne $stateContainer.TabNeedsResync -and
+                [bool]$stateContainer.TabNeedsResync[[string]$newActive.TabId]
+            )
         }
         & $engineHandle.SendCommand $cmdClose $null
 
         [void]$hostTabsCollection.Remove($tabToClose)
 
-        if ($wasActive) {
-            $newIdx = [Math]::Min($closeIdx, $hostTabsCollection.Count - 1)
-            $newActive = $hostTabsCollection[$newIdx]
+        if ($wasActive -and $newActive) {
             &$actionSelectHostTab $newActive $engineHandle
         } else {
             $canClose = ($hostTabsCollection.Count -gt 1)
@@ -4509,6 +4582,8 @@ function Start-PSRPM {
         }
         $window.Title = "PSRPM - PowerShell Remote Process Manager [$($stateContainer.TargetDisplayName)]"
         if ($script:ResetActiveTabFeatureState) { &$script:ResetActiveTabFeatureState $tabObj }
+        if ($script:ResetFindHandleForHostChange) { &$script:ResetFindHandleForHostChange }
+        if ($script:RebindActiveSysInfoWindow)   { &$script:RebindActiveSysInfoWindow $tabObj }
     }
 
     # Helper: Instantiate HostTabItemViewModel in Module Scope (Prevents DynamicModule class resolution errors)
@@ -5233,16 +5308,16 @@ function Start-PSRPM {
 
         $chkPerCpu = $sysWin.FindName("ChkPerCpuGraph")
         if ($chkPerCpu) {
-            $localSumm         = $activeSumm
+            $localSysWinChk    = $sysWin
             $localCpuHoverChk  = $sysHoverState
             $localCpuCloseFn   = $closeHoverState
             $chkPerCpu.add_Checked({
                 & $localCpuCloseFn $localCpuHoverChk
-                $localSumm.SetPerCpuMode($true)
+                if ($localSysWinChk.DataContext) { $localSysWinChk.DataContext.SetPerCpuMode($true) }
             }.GetNewClosure())
             $chkPerCpu.add_Unchecked({
                 & $localCpuCloseFn $localCpuHoverChk
-                $localSumm.SetPerCpuMode($false)
+                if ($localSysWinChk.DataContext) { $localSysWinChk.DataContext.SetPerCpuMode($false) }
             }.GetNewClosure())
         }
 
@@ -5259,7 +5334,7 @@ function Start-PSRPM {
             }
         }.GetNewClosure())
 
-        $localCloseSumm     = $activeSumm
+        $localSysWinClose   = $sysWin
         $localSysHoverClose = $sysHoverState
         $localCloseHoverFn  = $closeHoverState
         $localClearSysWin   = {
@@ -5268,13 +5343,46 @@ function Start-PSRPM {
         }
         $sysWin.add_Closed({
             & $localCloseHoverFn $localSysHoverClose
-            $localCloseSumm.IsSysInfoOpen = $false
+            if ($localSysWinClose.DataContext) {
+                $localSysWinClose.DataContext.IsSysInfoOpen = $false
+            }
             & $localClearSysWin
         }.GetNewClosure())
 
         $script:ActiveSysInfoWin = $sysWin
         &$registerDialogRenderFlush $sysWin
         $sysWin.Show()
+    }
+
+    $script:RebindActiveSysInfoWindow = {
+        param([Object]$newTabVm)
+        $sysWinRef = $script:ActiveSysInfoWin
+        if (-not $sysWinRef -or -not $sysWinRef.IsLoaded) { return }
+
+        if ($script:ActiveSysHoverState) {
+            & $closeHoverState $script:ActiveSysHoverState
+        }
+
+        $oldSumm = $sysWinRef.DataContext
+        $newSumm = if ($newTabVm -and $newTabVm.SummaryVm) { $newTabVm.SummaryVm } else { $summaryVm }
+        if ($oldSumm -and ($oldSumm -ne $newSumm)) {
+            $oldSumm.IsSysInfoOpen = $false
+        }
+
+        $sysWinRef.Title       = "System Information [$($stateContainer.TargetDisplayName)]"
+        $sysWinRef.DataContext = $newSumm
+
+        if ($newSumm) {
+            $newSumm.IsSysInfoOpen = $true
+            $newSumm.RefreshSysInfoGraphs()
+            if ($newSumm.ShowOneGraphPerCpu -and $newSumm.CoreGraphs) {
+                foreach ($cg in $newSumm.CoreGraphs) { $cg.BuildCoreGeometry() }
+            }
+            $chkPerCpuCtl = $sysWinRef.FindName("ChkPerCpuGraph")
+            if ($chkPerCpuCtl) {
+                $chkPerCpuCtl.IsChecked = [bool]$newSumm.ShowOneGraphPerCpu
+            }
+        }
     }
 
     $menuSysInfo    = $window.FindName("MenuSystemInfo")
@@ -5423,12 +5531,13 @@ function Start-PSRPM {
     $script:FindHandleControls   = @{}
     $script:FindHandleResultsCol = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
     $findSearchState = @{
-        ActiveGen = 0
+        ActiveGen  = 0
         IsScanning = $false
-        StartUtc  = [DateTime]::MinValue
-        Query     = ""
-        Target    = ""
-        Timer     = $null
+        StartUtc   = [DateTime]::MinValue
+        Query      = ""
+        Target     = ""
+        TabId      = ""
+        Timer      = $null
     }
 
     $cancelHandleSearch = {
@@ -5449,6 +5558,34 @@ function Start-PSRPM {
         if ($txtStatus -and $reasonText) { $txtStatus.Text = $reasonText }
     }
 
+    $script:ResetFindHandleForHostChange = {
+        $wasScanning    = [bool]$findSearchState.IsScanning
+        $hadResults     = ($script:FindHandleResultsCol -and $script:FindHandleResultsCol.Count -gt 0)
+        $hasWin         = ($null -ne $script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded)
+        $targetLabel    = [string]$stateContainer.TargetDisplayName
+        $activeTabIdNow = if ($script:ActiveHostTab) { [string]$script:ActiveHostTab.TabId } else { [string]$stateContainer.ActiveTabId }
+
+        if ($wasScanning) {
+            &$cancelHandleSearch "Host switched to '$targetLabel'; handle search cancelled."
+        } else {
+            $findSearchState.ActiveGen = ([int]$findSearchState.ActiveGen) + 1
+            if ($hasWin -and $hadResults -and $script:FindHandleControls['TxtHandleStatus']) {
+                $script:FindHandleControls['TxtHandleStatus'].Text = "Host switched to '$targetLabel'. Previous results cleared; search again to inspect handles."
+            }
+        }
+        $findSearchState.Target = $targetLabel
+        $findSearchState.TabId  = $activeTabIdNow
+
+        if ($hadResults) {
+            for ($i = $script:FindHandleResultsCol.Count - 1; $i -ge 0; $i--) {
+                $script:FindHandleResultsCol.RemoveAt($i)
+            }
+        }
+        if ($hasWin) {
+            $script:ActiveFindHandleWin.Title = "Find Handle or DLL Substring [$targetLabel]"
+        }
+    }
+
     $executeHandleSearch = {
         $ctrls     = $script:FindHandleControls
         $txtBox    = $ctrls['TxtSearchHandle']
@@ -5465,18 +5602,22 @@ function Start-PSRPM {
             return
         }
 
+        $launchTabId  = if ($script:ActiveHostTab) { [string]$script:ActiveHostTab.TabId } else { [string]$stateContainer.ActiveTabId }
+        $launchTarget = [string]$stateContainer.TargetDisplayName
+
         $findSearchState.ActiveGen  = ([int]$findSearchState.ActiveGen) + 1
         $findSearchState.IsScanning = $true
         $findSearchState.StartUtc   = [DateTime]::UtcNow
         $findSearchState.Query      = $q
-        $findSearchState.Target     = [string]$stateContainer.TargetDisplayName
-        $myGen      = [int]$findSearchState.ActiveGen
-        $localState = $findSearchState
+        $findSearchState.Target     = $launchTarget
+        $findSearchState.TabId      = $launchTabId
+        $myGen       = [int]$findSearchState.ActiveGen
+        $localState  = $findSearchState
 
         if ($btnSearch) { $btnSearch.IsEnabled = $false }
         if ($btnCancel) { $btnCancel.Visibility = [System.Windows.Visibility]::Visible }
         if ($pbSearch)  { $pbSearch.Visibility  = [System.Windows.Visibility]::Visible }
-        if ($txtStatus) { $txtStatus.Text = "Searching across processes on '$($stateContainer.TargetDisplayName)' for '$q'... (0.0s)" }
+        if ($txtStatus) { $txtStatus.Text = "Searching across processes on '$launchTarget' for '$q'... (0.0s)" }
         if ($findSearchState.Timer) { $findSearchState.Timer.Start() }
 
         $cmdFind = @{
@@ -5484,14 +5625,16 @@ function Start-PSRPM {
             Query       = $q
         }
 
-        $localJss = $jssAction
-        $localQ   = $q
+        $localJss    = $jssAction
+        $localQ      = $q
+        $localTabId  = $launchTabId
+        $localTarget = $launchTarget
 
         & $engineHandle.SendCommand $cmdFind ({
             param($res)
             if ($findWin -and $findWin.IsLoaded) {
                 $findWin.Dispatcher.Invoke([Action]({
-                    if ([int]$localState.ActiveGen -ne $myGen) { return }
+                    if ([int]$localState.ActiveGen -ne $myGen -or ($localTabId -and $localState.TabId -ne $localTabId)) { return }
                     $localState.IsScanning = $false
                     if ($localState.Timer) {
                         try { $localState.Timer.Stop() } catch {}
@@ -5510,6 +5653,8 @@ function Start-PSRPM {
                                     Type        = [string]$item['Type']
                                     Handle      = [string]$item['Handle']
                                     Name        = [string]$item['Name']
+                                    TabId       = $localTabId
+                                    Host        = $localTarget
                                 })
                             }
                             if ($txtStatus) {
@@ -5541,6 +5686,22 @@ function Start-PSRPM {
         $nVal   = [string]$sel.Name
 
         $findOwner = if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsVisible) { $script:ActiveFindHandleWin } else { $window }
+
+        $curTabIdNow = if ($script:ActiveHostTab) { [string]$script:ActiveHostTab.TabId } else { [string]$stateContainer.ActiveTabId }
+        $selTabId    = if ($sel.PSObject.Properties['TabId']) { [string]$sel.TabId } else { "" }
+        $selHost     = if ($sel.PSObject.Properties['Host'])  { [string]$sel.Host }  else { "" }
+        if ($selTabId -and $curTabIdNow -and $selTabId -ne $curTabIdNow) {
+            $hostTag = if ($selHost) { " '$selHost'" } else { "" }
+            [System.Windows.MessageBox]::Show(
+                $findOwner,
+                "Cannot close handle $hVal in '$pName' (PID $pidVal): search result belongs to host$hostTag ($selTabId), not active host '$($stateContainer.TargetDisplayName)'. Re-run search on the active host.",
+                "PSRPM - Host Mismatch",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            ) | Out-Null
+            return
+        }
+
         if ($tVal -eq "DLL" -or [string]::IsNullOrWhiteSpace($hVal) -or $hVal -eq "N/A" -or ($tVal -and $tVal.StartsWith("["))) {
             [System.Windows.MessageBox]::Show(
                 $findOwner,
@@ -5562,9 +5723,15 @@ function Start-PSRPM {
         )
         if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
 
+        $procCreateTime = if ($engineHandle -and $engineHandle.ProcessMap -and $engineHandle.ProcessMap.ContainsKey($pidVal)) {
+            [long]$engineHandle.ProcessMap[$pidVal].CreateTime
+        } else {
+            0L
+        }
         $procVmDummy = [PSCustomObject]@{
-            PID  = $pidVal
-            Name = $pName
+            PID        = $pidVal
+            Name       = $pName
+            CreateTime = $procCreateTime
         }
         $targetPid    = $pidVal
         $targetHnd    = $hVal
@@ -5620,6 +5787,20 @@ function Start-PSRPM {
         if (-not $gridHandles -or -not $gridHandles.SelectedItem) { return }
         $sel = $gridHandles.SelectedItem
         $findOwner = if ($script:ActiveFindHandleWin -and $script:ActiveFindHandleWin.IsLoaded -and $script:ActiveFindHandleWin.IsVisible) { $script:ActiveFindHandleWin } else { $window }
+        $curTabIdNow = if ($script:ActiveHostTab) { [string]$script:ActiveHostTab.TabId } else { [string]$stateContainer.ActiveTabId }
+        $selTabId    = if ($sel.PSObject.Properties['TabId']) { [string]$sel.TabId } else { "" }
+        $selHost     = if ($sel.PSObject.Properties['Host'])  { [string]$sel.Host }  else { "" }
+        if ($selTabId -and $curTabIdNow -and $selTabId -ne $curTabIdNow) {
+            $hostTag = if ($selHost) { " '$selHost'" } else { "" }
+            [System.Windows.MessageBox]::Show(
+                $findOwner,
+                "Search result belongs to host$hostTag ($selTabId), not active host '$($stateContainer.TargetDisplayName)'. Re-run search on the active host.",
+                "PSRPM - Host Mismatch",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            ) | Out-Null
+            return
+        }
         &$jumpToProcessInMainGrid ([int]$sel.PID) $false ([string]$sel.ProcessName) $findOwner $true
     }
 

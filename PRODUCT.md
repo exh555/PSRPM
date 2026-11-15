@@ -1,7 +1,7 @@
 # PRODUCT.md -- PSRPM (PowerShell Remote Process Manager)
 
 ## 1. Executive Summary & Vision
-**PSRPM (PowerShell Remote Process Manager)** is an enterprise-grade, **100% fileless**, agentless Windows process monitoring, forensics, and administration application. Built natively for **Windows PowerShell 5.1** and **PowerShell 7+** using pure WPF and in-memory `.NET Reflection.Emit`, PSRPM bridges the gap between raw remote command-line tools and native desktop inspection utilities.
+**PSRPM (PowerShell Remote Process Manager)** is an enterprise-grade, **100% fileless**, agentless Windows process monitoring, forensics, and administration application. Built natively for **Windows PowerShell 5.1** (`Desktop` edition) using pure WPF and in-memory `.NET Reflection.Emit`, PSRPM bridges the gap between raw remote command-line tools and native desktop inspection utilities.
 
 Inspired by **Sysinternals Process Explorer**, PSRPM provides a unified hierarchical **Tree-Grid**, semantic row coloring across **6 themes**, real-time telemetry sparklines, an interactive **Multi-Host Tabbed Session Bar**, a live **5-tab System Information** modal, a **7-tab Deep Process Properties Inspector**, and a live **Audit & Network Telemetry Console**--delivered entirely over persistent WinRM `PSSession`s (`-ComputerName`) or zero-privilege local execution (`-LocalOnly`).
 

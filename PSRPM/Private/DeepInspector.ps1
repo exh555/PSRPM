@@ -310,7 +310,7 @@ $script:PSRPMDeepInspectorScriptBlock = {
         $roBuf     = [IntPtr]::Zero
         $tcp4Row   = [IntPtr]::Zero
         $tcp6Row   = [IntPtr]::Zero
-        $estatsSetBlocked = $false
+        $estatsState = @{ SetBlocked = $false }
 
         try {
             if ($includeAllFields) {
@@ -352,12 +352,12 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     for ($k = 0; $k -lt 48; $k += 4) {
                         [System.Runtime.InteropServices.Marshal]::WriteInt32($tcp6Row, 4 + $k, [System.Runtime.InteropServices.Marshal]::ReadInt32($rowPtr, $k))
                     }
-                    if (-not $estatsSetBlocked -and -not $script:EnabledEStatsKeys.Contains($eKey)) {
+                    if (-not $estatsState.SetBlocked -and -not $script:EnabledEStatsKeys.Contains($eKey)) {
                         $sr = [PSRPM.NativeInspectorV3]::SetPerTcp6ConnectionEStats($tcp6Row, 1, $rwBuf, 0, 1, 0)
                         if ($sr -eq 0) {
                             [void]$script:EnabledEStatsKeys.Add($eKey)
                         } elseif ($sr -eq 5) {
-                            $estatsSetBlocked = $true
+                            $estatsState.SetBlocked = $true
                         }
                     }
                     $gr = [PSRPM.NativeInspectorV3]::GetPerTcp6ConnectionEStats($tcp6Row, 1, $rwBuf, 0, 1, [IntPtr]::Zero, 0, 0, $roBuf, 0, 96)
@@ -365,12 +365,12 @@ $script:PSRPMDeepInspectorScriptBlock = {
                     for ($k = 0; $k -lt 20; $k += 4) {
                         [System.Runtime.InteropServices.Marshal]::WriteInt32($tcp4Row, $k, [System.Runtime.InteropServices.Marshal]::ReadInt32($rowPtr, $k))
                     }
-                    if (-not $estatsSetBlocked -and -not $script:EnabledEStatsKeys.Contains($eKey)) {
+                    if (-not $estatsState.SetBlocked -and -not $script:EnabledEStatsKeys.Contains($eKey)) {
                         $sr = [PSRPM.NativeInspectorV3]::SetPerTcpConnectionEStats($tcp4Row, 1, $rwBuf, 0, 1, 0)
                         if ($sr -eq 0) {
                             [void]$script:EnabledEStatsKeys.Add($eKey)
                         } elseif ($sr -eq 5) {
-                            $estatsSetBlocked = $true
+                            $estatsState.SetBlocked = $true
                         }
                     }
                     $gr = [PSRPM.NativeInspectorV3]::GetPerTcpConnectionEStats($tcp4Row, 1, $rwBuf, 0, 1, [IntPtr]::Zero, 0, 0, $roBuf, 0, 96)
@@ -1017,11 +1017,17 @@ $script:PSRPMDeepInspectorScriptBlock = {
                         if ($nxt -lt 0) { break }
                         $pIdCur = [System.Runtime.InteropServices.Marshal]::ReadIntPtr($cPtr, $offPid).ToInt32()
                         if ($pIdCur -eq $TargetPid) {
+                            $formatCpuTime = {
+                                param([TimeSpan]$ts)
+                                if ($ts.Ticks -lt 0L) { $ts = [TimeSpan]::Zero }
+                                $hrs = [long][Math]::Floor($ts.TotalHours)
+                                return ("{0:D2}:{1:D2}:{2:D2}.{3:D3}" -f $hrs, $ts.Minutes, $ts.Seconds, $ts.Milliseconds)
+                            }
                             $uTime = [TimeSpan]::FromTicks([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 40))
                             $kTime = [TimeSpan]::FromTicks([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 48))
-                            $result.Performance["UserTime"]     = $uTime.ToString("hh\:mm\:ss\.fff")
-                            $result.Performance["KernelTime"]   = $kTime.ToString("hh\:mm\:ss\.fff")
-                            $result.Performance["TotalCpuTime"] = ($uTime + $kTime).ToString("hh\:mm\:ss\.fff")
+                            $result.Performance["UserTime"]     = &$formatCpuTime $uTime
+                            $result.Performance["KernelTime"]   = &$formatCpuTime $kTime
+                            $result.Performance["TotalCpuTime"] = &$formatCpuTime ($uTime + $kTime)
 
                             if ($is64) {
                                 $result.Performance["PeakWorkingSet"] = "$([Math]::Round([System.Runtime.InteropServices.Marshal]::ReadInt64($cPtr, 136) / 1KB, 0).ToString('N0')) K"

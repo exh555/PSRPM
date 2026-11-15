@@ -72,6 +72,7 @@ function Start-PSRPMEngine {
         CategoryFilter      = ""
         ForceFullSync       = $true
         FullSyncGen         = 1L
+        TabNeedsResync      = [hashtable]::Synchronized(@{})
         ClearHostMaps       = $false
         ActiveTabId         = $InitialTabId
         PayloadTabId        = $InitialTabId
@@ -750,7 +751,14 @@ function Start-PSRPMEngine {
                                 if ($cmd.ContainsKey('NetEtwEventsPerSec')) {
                                     $stateContainer.NetEtwEventsPerSec = [int]$cmd.NetEtwEventsPerSec
                                 }
-                                &$setFullSync ([bool]$cmd.ForceFullSync)
+                                $needSelFullSync = [bool]$cmd.ForceFullSync -or (
+                                    $stateContainer.ContainsKey('TabNeedsResync') -and
+                                    $null -ne $stateContainer.TabNeedsResync -and
+                                    [bool]$stateContainer.TabNeedsResync[$selTabId]
+                                )
+                                if ($needSelFullSync) {
+                                    &$setFullSync $true
+                                }
                             }
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -816,18 +824,35 @@ function Start-PSRPMEngine {
                                     Remove-PSSession -Session $sessToClose.Session -ErrorAction SilentlyContinue
                                 }
                                 $sessions.Remove($closeTabId)
+                                if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
+                                    [void]$stateContainer.TabNeedsResync.Remove($closeTabId)
+                                }
                             }
 
                             if ($activeTabId -eq $closeTabId) {
                                 $remainKeys = @($sessions.Keys)
                                 if ($remainKeys.Count -gt 0) {
-                                    $activeTabId = $remainKeys[0]
+                                    $prefNext = if ($cmd.ContainsKey('NextTabId')) { [string]$cmd.NextTabId } else { "" }
+                                    if ($prefNext -and $sessions.ContainsKey($prefNext)) {
+                                        $activeTabId = $prefNext
+                                    } else {
+                                        $activeTabId = $remainKeys[0]
+                                    }
                                     $curr = $sessions[$activeTabId]
                                     $stateContainer.ActiveTabId       = $activeTabId
                                     $stateContainer.TargetDisplayName = $curr.Target
                                     $stateContainer.TransportBadge    = $curr.Badge
                                     $stateContainer.ConnectionState   = $curr.ConnState
-                                    &$setFullSync $true
+                                    $hasExplicitNext = ($prefNext -and $prefNext -eq $activeTabId)
+                                    $needCloseNextFull = (-not $hasExplicitNext) -or
+                                        ($cmd.ContainsKey('NextForceFullSync') -and [bool]$cmd.NextForceFullSync) -or (
+                                            $stateContainer.ContainsKey('TabNeedsResync') -and
+                                            $null -ne $stateContainer.TabNeedsResync -and
+                                            [bool]$stateContainer.TabNeedsResync[$activeTabId]
+                                        )
+                                    if ($needCloseNextFull) {
+                                        &$setFullSync $true
+                                    }
                                 }
                             }
 
@@ -912,6 +937,9 @@ function Start-PSRPMEngine {
                             $stateContainer.EnableNetEtw = $false
 
                             $stateContainer.ClearHostMaps = $true
+                            if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
+                                [void]$stateContainer.TabNeedsResync.Remove($activeTabId)
+                            }
                             &$setFullSync $true
                             $swCmd.Stop()
                             $stateContainer.ResultQueue.Enqueue(@{
@@ -1029,6 +1057,14 @@ function Start-PSRPMEngine {
 
                         [System.Threading.Monitor]::Enter($stateContainer.SyncRoot)
                         try {
+                            if ($null -ne $stateContainer.Payload) {
+                                $overwrittenTabId = [string]$stateContainer.PayloadTabId
+                                if ($overwrittenTabId -and ($overwrittenTabId -ne $activeTabId -or -not $forceFull)) {
+                                    if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
+                                        $stateContainer.TabNeedsResync[$overwrittenTabId] = $true
+                                    }
+                                }
+                            }
                             if ($forceFull -and ([long]$stateContainer.FullSyncGen -eq $syncGenBefore)) {
                                 $stateContainer.ForceFullSync = $false
                             }
@@ -2061,6 +2097,9 @@ function Start-PSRPMEngine {
         if (-not $payloadStr) { return }
 
         if ($payloadTabId -and $stateContainer.ActiveTabId -and $payloadTabId -ne $stateContainer.ActiveTabId) {
+            if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
+                $stateContainer.TabNeedsResync[[string]$payloadTabId] = $true
+            }
             return
         }
 
@@ -2087,12 +2126,22 @@ function Start-PSRPMEngine {
             $seq        = [int]$data['seq']
             $isFullSnap = ($data.ContainsKey('full') -and [int]$data['full'] -eq 1)
 
+            if ($isFullSnap -and $stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
+                $ackTabId = if ($payloadTabId) { [string]$payloadTabId } else { [string]$stateContainer.ActiveTabId }
+                if ($ackTabId) {
+                    [void]$stateContainer.TabNeedsResync.Remove($ackTabId)
+                }
+            }
+
             $lastSeq = [int]$telemStats.LastReceivedSeq
             if ($lastSeq -gt 0 -and $seq -gt ($lastSeq + 1) -and -not $isFullSnap) {
                 $gapCount = $seq - $lastSeq - 1
                 if ($LogConsole) {
                     $tsGap = (Get-Date).ToString("HH:mm:ss.fff")
                     &$appendLogSafe "[$tsGap] [WARN] Telemetry sequence gap detected: expected #$($lastSeq + 1), received #$seq ($gapCount missed ticks). Triggering baseline resync.`r`n"
+                }
+                if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync -and $stateContainer.ActiveTabId) {
+                    $stateContainer.TabNeedsResync[[string]$stateContainer.ActiveTabId] = $true
                 }
                 &$requestFullSync
             }
@@ -2171,18 +2220,47 @@ function Start-PSRPMEngine {
                 }
             }
 
-            # C. Process Differential Services Update (Added/Changed + Removed)
+            # C. Process Differential Services Update (Added/Changed + Removed + Full Resync Pruning)
             $svcArr     = $data['svc']
             $svcDeadArr = $data['svcDead']
-            $svcChanged = ($svcArr -and $svcArr.Count -gt 0) -or ($svcDeadArr -and $svcDeadArr.Count -gt 0)
+            $svcFullVal = if ($data.ContainsKey('svcFull')) { [int]$data['svcFull'] } else { 0 }
+            $svcPruneNames = $null
+            if ($svcFullVal -eq 1 -and $svcArr -and $svcArr.Count -gt 0 -and $servicesMap.Count -gt 0) {
+                $liveSvcSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                foreach ($ls in $svcArr) {
+                    $lsName = [string]$ls['n']
+                    if ($lsName) { [void]$liveSvcSet.Add($lsName) }
+                }
+                if ($liveSvcSet.Count -gt 0) {
+                    foreach ($existingSvcName in $servicesMap.Keys) {
+                        if (-not $liveSvcSet.Contains([string]$existingSvcName)) {
+                            if ($null -eq $svcPruneNames) {
+                                $svcPruneNames = [System.Collections.Generic.List[string]]::new()
+                            }
+                            $svcPruneNames.Add([string]$existingSvcName)
+                        }
+                    }
+                }
+            }
+            $svcChanged = ($svcArr -and $svcArr.Count -gt 0) -or ($svcDeadArr -and $svcDeadArr.Count -gt 0) -or ($null -ne $svcPruneNames -and $svcPruneNames.Count -gt 0)
             if ($svcChanged) {
-                if ($svcDeadArr -and $svcDeadArr.Count -gt 0) {
+                if (($svcDeadArr -and $svcDeadArr.Count -gt 0) -or ($null -ne $svcPruneNames -and $svcPruneNames.Count -gt 0)) {
                     $deadSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-                    foreach ($dn in $svcDeadArr) {
-                        $dnStr = [string]$dn
-                        [void]$deadSet.Add($dnStr)
-                        if ($servicesMap.ContainsKey($dnStr)) {
-                            [void]$servicesMap.Remove($dnStr)
+                    if ($svcDeadArr) {
+                        foreach ($dn in $svcDeadArr) {
+                            $dnStr = [string]$dn
+                            [void]$deadSet.Add($dnStr)
+                            if ($servicesMap.ContainsKey($dnStr)) {
+                                [void]$servicesMap.Remove($dnStr)
+                            }
+                        }
+                    }
+                    if ($svcPruneNames) {
+                        foreach ($pnStr in $svcPruneNames) {
+                            [void]$deadSet.Add($pnStr)
+                            if ($servicesMap.ContainsKey($pnStr)) {
+                                [void]$servicesMap.Remove($pnStr)
+                            }
                         }
                     }
                     if ($null -ne $ServicesCollection) {
@@ -2268,6 +2346,10 @@ function Start-PSRPMEngine {
             }
 
             # D. Ingest Static Metadata for Newly Spawned Processes (and Deferred Metadata Resolution)
+            $snapshotLivePids = $null
+            if ($isFullSnap) {
+                $snapshotLivePids = [System.Collections.Generic.HashSet[int]]::new()
+            }
             $metaArr = $data['meta']
             $spawnedLogNames = [System.Collections.Generic.List[string]]::new()
             $newSpawnedVms   = [System.Collections.Generic.List[Object]]::new()
@@ -2275,6 +2357,9 @@ function Start-PSRPMEngine {
                 foreach ($m in $metaArr) {
                     try {
                         $pidVal = [int]$m['id']
+                        if ($null -ne $snapshotLivePids) {
+                            [void]$snapshotLivePids.Add($pidVal)
+                        }
                         $newCt  = [long]$m['ct']
                         $vm = $null
                         $isBrandNew = $false
@@ -2366,6 +2451,9 @@ function Start-PSRPMEngine {
             if ($dynArr -and $dynArr.Count -gt 0) {
                 foreach ($tuple in $dynArr) {
                     $pidVal = [int]$tuple[0]
+                    if ($null -ne $snapshotLivePids) {
+                        [void]$snapshotLivePids.Add($pidVal)
+                    }
                     if ($processMap.ContainsKey($pidVal)) {
                         $vm = $processMap[$pidVal]
                         $vm.UpdateDynamic(
@@ -2379,6 +2467,20 @@ function Start-PSRPMEngine {
                         if ($tuple.Count -ge 9 -and $newNetCap -eq 1) {
                             $vm.UpdateNetwork([long]$tuple[7], [long]$tuple[8])
                         }
+                    }
+                }
+            }
+
+            # E2. Full-Snapshot Reconciliation: Mark Any Stale Cached PIDs Absent From Full Snapshot as Exiting
+            if ($isFullSnap -and $null -ne $snapshotLivePids -and $snapshotLivePids.Count -gt 0) {
+                foreach ($kvp in $processMap.GetEnumerator()) {
+                    $pKey = [int]$kvp.Key
+                    $pVm  = $kvp.Value
+                    if (-not $snapshotLivePids.Contains($pKey) -and $pVm.LifecycleState -ne 2) {
+                        $exitedLogNames.Add("$($pVm.Name) ($pKey) [Resync Pruned]")
+                        $pVm.SetLifecycleState(2)
+                        $pVm.UpdateDynamic(0.0, $pVm.MemoryBytes, $pVm.PrivateBytes, 0, 0, 0)
+                        $pVm.UpdateNetwork(0L, 0L)
                     }
                 }
             }
@@ -2463,7 +2565,7 @@ function Start-PSRPMEngine {
                 )
 
                 if ($sysArr.Count -ge 27) {
-                    $curSummaryVm.UpdateExtendedTelemetry($sysArr, $data['cores'])
+                    $curSummaryVm.UpdateExtendedTelemetry($sysArr, $data['cores'], $elapsedSec)
                 }
                 $curSummaryVm.UpdateNetEtwStatus($newNetCap, $newNetEv)
                 $accumNet    = ($newNetCap -eq 1 -and $elapsedSec -ge 0.05 -and $elapsedSec -le 15.0)
@@ -2572,7 +2674,7 @@ function Start-PSRPMEngine {
             }
 
             # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting; deferred while minimized)
-            $dynSortProps = @("CPU", "TreeCPU", "PeakCPU", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "Status", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
+            $dynSortProps = @("CPU", "CPUDelta", "TreeCPU", "PeakCPU", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "Status", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
             $needsOrderPass = $structureChanged -or ($stateContainer.SortProperty -in $dynSortProps)
             if ($isMinimized) {
                 if ($needsOrderPass -or $ProcessCollection.Count -eq 0 -or ($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {

@@ -2649,8 +2649,13 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] UpdateExtendedTelemetry([Object]$sysArr, [Object]$coresArr) {
+        $this.UpdateExtendedTelemetry($sysArr, $coresArr, 1.0)
+    }
+
+    [void] UpdateExtendedTelemetry([Object]$sysArr, [Object]$coresArr, [double]$elapsedSec) {
         if (-not $sysArr -or $sysArr.Count -lt 27) { return }
 
+        $safeElapsed = if ($elapsedSec -gt 0.0) { [Math]::Max(0.05, $elapsedSec) } else { 1.0 }
         $cpuTot      = [double]$sysArr[0]
         $kernCpu     = [double]$sysArr[8]
         $userCpu     = [Math]::Max(0.0, [Math]::Round($cpuTot - $kernCpu, 2))
@@ -2678,6 +2683,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $kernTotalKB = $kernPagedKB + $kernNonpKB
         $ioTotalD    = $ioReadD + $ioWriteD + $ioOtherD
         $ioWriteAllD = $ioWriteD + $ioOtherD
+        $ioTotalRate = [double]$ioTotalD / $safeElapsed
+        $ioWriteRate = [double]$ioWriteAllD / $safeElapsed
         $this.SessionIoBytesTotal += $ioTotalD
 
         # 1. Enqueue 240-Sample Circular Ring Buffers (< 12 KB Total RAM)
@@ -2695,8 +2702,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.KernelHistory240.Enqueue($kernCpu)
         $this.CommitHistory240.Enqueue($comPctExact)
         $this.RamHistory240.Enqueue($ramPctExact)
-        $this.IoTotalHistory240.Enqueue([double]$ioTotalD)
-        $this.IoWriteHistory240.Enqueue([double]$ioWriteAllD)
+        $this.IoTotalHistory240.Enqueue($ioTotalRate)
+        $this.IoWriteHistory240.Enqueue($ioWriteRate)
 
         # 2. Enqueue Per-Core CPU Ring Buffers
         if ($coresArr -and $coresArr.Count -gt 0) {
@@ -2721,7 +2728,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CpuGaugeText    = "$($cpuTot.ToString('F2'))%"
         $this.CommitGaugeText = "$([Math]::Round($commitCurKB / 1048576.0, 1).ToString('F1')) GB"
         $this.RamGaugeText    = "$([Math]::Round($physUsedKB / 1048576.0, 1).ToString('F1')) GB"
-        $this.IoGaugeText     = $this.FormatBytesCompact([double]$ioTotalD)
+        $this.IoGaugeText     = $this.FormatRateCompact($ioTotalRate)
 
         $this.ContextSwitchDeltaFormatted = $csDelta.ToString("N0")
         $this.InterruptDeltaFormatted     = $intrDelta.ToString("N0")
@@ -2749,7 +2756,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.PageFileWriteDeltaFormatted   = $pfwDelta.ToString("N0")
         $this.MappedFileWriteDeltaFormatted = $mfwDelta.ToString("N0")
 
-        $this.IoTotalRateFormatted    = "$($this.FormatBytesCompact([double]$ioTotalD))/s"
+        $this.IoTotalRateFormatted    = $this.FormatRateCompact($ioTotalRate)
         $this.IoReadDeltaFormatted    = $this.FormatBytesCompact([double]$ioReadD)
         $this.IoWriteDeltaFormatted   = $this.FormatBytesCompact([double]$ioWriteD)
         $this.IoOtherDeltaFormatted   = $this.FormatBytesCompact([double]$ioOtherD)

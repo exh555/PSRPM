@@ -1,7 +1,7 @@
 # PSRPM Architectural & UX Master Plan: Extended Feature Suite
 
 **Document Version:** 1.0.0  
-**Target Systems:** Windows PowerShell 5.1 & PowerShell 7+  
+**Target Systems:** Windows PowerShell 5.1 (`Desktop` edition)  
 **Target Architecture:** x64 / x86 / Arm64 (Remote WinRM & `-LocalOnly`)
 
 ---
