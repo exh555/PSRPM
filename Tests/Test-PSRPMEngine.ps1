@@ -3063,6 +3063,276 @@ foreach ($darkAuditSpec in @(
 }
 Write-Host "  [PASS] 12S: Verified dark-theme TabControl/TabItem/CheckBox/GroupBox styles and foreground luminance in SystemInfoWindow and HelpWindow." -ForegroundColor Green
 
+# 12T: Multi-Computer -ComputerName (10 Max), Lazy Dormant Tabs, Offline Fallback & Comma-Separated ConnectDialog
+$psm1Mod12t = Get-Module PSRPM
+if (-not $psm1Mod12t) {
+    Import-Module (Join-Path $repoRoot "PSRPM\PSRPM.psd1") -Force
+    $psm1Mod12t = Get-Module PSRPM
+}
+
+# Verify Resolve-PSRPMComputerTargets normalization, dedup, empty check & 10-host cap
+$parsed12t = (& $psm1Mod12t { Resolve-PSRPMComputerTargets -ComputerName @("srv-01, srv-02", "SRV-01; srv-03", "  ", "srv-04") -MaxCount 10 }).Targets
+if ($parsed12t.Count -ne 4 -or $parsed12t[0] -ne "srv-01" -or $parsed12t[1] -ne "srv-02" -or $parsed12t[2] -ne "srv-03" -or $parsed12t[3] -ne "srv-04") {
+    throw "12T Resolve-PSRPMComputerTargets failed normalization/dedup: $($parsed12t -join ', ')"
+}
+
+$tenHosts12t = 1..10 | ForEach-Object { "host-$_" }
+$parsed10_12t = (& $psm1Mod12t { param($h) Resolve-PSRPMComputerTargets -ComputerName $h -MaxCount 10 } $tenHosts12t).Targets
+if ($parsed10_12t.Count -ne 10) {
+    throw "12T expected 10 hosts to pass cap, got $($parsed10_12t.Count)."
+}
+
+$elevenThrew = $false
+try {
+    $elevenHosts12t = 1..11 | ForEach-Object { "host-$_" }
+    [void](& $psm1Mod12t { param($h) Resolve-PSRPMComputerTargets -ComputerName $h -MaxCount 10 } $elevenHosts12t)
+} catch {
+    if ($_.Exception.Message -match 'maximum of 10') { $elevenThrew = $true }
+}
+if (-not $elevenThrew) {
+    throw "12T Resolve-PSRPMComputerTargets failed to reject 11 hosts."
+}
+
+$emptyThrew = $false
+try {
+    [void](& $psm1Mod12t { Resolve-PSRPMComputerTargets -ComputerName @(" , ; ") -MaxCount 10 })
+} catch {
+    $emptyThrew = $true
+}
+if (-not $emptyThrew) {
+    throw "12T Resolve-PSRPMComputerTargets failed to reject whitespace/delimiter-only input."
+}
+
+# Verify Start-PSRPM & Start-RemoteProcessManager accept [string[]]$ComputerName and reject -LocalOnly + multiple hosts
+foreach ($cmdFn12t in @("Start-PSRPM", "Start-RemoteProcessManager")) {
+    $cmdAst12t = $waitAst12p.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $cmdFn12t }, $true) | Select-Object -First 1
+    $compParam12t = $cmdAst12t.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq "ComputerName" } | Select-Object -First 1
+    if (-not $compParam12t -or $compParam12t.StaticType.FullName -ne "System.String[]") {
+        throw "12T $cmdFn12t ComputerName parameter must be [string[]], got '$($compParam12t.StaticType.FullName)'."
+    }
+}
+$localConflictThrew = $false
+try {
+    Start-PSRPM -LocalOnly -ComputerName "srv-01", "srv-02" -Wait
+} catch {
+    if ($_.Exception.Message -match '-LocalOnly cannot be combined with multiple -ComputerName') {
+        $localConflictThrew = $true
+    }
+}
+if (-not $localConflictThrew) {
+    throw "12T Start-PSRPM -LocalOnly with multiple -ComputerName targets did not throw conflict error."
+}
+
+# Verify HostTabItemViewModel visual states for NotConnected, Connecting, and inactive Offline
+$tab12t = [HostTabItemViewModel]::new("t12t", "SRV-02", "SRV-02", "WINRM", $false, $null)
+$tab12t.UpdateVisualState($false, $false, $true, "NotConnected", $false, 0)
+if ($tab12t.StatusDotFill -ne "#64748B" -or $tab12t.LatencyText -ne "Not Connected") {
+    throw "12T HostTabItemViewModel inactive NotConnected mismatch: $($tab12t.StatusDotFill) / $($tab12t.LatencyText)"
+}
+$tab12t.UpdateVisualState($true, $false, $true, "Connecting", $false, 0)
+if ($tab12t.StatusDotFill -ne "#0284C7" -or $tab12t.LatencyText -ne "Connecting...") {
+    throw "12T HostTabItemViewModel active Connecting mismatch: $($tab12t.StatusDotFill) / $($tab12t.LatencyText)"
+}
+$tab12t.UpdateVisualState($false, $false, $true, "Disconnected", $false, 0)
+if ($tab12t.StatusDotFill -ne "#DC2626" -or $tab12t.LatencyText -ne "Offline") {
+    throw "12T HostTabItemViewModel inactive Disconnected mismatch: $($tab12t.StatusDotFill) / $($tab12t.LatencyText)"
+}
+
+# Verify RunspaceEngine dormant target lifecycle, non-blocking lazy connect, offline isolation & cancellation on close
+$win12t  = [System.Windows.Window]::new()
+$proc12t = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$svc12t  = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+$sum12t  = [SystemSummaryViewModel]::new()
+$dorm12t = @(
+    @{ TabId = "dorm_1"; ComputerName = "127.0.0.1"; Target = "dormant-1"; IsLocal = $false; Credential = $null; Port = 59998; UseSSL = $false },
+    @{ TabId = "dorm_2"; ComputerName = "127.0.0.1"; Target = "dormant-2"; IsLocal = $false; Credential = $null; Port = 59999; UseSSL = $false }
+)
+$initCfg12t = @{ ComputerName = "offline-primary"; IsLocal = $false; Credential = $null; Port = 59997; UseSSL = $false }
+$eng12t = Start-PSRPMEngine `
+    -PSSession $null `
+    -Window $win12t `
+    -ProcessCollection $proc12t `
+    -ServicesCollection $svc12t `
+    -SummaryViewModel $sum12t `
+    -CollectorScript $script:PSRPMCollectorScriptBlock `
+    -InspectorScript $script:PSRPMDeepInspectorScriptBlock `
+    -ActionScript $script:PSRPMActionScriptBlock `
+    -IntervalMs 500 `
+    -IsLocal $false `
+    -TargetName "offline-primary" `
+    -InitialTabId "prim_0" `
+    -InitialConnectionConfig $initCfg12t `
+    -DormantTargets $dorm12t `
+    -InitialConnectionState "Disconnected" `
+    -InitialConnectionError "Simulated primary offline error"
+
+try {
+    if ($eng12t.StateContainer.ConnectionState -ne "Disconnected") {
+        throw "12T Expected initial engine ConnectionState 'Disconnected', got '$($eng12t.StateContainer.ConnectionState)'."
+    }
+
+    $observedStates12t = [System.Collections.Generic.List[string]]::new()
+    $eng12t.StateContainer.OnSessionStateChanged = {
+        param($ev)
+        if ($ev -and $ev.TabId) {
+            $observedStates12t.Add("$($ev.TabId):$($ev.ConnState)")
+        }
+    }
+
+    # Add a 3rd dormant tab dynamically via AddDormantTabs
+    $addDormDone12t = $false
+    & $eng12t.SendCommand @{
+        CommandType = "AddDormantTabs"
+        Targets     = @(@{ TabId = "dorm_3"; ComputerName = "127.0.0.1"; Target = "dormant-3"; IsLocal = $false; Credential = $null; Port = 59996; UseSSL = $false })
+    } ({ param($r) $script:resAddDorm12t = $r; $script:flagAddDorm12t = $true })
+
+    $sw12t = [System.Diagnostics.Stopwatch]::StartNew()
+    $script:flagAddDorm12t = $false
+    while (-not $script:flagAddDorm12t -and $sw12t.ElapsedMilliseconds -lt 5000) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+        Start-Sleep -Milliseconds 25
+    }
+    if (-not $script:flagAddDorm12t -or -not $script:resAddDorm12t.Success -or $script:resAddDorm12t.AddedCount -ne 1) {
+        throw "12T AddDormantTabs command failed."
+    }
+
+    # Select dorm_1 -> triggers non-blocking async connect, transitions Connecting -> Disconnected cleanly
+    $script:flagSelDorm12t = $false
+    & $eng12t.SendCommand @{ CommandType = "SelectTabSession"; TabId = "dorm_1"; ForceFullSync = $true } ({ param($r) $script:flagSelDorm12t = $true })
+    $swSel12t = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $script:flagSelDorm12t -and $swSel12t.ElapsedMilliseconds -lt 2000) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+        Start-Sleep -Milliseconds 20
+    }
+    if (-not $script:flagSelDorm12t -or $swSel12t.ElapsedMilliseconds -ge 2000) {
+        throw "12T SelectTabSession blocked coordinator instead of launching connect asynchronously."
+    }
+
+    # Wait for dorm_1 async connect failure to settle into Disconnected
+    $swConn12t = [System.Diagnostics.Stopwatch]::StartNew()
+    while (($observedStates12t -notcontains "dorm_1:Disconnected") -and $swConn12t.ElapsedMilliseconds -lt 15000) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+        Start-Sleep -Milliseconds 30
+    }
+    if (($observedStates12t -notcontains "dorm_1:Connecting") -or ($observedStates12t -notcontains "dorm_1:Disconnected")) {
+        throw "12T Expected dorm_1 Connecting -> Disconnected transitions, observed: $($observedStates12t -join ', ')"
+    }
+
+    # Select dorm_2 and immediately CloseTabSession to verify mid-connect cancellation
+    $script:flagCloseDorm2_12t = $false
+    & $eng12t.SendCommand @{ CommandType = "SelectTabSession"; TabId = "dorm_2"; ForceFullSync = $true } $null
+    & $eng12t.SendCommand @{ CommandType = "CloseTabSession"; TabId = "dorm_2"; NextTabId = "prim_0" } ({ param($r) $script:flagCloseDorm2_12t = $true })
+    $swClose12t = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $script:flagCloseDorm2_12t -and $swClose12t.ElapsedMilliseconds -lt 3000) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+        Start-Sleep -Milliseconds 20
+    }
+    if (-not $script:flagCloseDorm2_12t) {
+        throw "12T CloseTabSession mid-connect did not complete promptly."
+    }
+} finally {
+    $eng12t.StateContainer.IsStopping = $true
+    if ($eng12t.StateContainer.WakeEvent) { [void]$eng12t.StateContainer.WakeEvent.Set() }
+    if ($eng12t.Timer) { $eng12t.Timer.Stop() }
+    if ($eng12t.Handle -and $eng12t.Handle.AsyncWaitHandle) {
+        [void]$eng12t.Handle.AsyncWaitHandle.WaitOne(3000)
+        try { [void]$eng12t.PowerShell.EndInvoke($eng12t.Handle) } catch {}
+    }
+    try { $eng12t.PowerShell.Dispose() } catch {}
+    try { $eng12t.Runspace.Close(); $eng12t.Runspace.Dispose() } catch {}
+    try { $eng12t.StateContainer.WakeEvent.Dispose() } catch {}
+    $win12t.Close()
+}
+Write-Host "  [PASS] 12T: Verified multi-computer -ComputerName (10-host cap, dedup, -LocalOnly conflict, dormant NotConnected -> Connecting -> Offline lifecycle & mid-connect close)." -ForegroundColor Green
+
+# 12U: Post-Launch 1px Resize Nudge Mitigation for WPF Blank Modal / Window Surface Stalls
+if ($psm1Src12 -notmatch '\$attachRenderResizeNudge\s*=') {
+    throw "12U PSRPM.psm1 missing `$attachRenderResizeNudge helper."
+}
+if ($psm1Src12 -notmatch '\$registerDialogRenderFlush\s*=\s*\{[\s\S]*?&\$attachRenderResizeNudge\s+\$dlg') {
+    throw "12U PSRPM.psm1 `$registerDialogRenderFlush does not invoke `&$attachRenderResizeNudge `$dlg."
+}
+if ($psm1Src12 -notmatch '&\$attachRenderResizeNudge\s+\$propWin') {
+    throw "12U PSRPM.psm1 PropertiesWindow is missing `&$attachRenderResizeNudge `$propWin."
+}
+if ($psm1Src12 -notmatch '&\$attachRenderResizeNudge\s+\$window') {
+    throw "12U PSRPM.psm1 MainWindow is missing `&$attachRenderResizeNudge `$window."
+}
+# Functional WPF probe: verify ContentRendered -> DispatcherTimer -> +1px grow -> 5ms -> -1px shrink back executes cleanly (including ResizeMode=NoResize + SizeToContent=Height)
+$probeNudgeWin = [System.Windows.Window]::new()
+$probeNudgeWin.Width = 420
+$probeNudgeWin.Height = 120
+$probeNudgeWin.ResizeMode = [System.Windows.ResizeMode]::NoResize
+$probeNudgeWin.SizeToContent = [System.Windows.SizeToContent]::Height
+$probeNudgeWin.WindowStyle = [System.Windows.WindowStyle]::None
+$probeNudgeWin.ShowInTaskbar = $false
+$probeNudgeWin.AllowsTransparency = $true
+$probeNudgeWin.Opacity = 0.0
+$probeNudgeWin.Left = -32000
+$probeNudgeWin.Top = -32000
+$probeNudgeWin.Content = [System.Windows.Controls.TextBlock]::new()
+$probeFrame12u = [System.Windows.Threading.DispatcherFrame]::new()
+$probeNudgeState = @{ Done = $false; Phase = 0; PeakWidth = 0.0; Timer = $null; Win = $probeNudgeWin; Frame = $probeFrame12u }
+$probeNudgeTick = {
+    param($ts, $te)
+    $w = $probeNudgeState.Win
+    if ($probeNudgeState.Phase -eq 0) {
+        if ($w -and $w.IsLoaded -and $w.WindowState -eq [System.Windows.WindowState]::Normal) {
+            $curW = if ([double]::IsNaN($w.Width) -or $w.Width -le 0) { $w.ActualWidth } else { $w.Width }
+            if ($curW -gt 0 -and ($curW + 1) -le $w.MaxWidth) {
+                $w.Width = $curW + 1
+            }
+            $probeNudgeState.PeakWidth = $w.Width
+            $w.UpdateLayout()
+            $w.InvalidateVisual()
+        }
+        $probeNudgeState.Phase = 1
+        $probeNudgeState.Timer.Interval = [TimeSpan]::FromMilliseconds(5)
+        return
+    }
+    if ($probeNudgeState.Timer) {
+        $probeNudgeState.Timer.Stop()
+        $probeNudgeState.Timer = $null
+    }
+    if ($w -and $w.IsLoaded -and $w.WindowState -eq [System.Windows.WindowState]::Normal) {
+        $curW = if ([double]::IsNaN($w.Width) -or $w.Width -le 0) { $w.ActualWidth } else { $w.Width }
+        if (($curW - 1) -gt 0 -and ($curW - 1) -ge $w.MinWidth) {
+            $w.Width = $curW - 1
+        }
+        $w.UpdateLayout()
+        $w.InvalidateVisual()
+    }
+    $probeNudgeState.Frame.Continue = $false
+}.GetNewClosure()
+$probeNudgeWin.add_ContentRendered({
+    param($s, $e)
+    if ($probeNudgeState.Done) { return }
+    $probeNudgeState.Done = $true
+    $t = [System.Windows.Threading.DispatcherTimer]::new(
+        [System.Windows.Threading.DispatcherPriority]::Background,
+        $probeNudgeState.Win.Dispatcher
+    )
+    $t.Interval = [TimeSpan]::FromMilliseconds(40)
+    $t.add_Tick($probeNudgeTick)
+    $probeNudgeState.Timer = $t
+    $t.Start()
+}.GetNewClosure())
+$probeTimeout12u = [System.Windows.Threading.DispatcherTimer]::new()
+$probeTimeout12u.Interval = [TimeSpan]::FromMilliseconds(1500)
+$probeTimeout12u.add_Tick({ $probeNudgeState.Frame.Continue = $false }.GetNewClosure())
+$probeTimeout12u.Start()
+$probeNudgeWin.Show()
+[System.Windows.Threading.Dispatcher]::PushFrame($probeFrame12u)
+$probeTimeout12u.Stop()
+$peakWidth12u = $probeNudgeState.PeakWidth
+$finalWidth12u = $probeNudgeWin.Width
+if ($probeNudgeState.Timer) { $probeNudgeState.Timer.Stop() }
+$probeNudgeWin.Close()
+if ($peakWidth12u -ne 421 -or $finalWidth12u -ne 420) {
+    throw "12U Expected 1px grow+shrink Width nudge (420 -> 421 -> 420), got Peak=$peakWidth12u, Final=$finalWidth12u."
+}
+Write-Host "  [PASS] 12U: Verified 1px post-launch render resize nudge (grow + shrink back) across MainWindow and all 7 modal/modeless windows." -ForegroundColor Green
+
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()
 foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {

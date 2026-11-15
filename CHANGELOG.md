@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-15
+
+### Added
+- **Multi-Host `-ComputerName` Session Bar Lifecycle (`PSRPM.psm1`, `RunspaceEngine.ps1`, `ViewModelClasses.ps1`, `ConnectDialog.xaml`)**:
+  - Added multi-computer `-ComputerName` support with 10-host cap, deduplication, `-LocalOnly` conflict handling, and dormant `NotConnected -> Connecting -> Offline` tab lifecycle with mid-connect cancellation.
+
+### Fixed
+- **WPF Blank Modal / Window Surface Stall Mitigation (`PSRPM.psm1`, `Test-PSRPMEngine.ps1`)**:
+  - Added `$attachRenderResizeNudge` across `MainWindow` and all 7 modal/modeless child windows (`SelectColumnsWindow`, `ServiceDetailWindow`, `PropertiesWindow`, `ConnectDialog`, `SystemInfoWindow`, `HelpWindow`, `FindHandleWindow`) to schedule a post-`ContentRendered` `+1 px` width resize after `1000 ms` followed `5 ms` later by a `-1 px` shrink back, forcing an `HwndTarget` swapchain reset on GPU drivers that stall initial frame presentation.
+
 ## [1.14.1] - 2026-11-15
 
 ### Added

@@ -51,11 +51,40 @@ function Start-PSRPMEngine {
 
         [AllowNull()]
         [Parameter(Mandatory = $false)]
-        [System.Windows.Controls.TextBox]$LogConsole
+        [System.Windows.Controls.TextBox]$LogConsole,
+
+        [AllowNull()]
+        [Parameter(Mandatory = $false)]
+        [hashtable]$InitialConnectionConfig = $null,
+
+        [AllowNull()]
+        [Parameter(Mandatory = $false)]
+        [Object[]]$DormantTargets = $null,
+
+        [Parameter(Mandatory = $false)]
+        [string]$InitialConnectionState = "",
+
+        [Parameter(Mandatory = $false)]
+        [string]$InitialConnectionError = ""
     )
 
     Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
     Add-Type -AssemblyName System.Web.Extensions -ErrorAction SilentlyContinue
+
+    $resolvedInitConnState = if (-not [string]::IsNullOrWhiteSpace($InitialConnectionState)) {
+        $InitialConnectionState
+    } elseif ($IsLocal) {
+        "LocalMode"
+    } else {
+        "Connected"
+    }
+    $resolvedInitBadge = if ($IsLocal) {
+        "LOCAL"
+    } elseif ($InitialConnectionConfig -and [bool]$InitialConnectionConfig.UseSSL) {
+        "WINRM-SSL"
+    } else {
+        "WINRM"
+    }
 
     $stateContainer = [hashtable]::Synchronized(@{
         IntervalMs          = $IntervalMs
@@ -79,10 +108,10 @@ function Start-PSRPMEngine {
         Payload             = $null
         PollLatencyMs       = 0
         PayloadBytes        = 0
-        ConnectionState     = if ($IsLocal) { "LocalMode" } else { "Connected" }
+        ConnectionState     = $resolvedInitConnState
         TargetDisplayName   = $TargetName
-        TransportBadge      = if ($IsLocal) { "LOCAL" } else { "WINRM" }
-        LastErr             = $null
+        TransportBadge      = $resolvedInitBadge
+        LastErr             = if ($InitialConnectionError) { $InitialConnectionError } else { $null }
         VerboseTelemetryLog = $true
         LogAutoScroll       = $true
         IsAppendingLog      = $false
@@ -91,16 +120,19 @@ function Start-PSRPMEngine {
         NetEtwCap           = 0
         NetEtwEventsPerSec  = 0
         ResetNetBreaker     = $false
-        OnNetEtwStateChanged = $null
-        OnTickProcessed      = $null
+        OnNetEtwStateChanged  = $null
+        OnTickProcessed       = $null
+        OnSessionStateChanged = $null
+        OnActiveTabStatusSync = $null
         HasBaseline          = $false
         BaselineSnapshots    = $null
         LastSampleUtcTicks  = 0L
         TelemetryAgeMs      = 0
         FreshnessState      = "Fresh"
-        CommandQueue        = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
-        ResultQueue         = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
-        WakeEvent           = [System.Threading.AutoResetEvent]::new($false)
+        CommandQueue         = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+        ResultQueue          = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+        SessionStateEvents   = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+        WakeEvent            = [System.Threading.AutoResetEvent]::new($false)
     })
 
     # Create Coordinator Background Runspace
@@ -123,7 +155,11 @@ function Start-PSRPMEngine {
             $inspectorCode,
             $actionCode,
             $isLocalMode,
-            $initTabId
+            $initTabId,
+            $initConnCfg,
+            $dormantTargets,
+            $initConnState,
+            $initConnError
         )
 
         $newLocalCollectorSb = {
@@ -350,8 +386,23 @@ function Start-PSRPMEngine {
 
         # Multi-Host Session Dictionary (TabId -> @{ Session, IsLocal, Target, Badge, CollectorSb, ... })
         $sessions = @{}
-        $initBadge = if ($isLocalMode) { "LOCAL" } else { "WINRM" }
-        $initComp  = if ($isLocalMode) { "$env:COMPUTERNAME" } elseif ($session) { $session.ComputerName } else { $stateContainer.TargetDisplayName }
+        $initBadge = if ($isLocalMode) { "LOCAL" } elseif ($initConnCfg -and [bool]$initConnCfg.UseSSL) { "WINRM-SSL" } else { "WINRM" }
+        $initComp  = if ($isLocalMode) {
+            "$env:COMPUTERNAME"
+        } elseif ($initConnCfg -and $initConnCfg.ComputerName) {
+            [string]$initConnCfg.ComputerName
+        } elseif ($session) {
+            $session.ComputerName
+        } else {
+            $stateContainer.TargetDisplayName
+        }
+        $effInitConnState = if (-not [string]::IsNullOrWhiteSpace($initConnState)) {
+            [string]$initConnState
+        } elseif ($isLocalMode) {
+            "LocalMode"
+        } else {
+            "Connected"
+        }
         $sessions[$initTabId] = @{
             Session              = $session
             IsLocal              = $isLocalMode
@@ -366,18 +417,251 @@ function Start-PSRPMEngine {
             ConnectionConfig     = @{
                 ComputerName = $initComp
                 IsLocal      = $isLocalMode
-                Credential   = $null
-                Port         = 0
-                UseSSL       = ($initBadge -eq "WINRM-SSL")
+                Credential   = if ($initConnCfg) { $initConnCfg.Credential } else { $null }
+                Port         = if ($initConnCfg) { [int]$initConnCfg.Port } else { 0 }
+                UseSSL       = if ($initConnCfg) { [bool]$initConnCfg.UseSSL } else { ($initBadge -eq "WINRM-SSL") }
             }
-            ConnState           = if ($isLocalMode) { "LocalMode" } else { "Connected" }
+            ConnState           = $effInitConnState
             ConsecutiveFailures = 0
             ReconnectAttempts   = 0
             NextReconnectTicks  = 0L
             BackoffSec          = 1
             NetEtwStarted       = $false
+            LastConnectError    = if ($initConnError) { [string]$initConnError } else { $null }
         }
         $activeTabId = $initTabId
+
+        if ($dormantTargets) {
+            foreach ($dt in $dormantTargets) {
+                if ($null -eq $dt -or -not $dt.TabId) { continue }
+                $dtId    = [string]$dt.TabId
+                $dtLocal = [bool]$dt.IsLocal
+                $dtSsl   = [bool]$dt.UseSSL
+                $dtBadge = if ($dtLocal) { "LOCAL" } elseif ($dtSsl) { "WINRM-SSL" } else { "WINRM" }
+                $dtComp  = [string]$dt.ComputerName
+                $dtTgt   = if ($dt.Target) { [string]$dt.Target } else { $dtComp }
+                $sessions[$dtId] = @{
+                    Session              = $null
+                    IsLocal              = $dtLocal
+                    Target               = $dtTgt
+                    Badge                = $dtBadge
+                    CollectorSb          = $null
+                    CollectorInitialized = $false
+                    InspectorInitialized = $false
+                    ActionInitialized    = $false
+                    WorkerInitialized    = $false
+                    PendingJobs          = @{}
+                    ConnectionConfig     = @{
+                        ComputerName = $dtComp
+                        IsLocal      = $dtLocal
+                        Credential   = $dt.Credential
+                        Port         = [int]$dt.Port
+                        UseSSL       = $dtSsl
+                    }
+                    ConnState           = "NotConnected"
+                    ConsecutiveFailures = 0
+                    ReconnectAttempts   = 0
+                    NextReconnectTicks  = 0L
+                    BackoffSec          = 1
+                    NetEtwStarted       = $false
+                    LastConnectError    = $null
+                }
+            }
+        }
+
+        $pendingConnects = @{}
+        $emitSessionState = {
+            param([string]$tId, [string]$cState, [string]$tName, [string]$msg, [string]$errText)
+            if ($stateContainer -and $stateContainer.SessionStateEvents) {
+                $stateContainer.SessionStateEvents.Enqueue(@{
+                    TabId     = $tId
+                    ConnState = $cState
+                    Target    = $tName
+                    Message   = $msg
+                    Error     = $errText
+                })
+            }
+        }
+
+        $asyncConnectScriptText = {
+            param($comp, $cred, $port, $useSsl, $wakeEv)
+            $out = @{ Success = $false; Session = $null; Error = "" }
+            try {
+                $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000 -NoMachineProfile
+                $sParams = @{
+                    ComputerName  = $comp
+                    SessionOption = $so
+                    ErrorAction   = 'Stop'
+                }
+                if ($cred) { $sParams['Credential'] = $cred }
+                if ($port -gt 0) { $sParams['Port'] = $port }
+                if ($useSsl) { $sParams['UseSSL'] = $true }
+                $s = New-PSSession @sParams
+                $out.Success = $true
+                $out.Session = $s
+            } catch {
+                $out.Error = $_.Exception.Message
+            } finally {
+                if ($wakeEv) {
+                    try { [void]$wakeEv.Set() } catch {}
+                }
+            }
+            return $out
+        }.ToString()
+
+        $cancelTabConnect = {
+            param([string]$tId)
+            if (-not $tId -or -not $pendingConnects.ContainsKey($tId)) { return }
+            $pc = $pendingConnects[$tId]
+            if ($pc) {
+                $pc.Cancelled = $true
+                try {
+                    if ($pc.PowerShell) { [void]$pc.PowerShell.BeginStop($null, $null) }
+                } catch {}
+            }
+        }
+
+        $startTabConnectAsync = {
+            param([string]$tId, [hashtable]$sessObj)
+            if (-not $tId -or -not $sessObj) { return }
+            if ($sessObj.IsLocal) {
+                if (-not $sessObj.CollectorSb) {
+                    $sessObj.CollectorSb = &$newLocalCollectorSb
+                }
+                $sessObj.ConnState = "LocalMode"
+                $sessObj.LastConnectError = $null
+                if ($activeTabId -eq $tId) {
+                    $stateContainer.ConnectionState = "LocalMode"
+                    $stateContainer.LastErr = $null
+                    &$setFullSync $true
+                }
+                &$emitSessionState $tId "LocalMode" $sessObj.Target "Initialized local telemetry for '$($sessObj.Target)'." ""
+                return
+            }
+            if ($pendingConnects.ContainsKey($tId)) {
+                $existingPc = $pendingConnects[$tId]
+                if ($existingPc -and -not $existingPc.Cancelled) { return }
+                $pendingConnects.Remove($tId)
+            }
+            $cfg = $sessObj.ConnectionConfig
+            if (-not $cfg -or [string]::IsNullOrWhiteSpace($cfg.ComputerName)) {
+                $sessObj.ConnState = "Disconnected"
+                $sessObj.LastConnectError = "Missing target computer name."
+                if ($activeTabId -eq $tId) {
+                    $stateContainer.ConnectionState = "Disconnected"
+                    $stateContainer.LastErr = $sessObj.LastConnectError
+                }
+                &$emitSessionState $tId "Disconnected" $sessObj.Target "" $sessObj.LastConnectError
+                return
+            }
+
+            $sessObj.ConnState = "Connecting"
+            $sessObj.LastConnectError = $null
+            $sessObj.ConsecutiveFailures = 0
+            $sessObj.ReconnectAttempts = 0
+            $sessObj.BackoffSec = 1
+            if ($activeTabId -eq $tId) {
+                $stateContainer.ConnectionState = "Connecting"
+                $stateContainer.LastErr = $null
+            }
+            &$emitSessionState $tId "Connecting" $sessObj.Target "Connecting to '$($sessObj.Target)' via WinRM..." ""
+
+            $cIss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            $cRs  = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($cIss)
+            $cRs.Open()
+            $cPs  = [System.Management.Automation.PowerShell]::Create()
+            $cPs.Runspace = $cRs
+            [void]$cPs.AddScript($asyncConnectScriptText).AddArgument([string]$cfg.ComputerName).AddArgument($cfg.Credential).AddArgument([int]$cfg.Port).AddArgument([bool]$cfg.UseSSL).AddArgument($stateContainer.WakeEvent)
+            $cHnd = $cPs.BeginInvoke()
+
+            $pendingConnects[$tId] = @{
+                TabId      = $tId
+                Runspace   = $cRs
+                PowerShell = $cPs
+                Handle     = $cHnd
+                Cancelled  = $false
+                Stopwatch  = [System.Diagnostics.Stopwatch]::StartNew()
+            }
+        }
+
+        $harvestPendingConnects = {
+            if ($pendingConnects.Count -eq 0) { return }
+            $pcKeys = @($pendingConnects.Keys)
+            foreach ($tId in $pcKeys) {
+                $pc = $pendingConnects[$tId]
+                if (-not $pc -or -not $pc.Handle -or -not $pc.Handle.IsCompleted) { continue }
+                $pendingConnects.Remove($tId)
+                try { if ($pc.Stopwatch) { $pc.Stopwatch.Stop() } } catch {}
+                $elapsedMs = if ($pc.Stopwatch) { [int]$pc.Stopwatch.ElapsedMilliseconds } else { 0 }
+
+                $resObj = $null
+                $invErr = $null
+                try {
+                    $outColl = $pc.PowerShell.EndInvoke($pc.Handle)
+                    if ($outColl -and $outColl.Count -gt 0) {
+                        $resObj = $outColl[0]
+                    }
+                } catch {
+                    $invErr = $_.Exception.Message
+                }
+                try { if ($pc.PowerShell) { $pc.PowerShell.Dispose() } } catch {}
+                try { if ($pc.Runspace) { $pc.Runspace.Close(); $pc.Runspace.Dispose() } } catch {}
+
+                if ($pc.Cancelled -or (-not $sessions.ContainsKey($tId))) {
+                    if ($resObj -and $resObj.Session) {
+                        try { Remove-PSSession -Session $resObj.Session -ErrorAction SilentlyContinue } catch {}
+                    }
+                    continue
+                }
+
+                $sObj = $sessions[$tId]
+                if ($resObj -and [bool]$resObj.Success -and $resObj.Session -and $resObj.Session.State -eq 'Opened') {
+                    if ($sObj.Session) {
+                        try { Remove-PSSession -Session $sObj.Session -ErrorAction SilentlyContinue } catch {}
+                    }
+                    $sObj.Session              = $resObj.Session
+                    $sObj.CollectorInitialized = $false
+                    $sObj.InspectorInitialized = $false
+                    $sObj.ActionInitialized    = $false
+                    $sObj.WorkerInitialized    = $false
+                    $sObj.ConnState            = "Connected"
+                    $sObj.ConsecutiveFailures  = 0
+                    $sObj.ReconnectAttempts    = 0
+                    $sObj.BackoffSec           = 1
+                    $sObj.LastConnectError     = $null
+                    if ($activeTabId -eq $tId) {
+                        $stateContainer.ConnectionState = "Connected"
+                        $stateContainer.LastErr         = $null
+                        &$setFullSync $true
+                        $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
+                    } else {
+                        if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
+                            $stateContainer.TabNeedsResync[$tId] = $true
+                        }
+                    }
+                    &$emitSessionState $tId "Connected" $sObj.Target "Connected to '$($sObj.Target)' ($($sObj.Badge)) in ${elapsedMs}ms." ""
+                } else {
+                    if ($resObj -and $resObj.Session) {
+                        try { Remove-PSSession -Session $resObj.Session -ErrorAction SilentlyContinue } catch {}
+                    }
+                    $errMsg = if ($resObj -and -not [string]::IsNullOrWhiteSpace($resObj.Error)) {
+                        [string]$resObj.Error
+                    } elseif ($invErr) {
+                        [string]$invErr
+                    } else {
+                        "WinRM connection failed."
+                    }
+                    $sObj.Session          = $null
+                    $sObj.ConnState        = "Disconnected"
+                    $sObj.LastConnectError = $errMsg
+                    if ($activeTabId -eq $tId) {
+                        $stateContainer.ConnectionState = "Disconnected"
+                        $stateContainer.LastErr         = $errMsg
+                    }
+                    &$emitSessionState $tId "Disconnected" $sObj.Target "" $errMsg
+                }
+            }
+        }
 
         $lastPollUtcTicks = 0L
         $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
@@ -730,6 +1014,98 @@ function Start-PSRPMEngine {
                             })
                         }
 
+                        "AddDormantTabs" {
+                            $dtList = $cmd.Targets
+                            $addedCount = 0
+                            if ($dtList) {
+                                foreach ($dt in $dtList) {
+                                    if ($null -eq $dt -or -not $dt.TabId) { continue }
+                                    $dtId    = [string]$dt.TabId
+                                    if ($sessions.ContainsKey($dtId)) { continue }
+                                    $dtLocal = [bool]$dt.IsLocal
+                                    $dtSsl   = [bool]$dt.UseSSL
+                                    $dtBadge = if ($dtLocal) { "LOCAL" } elseif ($dtSsl) { "WINRM-SSL" } else { "WINRM" }
+                                    $dtComp  = [string]$dt.ComputerName
+                                    $dtTgt   = if ($dt.Target) { [string]$dt.Target } else { $dtComp }
+                                    $sessions[$dtId] = @{
+                                        Session              = $null
+                                        IsLocal              = $dtLocal
+                                        Target               = $dtTgt
+                                        Badge                = $dtBadge
+                                        CollectorSb          = $null
+                                        CollectorInitialized = $false
+                                        InspectorInitialized = $false
+                                        ActionInitialized    = $false
+                                        WorkerInitialized    = $false
+                                        PendingJobs          = @{}
+                                        ConnectionConfig     = @{
+                                            ComputerName = $dtComp
+                                            IsLocal      = $dtLocal
+                                            Credential   = $dt.Credential
+                                            Port         = [int]$dt.Port
+                                            UseSSL       = $dtSsl
+                                        }
+                                        ConnState           = "NotConnected"
+                                        ConsecutiveFailures = 0
+                                        ReconnectAttempts   = 0
+                                        NextReconnectTicks  = 0L
+                                        BackoffSec          = 1
+                                        NetEtwStarted       = $false
+                                        LastConnectError    = $null
+                                    }
+                                    $addedCount++
+                                }
+                            }
+                            $swCmd.Stop()
+                            $stateContainer.ResultQueue.Enqueue(@{
+                                RequestId   = $cmd.RequestId
+                                CommandType = "AddDormantTabs"
+                                Success     = $true
+                                AddedCount  = $addedCount
+                                ElapsedMs   = $swCmd.ElapsedMilliseconds
+                            })
+                        }
+
+                        "ConnectTabSession" {
+                            $cTabId = if ($cmd.ContainsKey('TabId') -and $cmd.TabId) { [string]$cmd.TabId } else { $activeTabId }
+                            $started = $false
+                            $alreadyConn = $false
+                            if ($sessions.ContainsKey($cTabId)) {
+                                $sObj = $sessions[$cTabId]
+                                if ($cmd.ContainsKey('Credential') -and $null -ne $cmd.Credential -and $sObj.ConnectionConfig) {
+                                    $sObj.ConnectionConfig.Credential = $cmd.Credential
+                                }
+                                if ($cmd.ContainsKey('Port') -and [int]$cmd.Port -ge 0 -and $sObj.ConnectionConfig) {
+                                    $sObj.ConnectionConfig.Port = [int]$cmd.Port
+                                }
+                                if ($cmd.ContainsKey('UseSSL') -and $sObj.ConnectionConfig) {
+                                    $sObj.ConnectionConfig.UseSSL = [bool]$cmd.UseSSL
+                                    $sObj.Badge = if ($sObj.IsLocal) { "LOCAL" } elseif ([bool]$cmd.UseSSL) { "WINRM-SSL" } else { "WINRM" }
+                                    if ($activeTabId -eq $cTabId) {
+                                        $stateContainer.TransportBadge = $sObj.Badge
+                                    }
+                                }
+                                if ($sObj.IsLocal -or ($sObj.Session -and $sObj.Session.State -eq 'Opened' -and $sObj.ConnState -in @("Connected", "Degraded"))) {
+                                    $alreadyConn = $true
+                                } elseif ($sObj.ConnState -eq "Reconnecting") {
+                                    $sObj.NextReconnectTicks = 0L
+                                    $started = $true
+                                } elseif ($sObj.ConnState -ne "Connecting") {
+                                    &$startTabConnectAsync $cTabId $sObj
+                                    $started = $true
+                                }
+                            }
+                            $swCmd.Stop()
+                            $stateContainer.ResultQueue.Enqueue(@{
+                                RequestId        = $cmd.RequestId
+                                CommandType      = "ConnectTabSession"
+                                Success          = $true
+                                TabId            = $cTabId
+                                Started          = $started
+                                AlreadyConnected = $alreadyConn
+                            })
+                        }
+
                         "SelectTabSession" {
                             $selTabId = [string]$cmd.TabId
                             if ($sessions.ContainsKey($selTabId)) {
@@ -742,6 +1118,7 @@ function Start-PSRPMEngine {
                                 $stateContainer.TargetDisplayName = $curr.Target
                                 $stateContainer.TransportBadge    = $curr.Badge
                                 $stateContainer.ConnectionState   = $curr.ConnState
+                                $stateContainer.LastErr           = $curr.LastConnectError
                                 if ($cmd.ContainsKey('EnableNetEtw')) {
                                     $stateContainer.EnableNetEtw = [bool]$cmd.EnableNetEtw
                                 }
@@ -758,6 +1135,9 @@ function Start-PSRPMEngine {
                                 )
                                 if ($needSelFullSync) {
                                     &$setFullSync $true
+                                }
+                                if ($curr.ConnState -eq "NotConnected") {
+                                    &$startTabConnectAsync $selTabId $curr
                                 }
                             }
                             $swCmd.Stop()
@@ -814,6 +1194,7 @@ function Start-PSRPMEngine {
 
                         "CloseTabSession" {
                             $closeTabId = [string]$cmd.TabId
+                            &$cancelTabConnect $closeTabId
                             if ($sessions.ContainsKey($closeTabId)) {
                                 $sessToClose = $sessions[$closeTabId]
                                 &$failSessionPendingJobs $sessToClose "Tab session closed."
@@ -872,6 +1253,7 @@ function Start-PSRPMEngine {
                             $newPort  = [int]$cmd.Port
                             $newSsl   = [bool]$cmd.UseSSL
 
+                            &$cancelTabConnect $activeTabId
                             if ($sessions.ContainsKey($activeTabId)) {
                                 &$failSessionPendingJobs $sessions[$activeTabId] "Target switched."
                                 &$stopRemoteWorker $sessions[$activeTabId]
@@ -963,8 +1345,9 @@ function Start-PSRPMEngine {
 
             if ($stateContainer.IsStopping) { break }
 
-            # 1b. Harvest Non-Blocking Async Worker Jobs
+            # 1b. Harvest Non-Blocking Async Worker Jobs & Async WinRM Connects
             &$harvestAsyncJobs
+            &$harvestPendingConnects
 
             # 2. Periodic Telemetry Snapshot Poll on Active Host Session (Wall-Clock Anchored & Reconnect Protected)
             $nowTicks = [DateTime]::UtcNow.Ticks
@@ -982,8 +1365,9 @@ function Start-PSRPMEngine {
             if ($activeSessObj -and -not $activeSessObj.IsLocal -and $activeSessObj.ConnState -eq "Reconnecting" -and $nowTicks -lt $activeSessObj.NextReconnectTicks) {
                 $isReconnectingBackoff = $true
             }
+            $skipNonPollable = $activeSessObj -and (-not $activeSessObj.IsLocal) -and ($activeSessObj.ConnState -in @("NotConnected", "Connecting", "Disconnected"))
 
-            if (-not $curPaused -and $activeSessObj -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
+            if (-not $curPaused -and $activeSessObj -and -not $skipNonPollable -and -not $isReconnectingBackoff -and $isDue -and ($null -eq $stateContainer.Payload -or $stateContainer.ForceFullSync)) {
                 $pollStartTicks = [DateTime]::UtcNow.Ticks
                 $swPoll = [System.Diagnostics.Stopwatch]::StartNew()
                 try {
@@ -1200,6 +1584,29 @@ function Start-PSRPMEngine {
                 try { if ($lw.Runspace) { $lw.Runspace.Dispose() } } catch {}
                 try { if ($lw.WakeEvent) { $lw.WakeEvent.Dispose() } } catch {}
             }
+            if ($pendingConnects -and $pendingConnects.Count -gt 0) {
+                foreach ($pcKey in @($pendingConnects.Keys)) {
+                    $pc = $pendingConnects[$pcKey]
+                    $pendingConnects.Remove($pcKey)
+                    if (-not $pc) { continue }
+                    $pc.Cancelled = $true
+                    try { if ($pc.PowerShell) { [void]$pc.PowerShell.BeginStop($null, $null) } } catch {}
+                    try {
+                        if ($pc.Handle -and $pc.Handle.AsyncWaitHandle) {
+                            [void]$pc.Handle.AsyncWaitHandle.WaitOne(300)
+                        }
+                        if ($pc.PowerShell -and $pc.Handle -and $pc.Handle.IsCompleted) {
+                            $pcOut = $pc.PowerShell.EndInvoke($pc.Handle)
+                            if ($pcOut -and $pcOut.Count -gt 0 -and $pcOut[0].Session) {
+                                Remove-PSSession -Session $pcOut[0].Session -ErrorAction SilentlyContinue
+                            }
+                        }
+                    } catch {}
+                    try { if ($pc.PowerShell) { $pc.PowerShell.Dispose() } } catch {}
+                    try { if ($pc.Runspace) { $pc.Runspace.Close() } } catch {}
+                    try { if ($pc.Runspace) { $pc.Runspace.Dispose() } } catch {}
+                }
+            }
             foreach ($sItem in $sessions.Values) {
                 &$failSessionPendingJobs $sItem "Engine stopped."
                 &$stopRemoteWorker $sItem
@@ -1219,6 +1626,10 @@ function Start-PSRPMEngine {
     [void]$ps.AddArgument($actionText)
     [void]$ps.AddArgument($IsLocal)
     [void]$ps.AddArgument($InitialTabId)
+    [void]$ps.AddArgument($InitialConnectionConfig)
+    [void]$ps.AddArgument($DormantTargets)
+    [void]$ps.AddArgument($resolvedInitConnState)
+    [void]$ps.AddArgument($InitialConnectionError)
 
     $asyncHandle = $ps.BeginInvoke()
 
@@ -1929,6 +2340,8 @@ function Start-PSRPMEngine {
         "#EAB308" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#EAB308")
         "#16A34A" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#16A34A")
         "#DC2626" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#DC2626")
+        "#0284C7" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#0284C7")
+        "#64748B" = [System.Windows.Media.SolidColorBrush]$brushConv.ConvertFromString("#64748B")
     }
     foreach ($b in $dotBrushes.Values) { if ($b.CanFreeze) { $b.Freeze() } }
 
@@ -2029,6 +2442,16 @@ function Start-PSRPMEngine {
             }
         }
 
+        # 1b. Drain Async Session State Transitions (Dormant / Connecting / Connected / Offline)
+        if ($stateContainer.SessionStateEvents) {
+            $ssEv = $null
+            while ($stateContainer.SessionStateEvents.TryDequeue([ref]$ssEv)) {
+                if ($stateContainer.OnSessionStateChanged) {
+                    try { & $stateContainer.OnSessionStateChanged $ssEv } catch {}
+                }
+            }
+        }
+
         # 2. Check Target Switch / Reset Request (Zero .Clear() on live DataGrids)
         if ($stateContainer.ClearHostMaps) {
             $stateContainer.ClearHostMaps = $false
@@ -2060,7 +2483,11 @@ function Start-PSRPMEngine {
             $cState = $stateContainer.ConnectionState
             $fState = $stateContainer.FreshnessState
             if ($connDot) {
-                $wantHex = if ($stateContainer.IsPaused) {
+                $wantHex = if ($cState -eq "NotConnected") {
+                    "#64748B"
+                } elseif ($cState -eq "Connecting") {
+                    "#0284C7"
+                } elseif ($stateContainer.IsPaused) {
                     "#F59E0B"
                 } elseif ($cState -in @("Connected", "LocalMode")) {
                     if ($fState -eq "Frozen") {
@@ -2097,7 +2524,11 @@ function Start-PSRPMEngine {
                 }
             }
             if ($txtLatency) {
-                $wantLat = if ($stateContainer.IsPaused) {
+                $wantLat = if ($cState -eq "NotConnected") {
+                    "Not Connected"
+                } elseif ($cState -eq "Connecting") {
+                    "Connecting..."
+                } elseif ($stateContainer.IsPaused) {
                     "Paused"
                 } elseif ($cState -eq "Reconnecting") {
                     "Reconnecting"
@@ -2128,6 +2559,13 @@ function Start-PSRPMEngine {
                 if ($uiStatusCache.PausedVis -ne $wantVis) {
                     $uiStatusCache.PausedVis = $wantVis
                     $badgePaused.Visibility = $wantVis
+                }
+            }
+            $tabSyncKey = "$cState|$($stateContainer.IsPaused)|$($stateContainer.PollLatencyMs)"
+            if ($uiStatusCache.ActiveTabSyncKey -ne $tabSyncKey) {
+                $uiStatusCache.ActiveTabSyncKey = $tabSyncKey
+                if ($stateContainer.OnActiveTabStatusSync) {
+                    try { & $stateContainer.OnActiveTabStatusSync } catch {}
                 }
             }
         }

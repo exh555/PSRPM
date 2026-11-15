@@ -3365,6 +3365,8 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$CloseVisibility
     [string]$LatencyText
     [string]$ConnState
+    [int]$Port
+    [bool]$UseSSL
 
     # Per-Tab Isolated State Caches (Enables <5ms Instant Tab Switching & 0 KB/s Standby)
     [Object]$ProcessMap
@@ -3400,6 +3402,8 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.BadgeBackground = if ($isLocal) { "#0D9488" } else { "#0284C7" }
         $this.IsLocal         = $isLocal
         $this.ConnState       = if ($isLocal) { "LocalMode" } else { "Connected" }
+        $this.Port            = 0
+        $this.UseSSL          = $false
         $this.IsActive        = $true
         $this.IsDarkTheme     = $false
         $this.ThemeMode       = "Light"
@@ -3482,7 +3486,13 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.BadgeBackground  = if ($this.IsLocal) { $tabColors.BadgeLocalBg } else { $tabColors.BadgeWinRmBg }
 
         if ($active) {
-            if ($isPaused) {
+            if ($connState -eq "NotConnected") {
+                $this.StatusDotFill = "#64748B"
+                $this.LatencyText   = "Not Connected"
+            } elseif ($connState -eq "Connecting") {
+                $this.StatusDotFill = "#0284C7"
+                $this.LatencyText   = "Connecting..."
+            } elseif ($isPaused) {
                 $this.StatusDotFill = "#F59E0B"
                 $this.LatencyText   = "Paused"
             } elseif ($connState -in @("Connected", "LocalMode")) {
@@ -3502,8 +3512,25 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.TabBorderBrush  = $tabColors.ActiveBorder
             $this.TitleForeground = $tabColors.ActiveFg
         } else {
-            $this.LatencyText   = "Standby"
-            $this.StatusDotFill = "#64748B"
+            if ($connState -eq "NotConnected") {
+                $this.LatencyText   = "Not Connected"
+                $this.StatusDotFill = "#64748B"
+            } elseif ($connState -eq "Connecting") {
+                $this.LatencyText   = "Connecting..."
+                $this.StatusDotFill = "#0284C7"
+            } elseif ($connState -eq "Disconnected") {
+                $this.LatencyText   = "Offline"
+                $this.StatusDotFill = "#DC2626"
+            } elseif ($connState -eq "Reconnecting") {
+                $this.LatencyText   = "Reconnecting"
+                $this.StatusDotFill = "#EA580C"
+            } elseif ($connState -eq "Degraded") {
+                $this.LatencyText   = "Degraded"
+                $this.StatusDotFill = "#EAB308"
+            } else {
+                $this.LatencyText   = "Standby"
+                $this.StatusDotFill = "#64748B"
+            }
             $this.TabBackground   = $tabColors.StandbyBg
             $this.TabBorderBrush  = $tabColors.StandbyBorder
             $this.TitleForeground = $tabColors.StandbyFg

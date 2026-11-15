@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.14.1"
+$script:AppVersion = "1.15.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -431,21 +431,64 @@ function Reset-PSRPMPreferences {
     return $false
 }
 
+function Resolve-PSRPMComputerTargets {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [string[]]$ComputerName,
+
+        [Parameter(Mandatory = $false)]
+        [int]$MaxCount = 10
+    )
+
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $resolved = [System.Collections.Generic.List[string]]::new()
+    if ($null -ne $ComputerName) {
+        foreach ($rawItem in $ComputerName) {
+            if ($null -eq $rawItem) { continue }
+            $parts = $rawItem -split '[,;]'
+            foreach ($p in $parts) {
+                $trimmed = if ($null -ne $p) { $p.Trim() } else { "" }
+                if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                    if ($seen.Add($trimmed)) {
+                        [void]$resolved.Add($trimmed)
+                    }
+                }
+            }
+        }
+    }
+
+    if ($resolved.Count -eq 0) {
+        throw "Target computer name cannot be empty."
+    }
+    if ($MaxCount -gt 0 -and $resolved.Count -gt $MaxCount) {
+        throw "PSRPM supports a maximum of $MaxCount target computers per window (received $($resolved.Count))."
+    }
+
+    return @{
+        Targets = [string[]]$resolved.ToArray()
+    }
+}
+
 function Start-PSRPM {
     <#
     .SYNOPSIS
         Launches PowerShell Remote Process Manager (PSRPM) with a real-time hierarchical Tree-Grid UI.
     .DESCRIPTION
         Launches PSRPM locally by default (zero WinRM or Administrator prerequisites when invoked
-        without -ComputerName), or connects to a remote Windows computer via WinRM (-ComputerName)
-        with near-zero remote CPU/memory footprint (<2-5ms per tick via native NtQuerySystemInformation
-        and differential GZIP JSON telemetry).
+        without -ComputerName), or connects to one or more remote Windows computers via WinRM (-ComputerName,
+        up to 10 targets) with near-zero remote CPU/memory footprint (<2-5ms per tick via native
+        NtQuerySystemInformation and differential GZIP JSON telemetry). When multiple targets are passed,
+        only the first host connects on launch while additional hosts open as Not Connected dormant tabs
+        that connect lazily when selected.
         By default, PSRPM launches in an isolated background STA runspace so your terminal prompt
         remains unlocked; pass -Wait to run synchronously until the window closes.
     .PARAMETER ComputerName
-        Target remote hostname or IP address for WinRM mode. When omitted (along with -Credential,
-        -Port, and -UseSSL), PSRPM starts in Local-Only Mode automatically. Passing '-ComputerName localhost'
-        explicitly tests/connects over WinRM loopback unless -LocalOnly is also specified.
+        One or more target remote hostnames or IP addresses for WinRM mode (up to 10; comma-separated
+        strings or string arrays are supported). When omitted (along with -Credential, -Port, and -UseSSL),
+        PSRPM starts in Local-Only Mode automatically. Passing '-ComputerName localhost' explicitly
+        tests/connects over WinRM loopback unless -LocalOnly is also specified.
     .PARAMETER Credential
         Optional PSCredential for authenticating the WinRM PSSession.
     .PARAMETER Port
@@ -472,6 +515,8 @@ function Start-PSRPM {
     .EXAMPLE
         Start-PSRPM -ComputerName "SRV-PROD-01" -Credential (Get-Credential)
     .EXAMPLE
+        Start-PSRPM -ComputerName "SRV-01", "SRV-02", "SRV-03"
+    .EXAMPLE
         Start-PSRPM -LocalOnly
     .EXAMPLE
         Start-PSRPM -LocalOnly -Wait
@@ -482,7 +527,7 @@ function Start-PSRPM {
     param(
         [Parameter(Position = 0, Mandatory = $false)]
         [ValidateNotNullOrEmpty()]
-        [string]$ComputerName = "localhost",
+        [string[]]$ComputerName = @("localhost"),
 
         [Parameter(Mandatory = $false)]
         [System.Management.Automation.PSCredential]$Credential,
@@ -537,7 +582,23 @@ function Start-PSRPM {
         [bool]$UseSSL
     $isLocalMode = [bool]$LocalOnly -or (-not $hasExplicitWinRmTarget)
     $session = $null
-    $targetLabel = if ($isLocalMode) { $env:COMPUTERNAME } else { $ComputerName }
+
+    if ([bool]$LocalOnly -and $PSBoundParameters.ContainsKey("ComputerName")) {
+        $localCheckRes = Resolve-PSRPMComputerTargets -ComputerName $ComputerName -MaxCount 10
+        if ($localCheckRes.Targets.Count -gt 1) {
+            throw "-LocalOnly cannot be combined with multiple -ComputerName targets."
+        }
+    }
+
+    $resolvedTargets = if ($isLocalMode) {
+        @([string]$env:COMPUTERNAME)
+    } else {
+        (Resolve-PSRPMComputerTargets -ComputerName $ComputerName -MaxCount 10).Targets
+    }
+    $primaryTarget = [string]$resolvedTargets[0]
+    $dormantHosts  = if ($resolvedTargets.Count -gt 1) { @($resolvedTargets[1..($resolvedTargets.Count - 1)]) } else { @() }
+    $targetLabel   = $primaryTarget
+    $launchSummary = if ($dormantHosts.Count -gt 0) { "$primaryTarget (+$($dormantHosts.Count) dormant)" } else { $primaryTarget }
 
     # 0. Set Explicit AppUserModelID to prevent Windows Taskbar from grouping under powershell.exe
     try {
@@ -586,17 +647,19 @@ function Start-PSRPM {
         $handle = $ps.BeginInvoke()
         $script:BackgroundRunspaces.Add(@{ Runspace = $rs; PowerShell = $ps; Handle = $handle })
 
-        Write-Host "[PSRPM] Launched in background (Target: $targetLabel). Terminal remains unlocked (use -Wait to block)." -ForegroundColor Green
+        Write-Host "[PSRPM] Launched in background (Target: $launchSummary). Terminal remains unlocked (use -Wait to block)." -ForegroundColor Green
         return
     }
 
-    # 1. Establish Persistent Remote PSSession (when WinRM parameters are explicitly supplied)
+    # 1. Establish Persistent Remote PSSession for Primary Host Only (dormant hosts connect lazily on tab click)
+    $initConnState = if ($isLocalMode) { "LocalMode" } else { "Connected" }
+    $initConnError = ""
     if (-not $isLocalMode) {
         try {
-            Write-Host "[PSRPM] Connecting to '$ComputerName' via WinRM..." -ForegroundColor Cyan
+            Write-Host "[PSRPM] Connecting to '$primaryTarget' via WinRM..." -ForegroundColor Cyan
             $so = New-PSSessionOption -OpenTimeout 10000 -OperationTimeout 30000 -CancelTimeout 5000 -NoMachineProfile
             $sessParams = @{
-                ComputerName  = $ComputerName
+                ComputerName  = $primaryTarget
                 SessionOption = $so
                 ErrorAction   = 'Stop'
             }
@@ -607,22 +670,28 @@ function Start-PSRPM {
             $session = New-PSSession @sessParams
         } catch {
             $errMsg = $_.Exception.Message
-            if ($ComputerName -in @("localhost", "127.0.0.1", ".", $env:COMPUTERNAME)) {
+            if ($resolvedTargets.Count -gt 1) {
+                $session = $null
+                $initConnState = "Disconnected"
+                $initConnError = $errMsg
+                Write-Warning "[PSRPM] Initial connection to '$primaryTarget' failed ($errMsg). Opening window with '$primaryTarget' marked Offline."
+            } elseif ($primaryTarget -in @("localhost", "127.0.0.1", ".", $env:COMPUTERNAME)) {
                 $ans = [System.Windows.MessageBox]::Show(
-                    "Could not establish a WinRM loopback session to '$ComputerName':`n`n$errMsg`n`nWould you like to continue in Local-Only Mode (zero WinRM/Admin required)?`nTip: Running 'Start-PSRPM' without -ComputerName starts in Local-Only Mode automatically.",
+                    "Could not establish a WinRM loopback session to '$primaryTarget':`n`n$errMsg`n`nWould you like to continue in Local-Only Mode (zero WinRM/Admin required)?`nTip: Running 'Start-PSRPM' without -ComputerName starts in Local-Only Mode automatically.",
                     "PSRPM - WinRM Connection Fallback",
                     [System.Windows.MessageBoxButton]::YesNo,
                     [System.Windows.MessageBoxImage]::Question
                 )
                 if ($ans -eq [System.Windows.MessageBoxResult]::Yes) {
-                    $isLocalMode = $true
-                    $targetLabel = $env:COMPUTERNAME
+                    $isLocalMode   = $true
+                    $initConnState = "LocalMode"
+                    $targetLabel   = $env:COMPUTERNAME
                 } else {
                     return
                 }
             } else {
                 [System.Windows.MessageBox]::Show(
-                    "Failed to connect to remote computer '$ComputerName' via WinRM:`n`n$errMsg`n`nTip: Launch without -ComputerName (or pass -LocalOnly) for Local-Only Mode, then use File -> Connect to Remote Computer.",
+                    "Failed to connect to remote computer '$primaryTarget' via WinRM:`n`n$errMsg`n`nTip: Launch without -ComputerName (or pass -LocalOnly) for Local-Only Mode, then use File -> Connect to Remote Computer.",
                     "PSRPM - WinRM Connection Error",
                     [System.Windows.MessageBoxButton]::OK,
                     [System.Windows.MessageBoxImage]::Error
@@ -695,11 +764,38 @@ function Start-PSRPM {
     if ($hostTabsList) { $hostTabsList.ItemsSource = $hostTabsCollection }
 
     $initialTabId = [guid]::NewGuid().ToString("N")
-    $initialTransport = if ($isLocalMode) { "LOCAL" } else { "WINRM" }
+    $initialTransport = if ($isLocalMode) { "LOCAL" } elseif ([bool]$UseSSL) { "WINRM-SSL" } else { "WINRM" }
     $initialTabVm = [HostTabItemViewModel]::new($initialTabId, $targetLabel, $targetLabel, $initialTransport, $isLocalMode, $summaryVm)
-    $initialTabVm.UpdateVisualState($true, $false, $false, $(if ($isLocalMode) { "LocalMode" } else { "Connected" }), $false, 0)
+    $initialTabVm.Port      = if ($isLocalMode) { 0 } else { [int]$Port }
+    $initialTabVm.UseSSL    = if ($isLocalMode) { $false } else { [bool]$UseSSL }
+    $initialTabVm.ConnState = $initConnState
+    $hasMultipleInitTabs = ($dormantHosts.Count -gt 0)
+    $initialTabVm.UpdateVisualState($true, $false, $hasMultipleInitTabs, $initConnState, $false, 0)
     $hostTabsCollection.Add($initialTabVm)
     $script:ActiveHostTab = $initialTabVm
+
+    $dormantEngineTargets = [System.Collections.Generic.List[Object]]::new()
+    if (-not $isLocalMode -and $dormantHosts.Count -gt 0) {
+        foreach ($dh in $dormantHosts) {
+            $dhTabId = [guid]::NewGuid().ToString("N")
+            $dhSumVm = [SystemSummaryViewModel]::new()
+            $dhTabVm = [HostTabItemViewModel]::new($dhTabId, $dh, $dh, $initialTransport, $false, $dhSumVm)
+            $dhTabVm.Port      = [int]$Port
+            $dhTabVm.UseSSL    = [bool]$UseSSL
+            $dhTabVm.ConnState = "NotConnected"
+            $dhTabVm.UpdateVisualState($false, $false, $true, "NotConnected", $false, 0)
+            $hostTabsCollection.Add($dhTabVm)
+            $dormantEngineTargets.Add(@{
+                TabId        = $dhTabId
+                ComputerName = $dh
+                Target       = $dh
+                IsLocal      = $false
+                Credential   = $Credential
+                Port         = [int]$Port
+                UseSSL       = [bool]$UseSSL
+            })
+        }
+    }
 
     # Helper: Append Audit Entry to Activity Log Console
     $writeAuditLog = {
@@ -741,12 +837,26 @@ function Start-PSRPM {
     }
 
     &$writeAuditLog "INIT" "PSRPM initialized for target '$targetLabel' (Mode: $(if ($isLocalMode) { 'LocalOnly' } else { 'WinRM PSSession' }), Interval: ${RefreshIntervalMs}ms)."
+    if ($initConnError) {
+        &$writeAuditLog "ERROR" "Initial connection to '$targetLabel' failed: $initConnError (Press F5 to retry or double-click the tab to edit connection settings)."
+    }
+    if ($dormantEngineTargets.Count -gt 0) {
+        &$writeAuditLog "INIT" "Added $($dormantEngineTargets.Count) dormant host tab(s) as Not Connected (connects lazily when clicked)."
+    }
     if ($prefLoadResult.SkippedDisk) {
         &$writeAuditLog "PREFS" "Skipped saved preferences (-Defaults specified); using factory defaults (saved config on disk left untouched)."
     } elseif ($prefLoadResult.HadParseError) {
         &$writeAuditLog "WARN" "Ignoring malformed preferences file '$($prefLoadResult.Path)'; using factory defaults."
     } elseif ($prefLoadResult.LoadedFromDisk) {
         &$writeAuditLog "PREFS" "Loaded saved user preferences from '$($prefLoadResult.Path)'."
+    }
+
+    $initConnConfig = @{
+        ComputerName = $targetLabel
+        IsLocal      = $isLocalMode
+        Credential   = $Credential
+        Port         = if ($isLocalMode) { 0 } else { [int]$Port }
+        UseSSL       = if ($isLocalMode) { $false } else { [bool]$UseSSL }
     }
 
     # 4. Start Background Runspace Engine
@@ -763,12 +873,81 @@ function Start-PSRPM {
         -IsLocal $isLocalMode `
         -TargetName $targetLabel `
         -InitialTabId $initialTabId `
-        -LogConsole $txtLogConsole
+        -LogConsole $txtLogConsole `
+        -InitialConnectionConfig $initConnConfig `
+        -DormantTargets $dormantEngineTargets.ToArray() `
+        -InitialConnectionState $initConnState `
+        -InitialConnectionError $initConnError
 
     $stateContainer = $engineHandle.StateContainer
     $initialTabVm.ProcessMap     = $engineHandle.ProcessMap
     $initialTabVm.ServicesMap    = $engineHandle.ServicesMap
     $initialTabVm.PidServicesMap = $engineHandle.PidServicesMap
+
+    $refreshAllHostTabVisuals = {
+        $canClose = ($hostTabsCollection.Count -gt 1)
+        $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
+        $isPausedNow = [bool]$stateContainer.IsPaused
+        $rttNow = [int]$stateContainer.PollLatencyMs
+        foreach ($tVm in $hostTabsCollection) {
+            $isAct = ($tVm -eq $script:ActiveHostTab)
+            $tState = if ($isAct) {
+                [string]$stateContainer.ConnectionState
+            } elseif ($tVm.ConnState) {
+                [string]$tVm.ConnState
+            } elseif ($tVm.IsLocal) {
+                "LocalMode"
+            } else {
+                "Connected"
+            }
+            if ($isAct) { $tVm.ConnState = $tState }
+            $tVm.UpdateVisualState($isAct, $curThemeMode, $canClose, $tState, $isPausedNow, $rttNow)
+        }
+    }
+
+    $stateContainer.OnActiveTabStatusSync = {
+        if (-not $script:ActiveHostTab) { return }
+        $canClose = ($hostTabsCollection.Count -gt 1)
+        $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
+        $curState = [string]$stateContainer.ConnectionState
+        $script:ActiveHostTab.ConnState = $curState
+        $script:ActiveHostTab.UpdateVisualState($true, $curThemeMode, $canClose, $curState, [bool]$stateContainer.IsPaused, [int]$stateContainer.PollLatencyMs)
+    }
+
+    $stateContainer.OnSessionStateChanged = {
+        param([hashtable]$ev)
+        if (-not $ev -or -not $ev.TabId) { return }
+        $evTabId = [string]$ev.TabId
+        $targetTab = $null
+        foreach ($tVm in $hostTabsCollection) {
+            if ($tVm.TabId -eq $evTabId) {
+                $targetTab = $tVm
+                break
+            }
+        }
+        if ($targetTab) {
+            $newState = [string]$ev.ConnState
+            $targetTab.ConnState = $newState
+            $isAct = ($targetTab -eq $script:ActiveHostTab)
+            if ($isAct) {
+                $stateContainer.ConnectionState = $newState
+                if ($window) {
+                    $window.Title = "PSRPM - PowerShell Remote Process Manager [$($targetTab.Title)]"
+                }
+            }
+            $canClose = ($hostTabsCollection.Count -gt 1)
+            $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
+            $rttVal = if ($isAct) { [int]$stateContainer.PollLatencyMs } else { 0 }
+            $pausedVal = ($isAct -and [bool]$stateContainer.IsPaused)
+            $targetTab.UpdateVisualState($isAct, $curThemeMode, $canClose, $newState, $pausedVal, $rttVal)
+        }
+        if ($ev.Message) {
+            &$writeAuditLog "CONNECT" ([string]$ev.Message)
+        }
+        if ($ev.Error) {
+            &$writeAuditLog "ERROR" ("Connection to '{0}' failed: {1} (Press F5 to retry or double-click the tab to edit connection settings)" -f [string]$ev.Target, [string]$ev.Error)
+        }
+    }
 
     # 5. Theme Engine (Clean Light, Precision Dark, Tokyo Night, Tokyo Night Light, Sysinternals Classic & High-Contrast WCAG AAA)
     $menuThemeCycle           = $window.FindName("MenuThemeCycle")
@@ -942,7 +1121,9 @@ function Start-PSRPM {
 
         $canClose = ($hostTabsCollection.Count -gt 1)
         foreach ($tVm in $hostTabsCollection) {
-            $tVm.UpdateVisualState(($tVm -eq $script:ActiveHostTab), $resolvedMode, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
+            $isAct = ($tVm -eq $script:ActiveHostTab)
+            $tState = if ($isAct) { [string]$stateContainer.ConnectionState } elseif ($tVm.ConnState) { [string]$tVm.ConnState } elseif ($tVm.IsLocal) { "LocalMode" } else { "Connected" }
+            $tVm.UpdateVisualState($isAct, $resolvedMode, $canClose, $tState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
         }
         if ($script:UpdateLegendFilterUi) { &$script:UpdateLegendFilterUi }
         if ($updatePauseUi) { &$updatePauseUi ([bool]$stateContainer.IsPaused) }
@@ -1026,6 +1207,103 @@ function Start-PSRPM {
                 $e.Handled = $true
             }
         }.GetNewClosure())
+    }
+
+    # Mitigate WPF D3D9 / GPU-driver blank-surface presentation stalls on window open
+    # by scheduling a post-ContentRendered +1px width resize (after 1000ms) followed
+    # 5ms later by a -1px shrink back to restore original dimensions cleanly.
+    $attachRenderResizeNudge = {
+        param([System.Windows.Window]$targetWin)
+        if (-not $targetWin) { return }
+
+        $nudgeState = @{
+            Done        = $false
+            Phase       = 0
+            AppliedGrow = $false
+            Timer       = $null
+            Win         = $targetWin
+        }
+
+        $onNudgeTick = {
+            param($ts, $te)
+            $w = $nudgeState.Win
+            if (-not $w -or -not $w.IsLoaded) {
+                if ($nudgeState.Timer) {
+                    try { $nudgeState.Timer.Stop() } catch {}
+                    $nudgeState.Timer = $null
+                }
+                return
+            }
+
+            if ($nudgeState.Phase -eq 0) {
+                try {
+                    if ($w.WindowState -eq [System.Windows.WindowState]::Normal) {
+                        $curW = if ([double]::IsNaN($w.Width) -or $w.Width -le 0) { $w.ActualWidth } else { $w.Width }
+                        if ($curW -gt 0 -and ($curW + 1) -le $w.MaxWidth) {
+                            $w.Width = $curW + 1
+                            $nudgeState.AppliedGrow = $true
+                        }
+                    }
+                    $w.UpdateLayout()
+                    $w.InvalidateVisual()
+                } catch {}
+
+                if ($nudgeState.AppliedGrow -and $nudgeState.Timer) {
+                    $nudgeState.Phase = 1
+                    $nudgeState.Timer.Interval = [TimeSpan]::FromMilliseconds(5)
+                } elseif ($nudgeState.Timer) {
+                    try { $nudgeState.Timer.Stop() } catch {}
+                    $nudgeState.Timer = $null
+                }
+                return
+            }
+
+            if ($nudgeState.Timer) {
+                try { $nudgeState.Timer.Stop() } catch {}
+                $nudgeState.Timer = $null
+            }
+            try {
+                if ($nudgeState.AppliedGrow -and $w.WindowState -eq [System.Windows.WindowState]::Normal) {
+                    $curW = if ([double]::IsNaN($w.Width) -or $w.Width -le 0) { $w.ActualWidth } else { $w.Width }
+                    if (($curW - 1) -gt 0 -and ($curW - 1) -ge $w.MinWidth) {
+                        $w.Width = $curW - 1
+                    }
+                }
+                $w.UpdateLayout()
+                $w.InvalidateVisual()
+            } catch {}
+        }.GetNewClosure()
+
+        $onContentRendered = {
+            param($s, $e)
+            if ($s -is [System.Windows.UIElement]) {
+                $s.InvalidateVisual()
+            }
+            if ($nudgeState.Done) { return }
+            $nudgeState.Done = $true
+            try {
+                $t = [System.Windows.Threading.DispatcherTimer]::new(
+                    [System.Windows.Threading.DispatcherPriority]::Background,
+                    $nudgeState.Win.Dispatcher
+                )
+                $t.Interval = [TimeSpan]::FromMilliseconds(1000)
+                $t.add_Tick($onNudgeTick)
+                $nudgeState.Timer = $t
+                $t.Start()
+            } catch {}
+        }.GetNewClosure()
+
+        $onClosedCleanup = {
+            param($cs, $ce)
+            if ($nudgeState.Timer) {
+                try { $nudgeState.Timer.Stop() } catch {}
+                $nudgeState.Timer = $null
+            }
+            $nudgeState.Win = $null
+        }.GetNewClosure()
+
+        $targetWin.add_ContentRendered($onContentRendered)
+        $targetWin.add_Closed($onClosedCleanup)
     }
 
     $initialTheme = if ($Dark.IsPresent) {
@@ -1704,6 +1982,17 @@ function Start-PSRPM {
     }
 
     $triggerImmediateRefresh = {
+        if ($script:ActiveHostTab -and $engineHandle -and -not $script:ActiveHostTab.IsLocal) {
+            $curTabState = [string]$stateContainer.ConnectionState
+            if ($curTabState -in @("Disconnected", "NotConnected")) {
+                &$writeAuditLog "CONNECT" "Retrying WinRM connection to '$($script:ActiveHostTab.Title)'..."
+                & $engineHandle.SendCommand @{
+                    CommandType = "ConnectTabSession"
+                    TabId       = $script:ActiveHostTab.TabId
+                } $null
+                return
+            }
+        }
         &$setPollingRate $stateContainer.IntervalMs $false
     }
     if ($menuRefresh)   { $menuRefresh.add_Click($triggerImmediateRefresh) }
@@ -3335,12 +3624,7 @@ function Start-PSRPM {
         param([System.Windows.Window]$dlg)
         if (-not $dlg) { return }
         &$registerChildWindow $dlg
-        $dlg.add_ContentRendered({
-            param($s, $e)
-            if ($s -is [System.Windows.UIElement]) {
-                $s.InvalidateVisual()
-            }
-        })
+        &$attachRenderResizeNudge $dlg
     }
 
     $actionShowServiceProperties = {
@@ -4326,6 +4610,7 @@ function Start-PSRPM {
 
         # Trigger Initial On-Demand Core Inspection on ContentRendered (prevents D3D9 partial dirty-rect race during ShowDialog)
         &$registerChildWindow $propWin
+        &$attachRenderResizeNudge $propWin
         $coreInspectState = @{ InitialCoreFired = $false }
         $propWin.add_ContentRendered({
             param($s, $e)
@@ -4468,7 +4753,9 @@ function Start-PSRPM {
         $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
         $canClose = ($hostTabsCollection.Count -gt 1)
         foreach ($tVm in $hostTabsCollection) {
-            $tVm.UpdateVisualState(($tVm -eq $targetTabVm), $curThemeMode, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
+            $isAct = ($tVm -eq $targetTabVm)
+            $tState = if ($isAct) { [string]$stateContainer.ConnectionState } elseif ($tVm.ConnState) { [string]$tVm.ConnState } elseif ($tVm.IsLocal) { "LocalMode" } else { "Connected" }
+            $tVm.UpdateVisualState($isAct, $curThemeMode, $canClose, $tState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
         }
         if ($script:RestoreActiveTabFeatureState) { &$script:RestoreActiveTabFeatureState $targetTabVm }
 
@@ -4546,7 +4833,9 @@ function Start-PSRPM {
             $canClose = ($hostTabsCollection.Count -gt 1)
             $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
             foreach ($tVm in $hostTabsCollection) {
-                $tVm.UpdateVisualState(($tVm -eq $script:ActiveHostTab), $curThemeMode, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
+                $isAct = ($tVm -eq $script:ActiveHostTab)
+                $tState = if ($isAct) { [string]$stateContainer.ConnectionState } elseif ($tVm.ConnState) { [string]$tVm.ConnState } elseif ($tVm.IsLocal) { "LocalMode" } else { "Connected" }
+                $tVm.UpdateVisualState($isAct, $curThemeMode, $canClose, $tState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
             }
         }
         &$writeAuditLog "TAB" "Closed session tab '$($tabToClose.Title)'."
@@ -4607,6 +4896,10 @@ function Start-PSRPM {
             $tabObj.Transport    = $stateContainer.TransportBadge
             $tabObj.IsLocal      = ($stateContainer.ConnectionState -eq "LocalMode")
             $tabObj.ConnState    = [string]$stateContainer.ConnectionState
+            if ($tabObj.IsLocal) {
+                $tabObj.Port   = 0
+                $tabObj.UseSSL = $false
+            }
             if ($tabObj.TelemStats) {
                 $tabObj.TelemStats.TotalWireBytes  = 0L
                 $tabObj.TelemStats.TotalRawBytes   = 0L
@@ -4614,9 +4907,7 @@ function Start-PSRPM {
                 $tabObj.TelemStats.TotalRttMs      = 0L
                 $tabObj.TelemStats.LastReceivedSeq = 0
             }
-            $canClose = ($hostTabsCollection.Count -gt 1)
-            $curThemeMode = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } elseif ([bool]$stateContainer.IsDarkTheme) { "Dark" } else { "Light" }
-            $tabObj.UpdateVisualState($true, $curThemeMode, $canClose, $stateContainer.ConnectionState, [bool]$stateContainer.IsPaused, $stateContainer.PollLatencyMs)
+            if ($refreshAllHostTabVisuals) { &$refreshAllHostTabVisuals }
         }
         $window.Title = "PSRPM - PowerShell Remote Process Manager [$($stateContainer.TargetDisplayName)]"
         if ($script:ResetActiveTabFeatureState) { &$script:ResetActiveTabFeatureState $tabObj }
@@ -4660,8 +4951,9 @@ function Start-PSRPM {
             $chkOpenNewTab.IsChecked = [bool]$forceNewTab
         }
 
-        # Context-aware defaults: If currently in Local Mode, default to Local Host Only
-        if ($stateContainer.ConnectionState -eq "LocalMode" -or $isLocalMode) {
+        # Context-aware defaults: Check active tab rather than launch-time mode
+        $activeIsLocal = if ($script:ActiveHostTab) { [bool]$script:ActiveHostTab.IsLocal } else { ($stateContainer.ConnectionState -eq "LocalMode") }
+        if ($activeIsLocal) {
             if ($rbLocal)    { $rbLocal.IsChecked = $true }
             if ($gridInputs) { $gridInputs.IsEnabled = $false }
         } else {
@@ -4670,6 +4962,10 @@ function Start-PSRPM {
         }
 
         $txtComp.Text = if ($forceNewTab) { "localhost" } else { $stateContainer.TargetDisplayName }
+        if (-not $forceNewTab -and $script:ActiveHostTab -and -not $script:ActiveHostTab.IsLocal) {
+            if ($chkSsl)  { $chkSsl.IsChecked = [bool]$script:ActiveHostTab.UseSSL }
+            if ($txtPort) { $txtPort.Text = if ($script:ActiveHostTab.Port -gt 0) { [string]$script:ActiveHostTab.Port } else { "" } }
+        }
         $credHolder   = @{ Value = $Credential }
 
         $setConnectBanner = {
@@ -4697,10 +4993,18 @@ function Start-PSRPM {
             if ($gridInputs)    { $gridInputs.IsEnabled    = ((-not $busy) -and (-not [bool]$rbLocal.IsChecked)) }
         }
 
+        if ($forceNewTab -and $hostTabsCollection.Count -ge 10) {
+            &$setConnectBanner $true "Maximum of 10 host tabs reached. Close an existing tab or uncheck 'Open in a new Host Tab' to switch the current tab."
+        }
+
         $rbRemote.add_Checked({ $gridInputs.IsEnabled = $true; &$setConnectBanner $false "" })
         $rbLocal.add_Checked({  $gridInputs.IsEnabled = $false; &$setConnectBanner $false "" })
         if ($txtComp) { $txtComp.add_TextChanged({ &$setConnectBanner $false "" }) }
         if ($txtPort) { $txtPort.add_TextChanged({ &$setConnectBanner $false "" }) }
+        if ($chkOpenNewTab) {
+            $chkOpenNewTab.add_Checked({ &$setConnectBanner $false "" })
+            $chkOpenNewTab.add_Unchecked({ &$setConnectBanner $false "" })
+        }
 
         $btnPickCred.add_Click({
             try {
@@ -4712,11 +5016,45 @@ function Start-PSRPM {
             } catch {}
         })
 
+        $addExtraDormantTabs = {
+            param([string[]]$extraNames, $credVal, [int]$portVal, [bool]$sslVal, $tabsCol, $eng, $createTabFn, $refreshTabsFn, $logFn)
+            if (-not $extraNames -or $extraNames.Count -eq 0) { return }
+            $transLabel = if ($sslVal) { "WINRM-SSL" } else { "WINRM" }
+            $payloadTargets = [System.Collections.Generic.List[Object]]::new()
+            foreach ($eh in $extraNames) {
+                $dId = [guid]::NewGuid().ToString("N")
+                $dVm = & $createTabFn $dId $eh $eh $transLabel $false
+                $dVm.Port      = $portVal
+                $dVm.UseSSL    = $sslVal
+                $dVm.ConnState = "NotConnected"
+                $tabsCol.Add($dVm)
+                $payloadTargets.Add(@{
+                    TabId        = $dId
+                    ComputerName = $eh
+                    Target       = $eh
+                    IsLocal      = $false
+                    Credential   = $credVal
+                    Port         = $portVal
+                    UseSSL       = $sslVal
+                })
+            }
+            if ($refreshTabsFn) { & $refreshTabsFn }
+            if ($eng -and $eng.SendCommand -and $payloadTargets.Count -gt 0) {
+                & $eng.SendCommand @{
+                    CommandType = "AddDormantTabs"
+                    Targets     = $payloadTargets.ToArray()
+                } $null
+            }
+            if ($logFn) {
+                &$logFn "INIT" "Added $($payloadTargets.Count) dormant host tab(s) as Not Connected (connects lazily when clicked)."
+            }
+        }
+
         $btnSubmit.add_Click({
             $useLocal = [bool]$rbLocal.IsChecked
-            $compName = $txtComp.Text.Trim()
-            if (-not $useLocal -and [string]::IsNullOrWhiteSpace($compName)) {
-                &$setConnectBanner $true "Please enter a remote computer name or IP address."
+            $compRaw  = $txtComp.Text.Trim()
+            if (-not $useLocal -and [string]::IsNullOrWhiteSpace($compRaw)) {
+                &$setConnectBanner $true "Please enter a remote computer name or comma-separated list of host names."
                 if ($txtComp) { [void]$txtComp.Focus() }
                 return
             }
@@ -4732,6 +5070,36 @@ function Start-PSRPM {
             }
             $useSslVal = [bool]$chkSsl.IsChecked
             $openNew   = if ($chkOpenNewTab) { [bool]$chkOpenNewTab.IsChecked } else { $false }
+
+            $parsedTargets = @()
+            $extraTargets  = @()
+            $compName      = ""
+            if ($useLocal) {
+                if ($openNew -and $hostTabsCollection.Count -ge 10) {
+                    &$setConnectBanner $true "Maximum of 10 host tabs reached per window. Close a tab or uncheck 'Open in a new Host Tab'."
+                    return
+                }
+                $compName = "$env:COMPUTERNAME"
+            } else {
+                try {
+                    $parsedTargets = (Resolve-PSRPMComputerTargets -ComputerName @($compRaw) -MaxCount 10).Targets
+                } catch {
+                    &$setConnectBanner $true $_.Exception.Message
+                    if ($txtComp) { [void]$txtComp.Focus() }
+                    return
+                }
+                $newTabSlots = if ($openNew) { $parsedTargets.Count } else { $parsedTargets.Count - 1 }
+                if (($hostTabsCollection.Count + $newTabSlots) -gt 10) {
+                    &$setConnectBanner $true ("Maximum of 10 host tabs allowed per window (currently {0} open, trying to add {1} new tab(s))." -f $hostTabsCollection.Count, $newTabSlots)
+                    if ($txtComp) { [void]$txtComp.Focus() }
+                    return
+                }
+                $compName = [string]$parsedTargets[0]
+                if ($parsedTargets.Count -gt 1) {
+                    $extraTargets = @($parsedTargets[1..($parsedTargets.Count - 1)])
+                }
+            }
+
             $targetLabel = if ($useLocal) { "$env:COMPUTERNAME" } else { $compName }
 
             &$setConnectBusy $true
@@ -4750,15 +5118,21 @@ function Start-PSRPM {
                     UseSSL       = $useSslVal
                 }
 
-                $localConnWin     = $connWin
-                $localLog         = $writeAuditLog
-                $localComp        = $compName
-                $localEngine      = $engineHandle
-                $localTabsCol     = $hostTabsCollection
-                $localActionSel   = $actionSelectHostTab
-                $localCreateTabVm = $fnCreateHostTabVm
-                $localSetBanner   = $setConnectBanner
-                $localSetBusy     = $setConnectBusy
+                $localConnWin      = $connWin
+                $localLog          = $writeAuditLog
+                $localComp         = $compName
+                $localEngine       = $engineHandle
+                $localTabsCol      = $hostTabsCollection
+                $localActionSel    = $actionSelectHostTab
+                $localCreateTabVm  = $fnCreateHostTabVm
+                $localRefreshTabs  = $refreshAllHostTabVisuals
+                $localAddDormant   = $addExtraDormantTabs
+                $localExtraTargets = $extraTargets
+                $localCredVal      = $credHolder.Value
+                $localPortVal      = $portNum
+                $localSslVal       = $useSslVal
+                $localSetBanner    = $setConnectBanner
+                $localSetBusy      = $setConnectBusy
 
                 & $localEngine.SendCommand $addCmd ({
                     param($res)
@@ -4776,6 +5150,8 @@ function Start-PSRPM {
                             }
 
                             $newTabVm = & $localCreateTabVm $res.TabId $res.Target $tabTitle $res.Transport ([bool]$res.IsLocal)
+                            $newTabVm.Port   = if ($res.IsLocal) { 0 } else { $localPortVal }
+                            $newTabVm.UseSSL = if ($res.IsLocal) { $false } else { $localSslVal }
                             if ($res.ConnState) { $newTabVm.ConnState = [string]$res.ConnState }
                             $localTabsCol.Add($newTabVm)
 
@@ -4783,6 +5159,10 @@ function Start-PSRPM {
                                 & $localActionSel $newTabVm $localEngine
                             } catch {
                                 &$localLog "ERROR" "SelectTab error: $($_.Exception.Message)"
+                            }
+
+                            if ($localExtraTargets -and $localExtraTargets.Count -gt 0) {
+                                & $localAddDormant $localExtraTargets $localCredVal $localPortVal $localSslVal $localTabsCol $localEngine $localCreateTabVm $localRefreshTabs $localLog
                             }
 
                             &$localLog "CONNECT" "Connected to $($tabTitle) ($($res.Transport)) in $($res.ElapsedMs)ms."
@@ -4811,6 +5191,15 @@ function Start-PSRPM {
                 $localLog          = $writeAuditLog
                 $localComp         = $compName
                 $curTab            = $script:ActiveHostTab
+                $localEngine       = $engineHandle
+                $localTabsCol      = $hostTabsCollection
+                $localCreateTabVm  = $fnCreateHostTabVm
+                $localRefreshTabs  = $refreshAllHostTabVisuals
+                $localAddDormant   = $addExtraDormantTabs
+                $localExtraTargets = $extraTargets
+                $localCredVal      = $credHolder.Value
+                $localPortVal      = $portNum
+                $localSslVal       = $useSslVal
                 $localSyncTargetUi = $syncTargetSwitchUi
                 $localSetBanner    = $setConnectBanner
                 $localSetBusy      = $setConnectBusy
@@ -4821,7 +5210,14 @@ function Start-PSRPM {
                         if (-not $localConnWin -or -not $localConnWin.IsLoaded) { return }
                         &$localSetBusy $false
                         if ($res.Success) {
+                            if ($curTab) {
+                                $curTab.Port   = if ($res.Message -and $res.Message.Contains('(LOCAL)')) { 0 } else { $localPortVal }
+                                $curTab.UseSSL = if ($res.Message -and $res.Message.Contains('(LOCAL)')) { $false } else { $localSslVal }
+                            }
                             & $localSyncTargetUi $curTab
+                            if ($localExtraTargets -and $localExtraTargets.Count -gt 0) {
+                                & $localAddDormant $localExtraTargets $localCredVal $localPortVal $localSslVal $localTabsCol $localEngine $localCreateTabVm $localRefreshTabs $localLog
+                            }
                             &$localLog "CONNECT" $res.Message
                             $localConnWin.Close()
                         } else {
@@ -7656,6 +8052,8 @@ function Start-PSRPM {
             & $closeHoverState $mainHoverState
             & $closeHoverState $script:ActiveSysHoverState
             $stateContainer.OnTickProcessed = $null
+            $stateContainer.OnSessionStateChanged = $null
+            $stateContainer.OnActiveTabStatusSync = $null
             $stateContainer.EnableNetEtw = $false
             $stateContainer.IsStopping = $true
             if ($netAutoTimer) { $netAutoTimer.Stop() }
@@ -7721,6 +8119,7 @@ function Start-PSRPM {
         }
     })
 
+    &$attachRenderResizeNudge $window
     [void]$window.ShowDialog()
 }
 
@@ -7732,7 +8131,8 @@ function Start-RemoteProcessManager {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0, Mandatory = $false)]
-        [string]$ComputerName = "localhost",
+        [ValidateNotNullOrEmpty()]
+        [string[]]$ComputerName = @("localhost"),
 
         [Parameter(Mandatory = $false)]
         [System.Management.Automation.PSCredential]$Credential,

@@ -51,7 +51,7 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="Connect to Remote Computer or Local Host" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
-            <TextBlock Text="Establish a persistent, low-overhead WinRM session or run locally without WinRM." Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,0"/>
+            <TextBlock Text="Establish a persistent WinRM session (or comma-separated list, max 10 tabs total) or run locally." Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,0"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1">
@@ -68,8 +68,8 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Computer Name:" VerticalAlignment="Center" Margin="0,0,0,6"/>
-                <TextBox x:Name="TxtConnectComputer" Grid.Row="0" Grid.Column="1" Text="localhost" Padding="5,3" Margin="0,0,0,6" AutomationProperties.Name="Target Computer Name"/>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Computer Name(s):" VerticalAlignment="Center" Margin="0,0,0,6"/>
+                <TextBox x:Name="TxtConnectComputer" Grid.Row="0" Grid.Column="1" Text="localhost" Padding="5,3" Margin="0,0,0,6" AutomationProperties.Name="Target Computer Name" ToolTip="Enter a host name or comma-separated list (max 10 total tabs). Only the first host connects immediately; additional hosts stay Not Connected until selected."/>
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Transport Options:" VerticalAlignment="Center" Margin="0,0,0,6"/>
                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
