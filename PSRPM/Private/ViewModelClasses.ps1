@@ -5,6 +5,17 @@
 
 class PSRPMThemeRegistry {
     hidden static [hashtable] $_PaletteCache = @{}
+    hidden static [System.Collections.Generic.Dictionary[string, System.ComponentModel.PropertyChangedEventArgs]] $_PropArgsCache = [System.Collections.Generic.Dictionary[string, System.ComponentModel.PropertyChangedEventArgs]]::new([System.StringComparer]::Ordinal)
+
+    static [System.ComponentModel.PropertyChangedEventArgs] GetPropArgs([string]$name) {
+        $argsObj = $null
+        if ([PSRPMThemeRegistry]::_PropArgsCache.TryGetValue($name, [ref]$argsObj)) {
+            return $argsObj
+        }
+        $argsObj = [System.ComponentModel.PropertyChangedEventArgs]::new($name)
+        [PSRPMThemeRegistry]::_PropArgsCache[$name] = $argsObj
+        return $argsObj
+    }
 
     static [bool] IsDarkMode([string]$mode) {
         return ($mode -in @("Dark", "TokyoNight", "HighContrast"))
@@ -1187,7 +1198,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [void] OnPropertyChanged([string]$propertyName) {
         if ($this.Handlers.Count -eq 0) { return }
-        $eventArgs = [System.ComponentModel.PropertyChangedEventArgs]::new($propertyName)
+        $eventArgs = [PSRPMThemeRegistry]::GetPropArgs($propertyName)
         for ($i = 0; $i -lt $this.Handlers.Count; $i++) {
             try { $this.Handlers[$i].Invoke($this, $eventArgs) } catch {}
         }
@@ -1302,7 +1313,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
     }
 
-    [void] RefreshHoverToolTip() {
+    [void] RefreshProcessHoverToolTipOnly() {
         $sb = [System.Text.StringBuilder]::new(384)
         [void]$sb.Append("$($this.Name) (PID $($this.PID), PPID $($this.ParentPID)) | $($this.Architecture) | Session $($this.SessionId)")
         [void]$sb.Append("`nUser: $($this.User) | Category: $($this.Category) | Status: $($this.Status)")
@@ -1336,24 +1347,37 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.ProcessHoverToolTip = $newTip
             $this.OnPropertyChanged('ProcessHoverToolTip')
         }
+    }
 
+    [void] RefreshPrivateCellToolTip() {
         $privTip = "Private Bytes: $($this.PrivateBytesFormatted) | Session Peak: $($this.PeakPrivateBytesFormatted)"
-        $wsTip   = "Working Set: $($this.MemoryFormatted) | Session Peak: $($this.PeakMemoryFormatted)"
-        $hndTip  = "Handles: $($this.HandlesFormatted) | Session Peak: $($this.PeakHandlesFormatted)"
         if ($this.HasBaseline) {
-            if ($this.SpawnedPostBaseline) {
-                $privTip += "`nBaseline: [NEW] Spawned post-baseline"
-                $wsTip   += "`nBaseline: [NEW] Spawned post-baseline"
-                $hndTip  += "`nBaseline: [NEW] Spawned post-baseline"
-            } else {
-                $privTip += "`nBaseline Delta: $($this.PrivateDeltaFormatted)"
-                $wsTip   += "`nBaseline Delta: $($this.MemoryDeltaFormatted)"
-                $hndTip  += "`nBaseline Delta: $($this.HandlesDeltaFormatted)"
-            }
+            $privTip += if ($this.SpawnedPostBaseline) { "`nBaseline: [NEW] Spawned post-baseline" } else { "`nBaseline Delta: $($this.PrivateDeltaFormatted)" }
         }
         if ($this.PrivateCellToolTip -ne $privTip) { $this.PrivateCellToolTip = $privTip; $this.OnPropertyChanged('PrivateCellToolTip') }
-        if ($this.WsCellToolTip -ne $wsTip)        { $this.WsCellToolTip = $wsTip;        $this.OnPropertyChanged('WsCellToolTip') }
-        if ($this.HandlesCellToolTip -ne $hndTip)  { $this.HandlesCellToolTip = $hndTip;  $this.OnPropertyChanged('HandlesCellToolTip') }
+    }
+
+    [void] RefreshWsCellToolTip() {
+        $wsTip = "Working Set: $($this.MemoryFormatted) | Session Peak: $($this.PeakMemoryFormatted)"
+        if ($this.HasBaseline) {
+            $wsTip += if ($this.SpawnedPostBaseline) { "`nBaseline: [NEW] Spawned post-baseline" } else { "`nBaseline Delta: $($this.MemoryDeltaFormatted)" }
+        }
+        if ($this.WsCellToolTip -ne $wsTip) { $this.WsCellToolTip = $wsTip; $this.OnPropertyChanged('WsCellToolTip') }
+    }
+
+    [void] RefreshHandlesCellToolTip() {
+        $hndTip = "Handles: $($this.HandlesFormatted) | Session Peak: $($this.PeakHandlesFormatted)"
+        if ($this.HasBaseline) {
+            $hndTip += if ($this.SpawnedPostBaseline) { "`nBaseline: [NEW] Spawned post-baseline" } else { "`nBaseline Delta: $($this.HandlesDeltaFormatted)" }
+        }
+        if ($this.HandlesCellToolTip -ne $hndTip) { $this.HandlesCellToolTip = $hndTip; $this.OnPropertyChanged('HandlesCellToolTip') }
+    }
+
+    [void] RefreshHoverToolTip() {
+        $this.RefreshProcessHoverToolTipOnly()
+        $this.RefreshPrivateCellToolTip()
+        $this.RefreshWsCellToolTip()
+        $this.RefreshHandlesCellToolTip()
         $this.RefreshCpuCellToolTip()
     }
 
@@ -1436,10 +1460,6 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($this.HandlesDeltaFormatted -ne $hFmt)       { $this.HandlesDeltaFormatted = $hFmt;       $this.OnPropertyChanged('HandlesDeltaFormatted') }
         if ($this.HandlesDeltaBrush -ne $hBr)            { $this.HandlesDeltaBrush = $hBr;            $this.OnPropertyChanged('HandlesDeltaBrush') }
 
-        $this.OnPropertyChanged('CPUDelta')
-        $this.OnPropertyChanged('PrivateBytesDelta')
-        $this.OnPropertyChanged('MemoryDelta')
-        $this.OnPropertyChanged('HandlesDelta')
         $this.RefreshCpuCellToolTip()
     }
 
@@ -1479,25 +1499,27 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.OnPropertyChanged('Status')
         }
 
-        $anyMetricChanged = $statusChanged
+        $cpuFmtChanged  = $statusChanged
+        $wsFmtChanged   = $false
+        $privFmtChanged = $false
+        $hndFmtChanged  = $false
+
         $cpuChanged = ($this.CPU -ne $cpu) -or $statusChanged
         if ($cpuChanged) {
             $this.CPU = $cpu
             $newCpuFmt = [ProcessItemViewModel]::FormatCpuDisplay($cpu, $this.Status)
-            $this.OnPropertyChanged('CPU')
             if ($this.CPUFormatted -ne $newCpuFmt) {
                 $this.CPUFormatted = $newCpuFmt
                 $this.OnPropertyChanged('CPUFormatted')
-                $anyMetricChanged = $true
+                $cpuFmtChanged = $true
             }
             if ($cpu -gt $this.PeakCPU) {
                 $this.PeakCPU = $cpu
                 $newPkCpuFmt = [ProcessItemViewModel]::FormatCpuDisplay($cpu, "Running")
-                $this.OnPropertyChanged('PeakCPU')
                 if ($this.PeakCPUFormatted -ne $newPkCpuFmt) {
                     $this.PeakCPUFormatted = $newPkCpuFmt
                     $this.OnPropertyChanged('PeakCPUFormatted')
-                    $anyMetricChanged = $true
+                    $cpuFmtChanged = $true
                 }
             }
         }
@@ -1507,19 +1529,17 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.MemoryBytes = $wsBytes
             $wsKB = [Math]::Round($wsBytes / 1KB, 0)
             $newWsFmt = "$($wsKB.ToString('N0')) K"
-            $this.OnPropertyChanged('MemoryBytes')
             if ($this.MemoryFormatted -ne $newWsFmt) {
                 $this.MemoryFormatted = $newWsFmt
                 $this.OnPropertyChanged('MemoryFormatted')
-                $anyMetricChanged = $true
+                $wsFmtChanged = $true
             }
             if ($wsBytes -gt $this.PeakMemoryBytes) {
                 $this.PeakMemoryBytes = $wsBytes
-                $this.OnPropertyChanged('PeakMemoryBytes')
                 if ($this.PeakMemoryFormatted -ne $newWsFmt) {
                     $this.PeakMemoryFormatted = $newWsFmt
                     $this.OnPropertyChanged('PeakMemoryFormatted')
-                    $anyMetricChanged = $true
+                    $wsFmtChanged = $true
                 }
             }
         }
@@ -1529,19 +1549,17 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.PrivateBytes = $privBytes
             $pbKB = [Math]::Round($privBytes / 1KB, 0)
             $newPbFmt = "$($pbKB.ToString('N0')) K"
-            $this.OnPropertyChanged('PrivateBytes')
             if ($this.PrivateBytesFormatted -ne $newPbFmt) {
                 $this.PrivateBytesFormatted = $newPbFmt
                 $this.OnPropertyChanged('PrivateBytesFormatted')
-                $anyMetricChanged = $true
+                $privFmtChanged = $true
             }
             if ($privBytes -gt $this.PeakPrivateBytes) {
                 $this.PeakPrivateBytes = $privBytes
-                $this.OnPropertyChanged('PeakPrivateBytes')
                 if ($this.PeakPrivateBytesFormatted -ne $newPbFmt) {
                     $this.PeakPrivateBytesFormatted = $newPbFmt
                     $this.OnPropertyChanged('PeakPrivateBytesFormatted')
-                    $anyMetricChanged = $true
+                    $privFmtChanged = $true
                 }
             }
         }
@@ -1555,19 +1573,17 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($hndChanged) {
             $this.Handles = $handles
             $newHndFmt = $handles.ToString("N0")
-            $this.OnPropertyChanged('Handles')
             if ($this.HandlesFormatted -ne $newHndFmt) {
                 $this.HandlesFormatted = $newHndFmt
                 $this.OnPropertyChanged('HandlesFormatted')
-                $anyMetricChanged = $true
+                $hndFmtChanged = $true
             }
             if ($handles -gt $this.PeakHandles) {
                 $this.PeakHandles = $handles
-                $this.OnPropertyChanged('PeakHandles')
                 if ($this.PeakHandlesFormatted -ne $newHndFmt) {
                     $this.PeakHandlesFormatted = $newHndFmt
                     $this.OnPropertyChanged('PeakHandlesFormatted')
-                    $anyMetricChanged = $true
+                    $hndFmtChanged = $true
                 }
             }
         }
@@ -1575,8 +1591,18 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($this.HasBaseline -and ($cpuChanged -or $privChanged -or $wsChanged -or $hndChanged)) {
             $this.UpdateBaselineDiffs()
         }
-        if ($anyMetricChanged -or [string]::IsNullOrEmpty($this.ProcessHoverToolTip)) {
+
+        $needFullTip = [string]::IsNullOrEmpty($this.ProcessHoverToolTip)
+        if ($needFullTip) {
             $this.RefreshHoverToolTip()
+        } else {
+            if ($cpuFmtChanged)  { $this.RefreshCpuCellToolTip() }
+            if ($privFmtChanged) { $this.RefreshPrivateCellToolTip() }
+            if ($wsFmtChanged)   { $this.RefreshWsCellToolTip() }
+            if ($hndFmtChanged)  { $this.RefreshHandlesCellToolTip() }
+            if ($cpuFmtChanged -or $privFmtChanged -or $wsFmtChanged -or $hndFmtChanged) {
+                $this.RefreshProcessHoverToolTipOnly()
+            }
         }
 
         if ($statusChanged -or ($prevHighCpu -ne ($cpu -ge 50.0))) {
@@ -1586,10 +1612,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [void] UpdateTreeCpu([double]$treeCpu) {
         $clamped = [Math]::Max(0.0, [Math]::Min(100.0, [Math]::Round($treeCpu, 2)))
-        if ($this.TreeCPU -ne $clamped) {
-            $this.TreeCPU = $clamped
-            $this.OnPropertyChanged('TreeCPU')
-        }
+        $this.TreeCPU = $clamped
         $newTreeFmt = if ($clamped -lt 0.05) {
             ""
         } else {
@@ -1635,7 +1658,6 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
         if ($this.NetRxBps -ne $rxVal) {
             $this.NetRxBps = $rxVal
-            $this.OnPropertyChanged('NetRxBps')
             $rxFmt = [ProcessItemViewModel]::FormatNetRate($rxVal)
             if ($this.NetRxFormatted -ne $rxFmt) {
                 $this.NetRxFormatted = $rxFmt
@@ -1645,7 +1667,6 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
         if ($this.NetTxBps -ne $txVal) {
             $this.NetTxBps = $txVal
-            $this.OnPropertyChanged('NetTxBps')
             $txFmt = [ProcessItemViewModel]::FormatNetRate($txVal)
             if ($this.NetTxFormatted -ne $txFmt) {
                 $this.NetTxFormatted = $txFmt
@@ -1655,7 +1676,6 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
         if ($this.NetTotalBps -ne $totVal) {
             $this.NetTotalBps = $totVal
-            $this.OnPropertyChanged('NetTotalBps')
             $totFmt = [ProcessItemViewModel]::FormatNetRate($totVal)
             if ($this.NetTotalFormatted -ne $totFmt) {
                 $this.NetTotalFormatted = $totFmt
@@ -1674,17 +1694,14 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
         if ($this.TreeNetRxBps -ne $rxVal) {
             $this.TreeNetRxBps = $rxVal
-            $this.OnPropertyChanged('TreeNetRxBps')
             $changed = $true
         }
         if ($this.TreeNetTxBps -ne $txVal) {
             $this.TreeNetTxBps = $txVal
-            $this.OnPropertyChanged('TreeNetTxBps')
             $changed = $true
         }
         if ($this.TreeNetTotalBps -ne $totVal) {
             $this.TreeNetTotalBps = $totVal
-            $this.OnPropertyChanged('TreeNetTotalBps')
             $totFmt = [ProcessItemViewModel]::FormatNetRate($totVal)
             if ($this.TreeNetTotalFormatted -ne $totFmt) {
                 $this.TreeNetTotalFormatted = $totFmt
@@ -1851,7 +1868,7 @@ class ServiceItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [void] OnPropertyChanged([string]$propertyName) {
         if ($this.Handlers.Count -eq 0) { return }
-        $eventArgs = [System.ComponentModel.PropertyChangedEventArgs]::new($propertyName)
+        $eventArgs = [PSRPMThemeRegistry]::GetPropArgs($propertyName)
         for ($i = 0; $i -lt $this.Handlers.Count; $i++) {
             try { $this.Handlers[$i].Invoke($this, $eventArgs) } catch {}
         }
@@ -1957,7 +1974,7 @@ class CpuCoreGraphViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [void] OnPropertyChanged([string]$propertyName) {
         if ($this.Handlers.Count -eq 0) { return }
-        $eventArgs = [System.ComponentModel.PropertyChangedEventArgs]::new($propertyName)
+        $eventArgs = [PSRPMThemeRegistry]::GetPropArgs($propertyName)
         for ($i = 0; $i -lt $this.Handlers.Count; $i++) {
             try { $this.Handlers[$i].Invoke($this, $eventArgs) } catch {}
         }
@@ -2464,7 +2481,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [void] OnPropertyChanged([string]$propertyName) {
         if ($this.Handlers.Count -eq 0) { return }
-        $eventArgs = [System.ComponentModel.PropertyChangedEventArgs]::new($propertyName)
+        $eventArgs = [PSRPMThemeRegistry]::GetPropArgs($propertyName)
         for ($i = 0; $i -lt $this.Handlers.Count; $i++) {
             try { $this.Handlers[$i].Invoke($this, $eventArgs) } catch {}
         }
@@ -3348,7 +3365,7 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     [void] OnPropertyChanged([string]$propertyName) {
         if ($this.Handlers.Count -eq 0) { return }
-        $eventArgs = [System.ComponentModel.PropertyChangedEventArgs]::new($propertyName)
+        $eventArgs = [PSRPMThemeRegistry]::GetPropArgs($propertyName)
         for ($i = 0; $i -lt $this.Handlers.Count; $i++) {
             try { $this.Handlers[$i].Invoke($this, $eventArgs) } catch {}
         }

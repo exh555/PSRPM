@@ -1003,7 +1003,7 @@ function Start-PSRPMEngine {
                     if ($effEnableNetEtw) { $activeSessObj.NetEtwStarted = $true }
 
                     $rawResult = if ($activeSessObj.IsLocal) {
-                        $resLocal = & $activeSessObj.CollectorSb $forceFull $effEnableNetEtw $netEtwAction
+                        $resLocal = & $activeSessObj.CollectorSb $forceFull $effEnableNetEtw $netEtwAction $true
                         $activeSessObj.CollectorInitialized = $true
                         $resLocal
                     } else {
@@ -1344,41 +1344,87 @@ function Start-PSRPMEngine {
             }
         }
 
-        $targetSet = [System.Collections.Generic.HashSet[Object]]::new()
-        foreach ($item in $desiredList) { [void]$targetSet.Add($item) }
+        $n = $desiredList.Count
+        $desiredIndex = [System.Collections.Generic.Dictionary[Object, int]]::new($n)
+        for ($i = 0; $i -lt $n; $i++) {
+            $desiredIndex[$desiredList[$i]] = $i
+        }
 
         # 1. Remove items no longer in desiredList (back-to-front)
         for ($i = $collection.Count - 1; $i -ge 0; $i--) {
-            if (-not $targetSet.Contains($collection[$i])) {
+            if (-not $desiredIndex.ContainsKey($collection[$i])) {
                 $collection.RemoveAt($i)
             }
         }
 
-        # 2. Align order with desiredList via Move or Insert
-        for ($i = 0; $i -lt $desiredList.Count; $i++) {
-            $want = $desiredList[$i]
-            if ($i -ge $collection.Count) {
-                $collection.Add($want)
-            } elseif (-not [Object]::ReferenceEquals($collection[$i], $want)) {
-                $existingIdx = $collection.IndexOf($want)
-                if ($existingIdx -gt $i) {
-                    $collection.Move($existingIdx, $i)
+        # 2. Align order with desiredList using Exact (M - LIS) minimal moves
+        $m = $collection.Count
+        if ($m -eq 0) {
+            for ($i = 0; $i -lt $n; $i++) {
+                $collection.Add($desiredList[$i])
+            }
+        } elseif ($n -gt 0) {
+            $pos = [int[]]::new($m)
+            for ($i = 0; $i -lt $m; $i++) {
+                $pos[$i] = $desiredIndex[$collection[$i]]
+            }
+
+            $tails   = [int[]]::new($m)
+            $tailIdx = [int[]]::new($m)
+            $prev    = [int[]]::new($m)
+            $lisLen  = 0
+            for ($i = 0; $i -lt $m; $i++) {
+                $x  = $pos[$i]
+                $lo = 0
+                $hi = $lisLen
+                while ($lo -lt $hi) {
+                    $mid = ($lo + $hi) -shr 1
+                    if ($tails[$mid] -lt $x) { $lo = $mid + 1 } else { $hi = $mid }
+                }
+                $tails[$lo]   = $x
+                $tailIdx[$lo] = $i
+                $prev[$i]     = if ($lo -gt 0) { $tailIdx[$lo - 1] } else { -1 }
+                if ($lo -eq $lisLen) { $lisLen++ }
+            }
+
+            $keepSet = [System.Collections.Generic.HashSet[Object]]::new()
+            $k = if ($lisLen -gt 0) { $tailIdx[$lisLen - 1] } else { -1 }
+            while ($k -ge 0) {
+                [void]$keepSet.Add($collection[$k])
+                $k = $prev[$k]
+            }
+
+            for ($i = 0; $i -lt $n; $i++) {
+                $want = $desiredList[$i]
+                if ($keepSet.Contains($want)) { continue }
+
+                $curIdx = $collection.IndexOf($want)
+                if ($i -eq 0) {
+                    if ($curIdx -lt 0) {
+                        $collection.Insert(0, $want)
+                    } elseif ($curIdx -ne 0) {
+                        $collection.Move($curIdx, 0)
+                    }
                 } else {
-                    $collection.Insert($i, $want)
+                    $anchorIdx = $collection.IndexOf($desiredList[$i - 1])
+                    if ($curIdx -lt 0) {
+                        $collection.Insert($anchorIdx + 1, $want)
+                    } else {
+                        $targetIdx = if ($curIdx -lt $anchorIdx) { $anchorIdx } else { $anchorIdx + 1 }
+                        if ($curIdx -ne $targetIdx) {
+                            $collection.Move($curIdx, $targetIdx)
+                        }
+                    }
                 }
             }
         }
 
-        while ($collection.Count -gt $desiredList.Count) {
-            $collection.RemoveAt($collection.Count - 1)
-        }
-
-        if ($grid) {
+        if ($grid -and ($isMultiGrid -or $null -ne $savedPrimary)) {
             if ($isMultiGrid -and $savedMulti -and $savedMulti.Count -gt 0) {
                 $surviving = [System.Collections.Generic.List[Object]]::new()
                 $survivingSet = [System.Collections.Generic.HashSet[Object]]::new()
                 foreach ($s in $savedMulti) {
-                    if ($targetSet.Contains($s) -and $survivingSet.Add($s)) {
+                    if ($desiredIndex.ContainsKey($s) -and $survivingSet.Add($s)) {
                         [void]$surviving.Add($s)
                     }
                 }
@@ -1407,7 +1453,7 @@ function Start-PSRPMEngine {
                         }
                     }
                 }
-            } elseif ($savedPrimary -and $targetSet.Contains($savedPrimary) -and $grid.SelectedItem -ne $savedPrimary) {
+            } elseif ($savedPrimary -and $desiredIndex.ContainsKey($savedPrimary) -and $grid.SelectedItem -ne $savedPrimary) {
                 $grid.SelectedItem = $savedPrimary
             }
         }
@@ -1456,11 +1502,12 @@ function Start-PSRPMEngine {
             }
         }
 
-        foreach ($kvp in $processMap.GetEnumerator()) {
-            $vm = $kvp.Value
-            $clampedCpu = [Math]::Max(0.0, [Math]::Min(100.0, [Math]::Round($vm.PendingTreeCPU, 2)))
-            if ($vm.TreeCPU -ne $clampedCpu) {
-                $vm.UpdateTreeCpu($clampedCpu)
+        foreach ($vm in $processMap.Values) {
+            if ($vm.PendingTreeCPU -ne 0.0 -or $vm.TreeCPU -ne 0.0) {
+                $clampedCpu = [Math]::Max(0.0, [Math]::Min(100.0, [Math]::Round($vm.PendingTreeCPU, 2)))
+                if ($vm.TreeCPU -ne $clampedCpu) {
+                    $vm.UpdateTreeCpu($clampedCpu)
+                }
             }
             if ($netTreeActive) {
                 if ($vm.TreeNetRxBps -ne $vm.PendingTreeNetRx -or $vm.TreeNetTxBps -ne $vm.PendingTreeNetTx) {
@@ -1821,9 +1868,13 @@ function Start-PSRPMEngine {
                     $flatCandidates.Add($vm)
                 }
             }
-            $sortedFlat = @(&$sortNodes $flatCandidates)
-            foreach ($item in $sortedFlat) {
-                $desiredList.Add($item)
+            $sortedFlat = &$sortNodes $flatCandidates
+            if ($null -ne $sortedFlat) {
+                if ($sortedFlat -is [System.Collections.Generic.IEnumerable[Object]]) {
+                    $desiredList.AddRange([System.Collections.Generic.IEnumerable[Object]]$sortedFlat)
+                } else {
+                    [void]$desiredList.Add($sortedFlat)
+                }
             }
         }
 
@@ -2058,14 +2109,18 @@ function Start-PSRPMEngine {
                     $ageTag = if ($fState -ne "Fresh" -and $stateContainer.TelemetryAgeMs -gt 0) { " ($fState)" } else { "" }
                     "$($stateContainer.PollLatencyMs) ms$ageTag"
                 }
+                $latChanged = $false
                 if ($uiStatusCache.Latency -ne $wantLat) {
                     $uiStatusCache.Latency = $wantLat
                     $txtLatency.Text = $wantLat
+                    $latChanged = $true
                 }
-                $wantTip = "Poll Latency: $($stateContainer.PollLatencyMs) ms | Age: $($stateContainer.TelemetryAgeMs) ms | State: $cState ($fState)"
-                if ($uiStatusCache.ToolTip -ne $wantTip) {
-                    $uiStatusCache.ToolTip = $wantTip
-                    $txtLatency.ToolTip = $wantTip
+                if ($latChanged -or $fState -ne "Fresh") {
+                    $wantTip = "Poll Latency: $($stateContainer.PollLatencyMs) ms | Age: $($stateContainer.TelemetryAgeMs) ms | State: $cState ($fState)"
+                    if ($uiStatusCache.ToolTip -ne $wantTip) {
+                        $uiStatusCache.ToolTip = $wantTip
+                        $txtLatency.ToolTip = $wantTip
+                    }
                 }
             }
             if ($badgePaused) {
@@ -2675,15 +2730,16 @@ function Start-PSRPMEngine {
 
             # G. Update Tree / Flat View Order (Realtime Dynamic Metric Re-sorting; deferred while minimized)
             $dynSortProps = @("CPU", "CPUDelta", "TreeCPU", "PeakCPU", "MemoryBytes", "PrivateBytes", "PeakPrivateBytes", "PrivateBytesDelta", "MemoryDelta", "Threads", "Handles", "Status", "NetRxBps", "NetTxBps", "NetTotalBps", "TreeNetRxBps", "TreeNetTxBps", "TreeNetTotalBps")
-            $needsOrderPass = $structureChanged -or ($stateContainer.SortProperty -in $dynSortProps)
+            $hasDynOrDead = ($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)
+            $needsOrderPass = $structureChanged -or ($hasDynOrDead -and ($stateContainer.SortProperty -in $dynSortProps))
             if ($isMinimized) {
-                if ($needsOrderPass -or $ProcessCollection.Count -eq 0 -or ($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
+                if ($needsOrderPass -or $ProcessCollection.Count -eq 0 -or $hasDynOrDead) {
                     $uiStatusCache.NeedsRestoreSync = $true
                 }
             } else {
                 if ($needsOrderPass -or $ProcessCollection.Count -eq 0) {
                     & $updateViewCollections
-                } elseif (($dynArr -and $dynArr.Count -gt 0) -or ($deadArr -and $deadArr.Count -gt 0)) {
+                } elseif ($hasDynOrDead) {
                     & $recalculateTreeCpu
                 }
             }

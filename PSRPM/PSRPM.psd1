@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.13.1'
+    ModuleVersion     = '1.14.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop')
@@ -78,11 +78,10 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Multi-tab resync recovery, stale process/service pruning on full snapshots, and CloseTabSession NextTabId routing
-- Self-PID protection in KillTree and SuspendProcess, plus host-switch rebinding for FindHandleWindow and SystemInfoWindow
-- Live CPUDelta sorting, >24h CPU time formatting, persisted TCP EStats fallback state, and elapsed-time I/O & Disk KB/s rate accuracy
-- Windows PowerShell 5.1 (Desktop) edition guard (PSRPM.psd1 + Start-PSRPM) and updated documentation
-- Global Ctrl+D theme cycling across all 7 child windows and dark-theme TabControl/TabItem/CheckBox/GroupBox contrast fixes
+- Replaced GridProcesses left-pull collection reconciler with Exact (M - LIS) minimum-move algorithm, cutting dynamic CPU-sort moves from ~185/tick to ~30/tick
+- Reduced local powershell.exe CPU by 52.3% (22.79% -> 10.88% of 1 core; WPF UI thread 170.6 -> 71.2 ms/s, -58.3%) during live Flat CPU-descending sorting
+- Cached PropertyChangedEventArgs across all 5 ViewModel classes, split per-cell hover tooltips, and removed unbound numeric OnPropertyChanged noise
+- Reduced GridProcesses VirtualizingPanel.CacheLength from 20,20 to 3,3 and bypassed GZIP loopback compression in local mode
 '@
         }
     }

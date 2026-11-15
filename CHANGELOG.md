@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-15
+
+### Changed
+- **Minimum-Move DataGrid Reconciliation (`RunspaceEngine.ps1`)**:
+  - Replaced the left-pull loop in `$reconcileCollection` with an exact `(M - LIS)` minimum-move reconciler using `Dictionary[Object, int]`, Patience-Sorting Longest Increasing Subsequence (`LIS`), and anchored `Move`/`Insert` operations while preserving `SelectedItems`/`SelectedItem` restoration. Eliminates cascading moves when active processes drop back into sorted tails during dynamic column sorting (e.g., `CPU` descending).
+  - Optimized `$recalculateTreeCpu` to iterate `$processMap.Values` and skip rounding on `0.0%` rows, removed redundant `@(...)` copying when building Flat Mode `$desiredList` (safely handling single-item unwrapping), gated latency tooltip rebuilds on state/latency changes, and skipped `$updateViewCollections` when dynamic/dead arrays are empty and structure is unchanged.
+- **Local Loopback GZIP Bypass (`DataCollector.ps1`, `RunspaceEngine.ps1`)**:
+  - Added optional `[bool]$SkipCompression = $false` parameter to `$script:PSRPMCollectorScriptBlock` so local loopback ticks (`$activeSessObj.IsLocal`) return raw `$jsonOut` directly without GZIP compression/decompression overhead while preserving remote WinRM GZIP compression unchanged.
+- **ViewModel Binding & Tooltip Churn Reduction (`ViewModelClasses.ps1`)**:
+  - Added `[PSRPMThemeRegistry]::GetPropArgs` (`_PropArgsCache`) and updated `OnPropertyChanged` across all 5 ViewModel classes (`ProcessItemViewModel`, `ServiceItemViewModel`, `CpuCoreGraphViewModel`, `SystemSummaryViewModel`, `HostTabItemViewModel`) to reuse frozen `PropertyChangedEventArgs` instances.
+  - Split `RefreshHoverToolTip` into `RefreshProcessHoverToolTipOnly`, `RefreshPrivateCellToolTip`, `RefreshWsCellToolTip`, and `RefreshHandlesCellToolTip` so `UpdateDynamic` only rebuilds tooltips for columns whose formatted display values actually changed.
+  - Removed redundant `OnPropertyChanged` notifications on unbound raw numeric properties (`CPU`, `PeakCPU`, `MemoryBytes`, `PeakMemoryBytes`, `PrivateBytes`, `PeakPrivateBytes`, `Handles`, `PeakHandles`, `CPUDelta`, `PrivateBytesDelta`, `MemoryDelta`, `HandlesDelta`, `TreeCPU`, `NetRxBps`, `NetTxBps`, `NetTotalBps`, `TreeNetRxBps`, `TreeNetTxBps`, `TreeNetTotalBps`).
+- **WPF DataGrid Virtualization Cache Tuning (`MainWindow.xaml`)**:
+  - Reduced `GridProcesses` `VirtualizingPanel.CacheLength` from `"20,20"` to `"3,3"` (`CacheLengthUnit="Item"`) to lower off-screen row container churn during dynamic re-sorting.
+
+### Benchmarks
+- **Local `powershell.exe` GUI Live CPU Profile** (~12s window, 1s poll interval, 204-214 live local processes, Windows 11 Pro 26H2, 4 cores):
+  - **Flat View Sorted by `CPU` Descending**: Total `powershell.exe` process CPU dropped from `2734.4 ms` (`22.79%` of 1 core / `5.70%` of 4 cores over `12.00s`) to `1312.5 ms` (`10.88%` of 1 core / `2.72%` of 4 cores over `12.07s`, **-52.3%**); WPF UI thread CPU dropped from `170.6 ms/s` (`2046.9 ms`) to `71.2 ms/s` (`859.4 ms`, **-58.3%**).
+  - **Tree View (Default)**: Total `powershell.exe` process CPU `781.3 ms` (`6.51%` of 1 core / `1.63%` of 4 cores over `12.00s`); WPF UI thread CPU `23.4 ms/s` (`281.3 ms`).
+- **Collector & Wire Efficiency Benchmarks** (`Test-PSRPMEngine.ps1`, `Test-PSRPMExtendedQA.ps1`, `Test-GzipPerformance.ps1`):
+  - **Collector (`NtQuerySystemInformation(5)`, 219 processes / 268 services)**: Initial Full Sync `513 ms` (`39.74 KB` GZIP); 30-tick steady-state mean `6.4 ms` (`P95 = 15 ms`, `0.96 KB` avg differential wire).
+  - **50-Tick Sustained Stress (`Test-PSRPMExtendedQA.ps1`)**: Median `5 ms`, `P95 = 17 ms`, `0.58 KB/tick` avg differential wire.
+  - **Remote GZIP Transport (`Test-GzipPerformance.ps1`)**: Tick 1 wire savings `80.9%` (`203.67 KB -> 38.95 KB`); steady-state wire savings `34.5%` (`2.35 KB -> 1.54 KB/tick`); delta compression CPU `0.0875 ms` target / `0.0641 ms` client.
+
 ## [1.13.1] - 2026-11-15
 
 ### Changed

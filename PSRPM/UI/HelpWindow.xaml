@@ -177,7 +177,7 @@
         <Border Grid.Row="0" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="{DynamicResource BrushBadgeBg}" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.13.1" Foreground="{DynamicResource BrushBadgeFg}" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.14.0" Foreground="{DynamicResource BrushBadgeFg}" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -510,7 +510,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
                                         <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.13.1" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.14.0" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,4"/>

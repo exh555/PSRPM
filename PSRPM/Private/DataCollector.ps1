@@ -7,7 +7,8 @@ $script:PSRPMCollectorScriptBlock = {
     param(
         [bool]$ForceFullSync = $false,
         [bool]$EnableNetEtw = $false,
-        [string]$NetEtwAction = ""
+        [string]$NetEtwAction = "",
+        [bool]$SkipCompression = $false
     )
 
     $swCol = [System.Diagnostics.Stopwatch]::StartNew()
@@ -2338,7 +2339,7 @@ $script:PSRPMCollectorScriptBlock = {
     $metaPendCnt  = $script:PendingMetaMap.Count
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.13.1","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.14.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"colMs":').Append($colMs)
     [void]$sb.Append(',"svcMs":').Append($svcMs)
@@ -2361,6 +2362,9 @@ $script:PSRPMCollectorScriptBlock = {
     [void]$sb.Append(',"dyn":[').Append(($dynDeltaList -join ',')).Append(']}')
 
     $jsonOut  = $sb.ToString()
+    if ($SkipCompression) {
+        return $jsonOut
+    }
     $rawBytes = [System.Text.Encoding]::UTF8.GetBytes($jsonOut)
     if ($rawBytes.Length -lt 256) {
         return $jsonOut

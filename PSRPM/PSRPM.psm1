@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.13.1"
+$script:AppVersion = "1.14.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
