@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-22
+
+### Added
+- **Display Density Modes & In-App UI Zoom (`PSRPM.psm1`, `MainWindow.xaml`, `ViewModelClasses.ps1`)**:
+  - Added `View -> Display & Scale` with `Standard` (`18 px` rows), `Compact Density` (`Ctrl+Shift+C`, `14 px` rows with slim toolbar, headers, tabs, and badges across Processes, Services, and Network Activity / TCPView), and `Mini Monitor` (`Ctrl+Shift+M`, chromeless pinned always-on-top compact widget).
+  - Added in-app UI Zoom (`75%`, `100%`, `125%`, `150%`, `175%`, `200%`, `Ctrl++`, `Ctrl+-`, `Ctrl+0`) via `LayoutTransform` propagated across `MainWindow` and all 7 child windows, persisted as `UiScalePct`, and dynamically scaling Mini Monitor window bounds.
+- **Process Explorer Tree Controls & Menu UX Overhaul (`MainWindow.xaml`, `PSRPM.psm1`, `RunspaceEngine.ps1`)**:
+  - Added `View -> Show Tree Lines` toggle, `Go to Parent Process`, `Expand/Collapse Subtree`, `Copy Name`/`PID`, `Reconnect Active Host`, radio-dot indicators (`Tag="Radio"`), and browser-style double-click on empty `HostTabBar` space to open a new host tab.
+- **Fileless MUI Service Description Resolution (`DataCollector.ps1`)**:
+  - Added in-memory `Reflection.Emit` P/Invoke (`PSRPM.NativeMuiV1::SHLoadIndirectString` with `PreserveSig`) gated on Win32 services and cached in `$State.ServiceConfigCache` to resolve indirect `@%SystemRoot%\...\*.dll,-id` service descriptions with zero steady-state overhead.
+
+### Changed
+- **6-Minute Stepped Telemetry History Charts (`ViewModelClasses.ps1`, `PSRPM.psm1`, `SystemInfoWindow.xaml`)**:
+  - Upgraded System Information circular history buffers from `240` to `360` samples (`6 minutes @ 1s`) with 1-minute vertical gridlines, stepped time-window buckets (`60s -> 120s -> 180s -> 360s`), and pre-session zero-line suppression.
+- **Process Explorer-Aligned Tree Indentation (`MainWindow.xaml`, `PSRPM.psm1`, `RunspaceEngine.ps1`)**:
+  - Aligned tree indentation to `(Level + 1) * 16` (`Standard`) and `(Level + 1) * 12` (`Compact`), preserved flat-view left gutter spacing, and reorganized the 6 top-level menus with zero duplicate mnemonics.
+- **Make-Before-Break Async WinRM Connection Probing (`RunspaceEngine.ps1`, `PSRPM.psm1`)**:
+  - Probed `New-PSSession` asynchronously via `$pendingDialogConnects` with mid-flight cancellation (`CancelConnectRequest`) before tearing down the existing active Local/Remote session on `SwitchTarget` and `AddTabSession`.
+
+### Fixed
+- **150% DPI Expander Box Clipping & Menu Separator Visibility (`MainWindow.xaml`, `PSRPM.psm1`)**:
+  - Replaced `<Border BorderThickness="1">` expander boxes (which clipped into an "E" shape at 150% DPI) with aliased centered `<Grid>` + `<Rectangle>` + `<Path Stretch="None">` boxes aligned to exact geometric connector midpoints (`6,7` Compact / `8,9` Standard).
+  - Removed outer `Height="1"` clipping on menu `<Separator/>` controls so menu dividers render cleanly across all themes.
+- **Mini Monitor State, Scaling & Search Hardening (`PSRPM.psm1`, `Tests/Test-PSRPMExtendedQA.ps1`)**:
+  - Snapshotted live column widths and order before entering Mini Monitor, guarded `ColumnReordered` and column header context menus while in Mini Monitor, synchronized `Always On Top` (`Ctrl+Shift+T`) and `Save Preferences` with `$layoutState.SavedTopmost`, and eliminated duplicate `RefreshTree` calls on Mini Search keystrokes.
+  - Fixed static AST Check 1.6 in `Test-PSRPMExtendedQA.ps1` to scan `$rawContent` for bare `[type](if ...)` casts.
+
 ## [1.15.1] - 2026-11-15
 
 ### Changed

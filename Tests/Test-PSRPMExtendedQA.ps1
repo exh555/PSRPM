@@ -178,6 +178,12 @@ foreach ($file in $modulePsFiles) {
     foreach ($cmdAst in $castArgCommands) {
         $castViolations.Add("$($file.Name): Unparenthesized cast argument in '$($cmdAst.Extent.Text)' at line $($cmdAst.Extent.StartLineNumber)")
     }
+
+    # Check 1.6: Invalid [type](if ...) / [type](switch ...) bare statement casts (PS 5.1 parses 'if' as a command name without '$')
+    $bareStmtCastMatches = [regex]::Matches($rawContent, '\]\((?:if|switch|foreach|for|while|try)\b')
+    foreach ($bm in $bareStmtCastMatches) {
+        $castViolations.Add("$($file.Name): Invalid bare statement cast '$($bm.Value)' (use 'if (...) { [type]... }' or '[type]`$(if ...)')")
+    }
 }
 
 Assert-QACheck "Static Guardrails" "Zero csc.exe / Add-Type -TypeDefinition" `
@@ -657,18 +663,18 @@ for ($c = 0; $c -lt [Environment]::ProcessorCount; $c++) { [void]$cores.Add(@(5.
 $fakeSys = [System.Collections.ArrayList]::new()
 for ($s = 0; $s -lt 27; $s++) { [void]$fakeSys.Add(100L) }
 
-# Feed 300 telemetry samples into the summary view model (buffer cap is 240 samples)
-for ($f = 0; $f -lt 300; $f++) {
+# Feed 420 telemetry samples into the summary view model (buffer cap is 360 samples = 6 min @ 1s)
+for ($f = 0; $f -lt 420; $f++) {
     $sumTest.UpdateExtendedTelemetry($fakeSys, $cores)
 }
 
-# Verify ring buffers are hard-capped at 240 items
+# Verify ring buffers are hard-capped at 360 items
 $cpuHistCount = $sumTest.CpuHistory240.Count
 $coreHistCount = if ($sumTest.CoreGraphs.Count -gt 0) { $sumTest.CoreGraphs[0].History.Count } else { 0 }
-$queueBounded = ($cpuHistCount -eq 240 -and $coreHistCount -le 240)
-Assert-QACheck "Zero-Leak Architecture" "Local Telemetry Circular Ring Buffer Hard Cap (<= 240 samples)" `
+$queueBounded = ($cpuHistCount -eq 360 -and $coreHistCount -le 360)
+Assert-QACheck "Zero-Leak Architecture" "Local Telemetry Circular Ring Buffer Hard Cap (<= 360 samples)" `
     $queueBounded `
-    "CpuHistory240 capped at $cpuHistCount samples | CoreGraphs[0] capped at $coreHistCount samples across 300 pushes (< 20 KB local memory)."
+    "CpuHistory capped at $cpuHistCount samples | CoreGraphs[0] capped at $coreHistCount samples across 420 pushes (~23 KB metric memory)."
 
 # 4.5 Console Log Buffer Truncation (Capped at 72,000 characters -> retain trailing 48,000)
 $fakeLogBox = [System.Windows.Controls.TextBox]::new()

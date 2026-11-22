@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.15.1"
+$script:AppVersion = "1.16.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -203,6 +203,9 @@ function Get-PSRPMDefaultPreferences {
         ConfirmKill              = $true
         VerboseTelemetryLog      = $true
         IsTreeMode               = $true
+        ShowTreeLines            = $true
+        CompactMode              = $false
+        UiScalePct               = 100
         TreeSortNewestFirst      = $true
         SortProperty             = "PID"
         SortDescending           = $false
@@ -254,7 +257,7 @@ function Read-PSRPMPreferences {
             }
         }
 
-        foreach ($boolKey in @("AlwaysOnTop", "EnableCategoryHighlights", "ConfirmKill", "VerboseTelemetryLog", "IsTreeMode", "TreeSortNewestFirst", "SortDescending", "LogPaneVisible", "LogAutoScroll")) {
+        foreach ($boolKey in @("AlwaysOnTop", "EnableCategoryHighlights", "ConfirmKill", "VerboseTelemetryLog", "IsTreeMode", "ShowTreeLines", "CompactMode", "TreeSortNewestFirst", "SortDescending", "LogPaneVisible", "LogAutoScroll")) {
             if ($null -ne $parsed.PSObject.Properties[$boolKey] -and $null -ne $parsed.$boolKey) {
                 if ($parsed.$boolKey -is [bool]) {
                     $defaults[$boolKey] = [bool]$parsed.$boolKey
@@ -350,6 +353,15 @@ function Read-PSRPMPreferences {
             }
         }
 
+        if ($null -ne $parsed.PSObject.Properties['UiScalePct'] -and $null -ne $parsed.UiScalePct) {
+            $sPct = 0
+            if ([int]::TryParse([string]$parsed.UiScalePct, [ref]$sPct)) {
+                if ($sPct -in @(75, 100, 125, 150, 175, 200)) {
+                    $defaults.UiScalePct = $sPct
+                }
+            }
+        }
+
         if ($null -ne $parsed.PSObject.Properties['LogPaneHeight'] -and $null -ne $parsed.LogPaneHeight) {
             $lHeight = 0.0
             if ([double]::TryParse([string]$parsed.LogPaneHeight, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$lHeight)) {
@@ -394,6 +406,9 @@ function Save-PSRPMPreferences {
         ConfirmKill              = [bool]$Preferences.ConfirmKill
         VerboseTelemetryLog      = [bool]$Preferences.VerboseTelemetryLog
         IsTreeMode               = [bool]$Preferences.IsTreeMode
+        ShowTreeLines            = if ($Preferences.ContainsKey('ShowTreeLines')) { [bool]$Preferences.ShowTreeLines } else { $true }
+        CompactMode              = if ($Preferences.ContainsKey('CompactMode')) { [bool]$Preferences.CompactMode } else { $false }
+        UiScalePct               = if ($Preferences.ContainsKey('UiScalePct') -and [int]$Preferences.UiScalePct -in @(75, 100, 125, 150, 175, 200)) { [int]$Preferences.UiScalePct } else { 100 }
         TreeSortNewestFirst      = [bool]$Preferences.TreeSortNewestFirst
         SortProperty             = [string]$Preferences.SortProperty
         SortDescending           = [bool]$Preferences.SortDescending
@@ -750,17 +765,45 @@ function Start-PSRPM {
     $servicesCollection = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
     $hostTabsCollection = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
     $summaryVm          = [SystemSummaryViewModel]::new()
+    $summaryVm.SetPollingIntervalMs([int]$RefreshIntervalMs)
 
-    $gridProcesses = $window.FindName("GridProcesses")
-    $gridServices  = $window.FindName("GridServices")
-    $summaryBar    = $window.FindName("SummaryBar")
-    $txtLogConsole = $window.FindName("TxtLogConsole")
-    $logPane       = $window.FindName("LogPane")
-    $hostTabsList  = $window.FindName("HostTabsList")
+    $gridProcesses       = $window.FindName("GridProcesses")
+    $gridServices        = $window.FindName("GridServices")
+    $summaryBar          = $window.FindName("SummaryBar")
+    $mainMenuBar         = $window.FindName("MainMenuBar")
+    $mainStatusBar       = $window.FindName("MainStatusBar")
+    $miniMonitorBar      = $window.FindName("MiniMonitorBar")
+    $miniStatusDot       = $window.FindName("MiniStatusDot")
+    $txtMiniHostName     = $window.FindName("TxtMiniHostName")
+    $txtMiniSearch       = $window.FindName("TxtMiniSearch")
+    $btnClearMiniSearch  = $window.FindName("BtnClearMiniSearch")
+    $btnMiniPause        = $window.FindName("BtnMiniPause")
+    $btnExitMiniMonitor  = $window.FindName("BtnExitMiniMonitor")
+    $menuLayoutStandard  = $window.FindName("MenuLayoutStandard")
+    $menuLayoutCompact   = $window.FindName("MenuLayoutCompact")
+    $menuLayoutMini      = $window.FindName("MenuLayoutMini")
+    $rootScaleTransform  = $window.FindName("RootScaleTransform")
+    $menuScaleZoomIn     = $window.FindName("MenuScaleZoomIn")
+    $menuScaleZoomOut    = $window.FindName("MenuScaleZoomOut")
+    $menuScaleReset      = $window.FindName("MenuScaleReset")
+    $menuScale75         = $window.FindName("MenuScale75")
+    $menuScale100        = $window.FindName("MenuScale100")
+    $menuScale125        = $window.FindName("MenuScale125")
+    $menuScale150        = $window.FindName("MenuScale150")
+    $menuScale175        = $window.FindName("MenuScale175")
+    $menuScale200        = $window.FindName("MenuScale200")
+    $txtLogConsole       = $window.FindName("TxtLogConsole")
+    $logPane             = $window.FindName("LogPane")
+    $hostTabsList        = $window.FindName("HostTabsList")
 
     $gridProcesses.ItemsSource = $processCollection
     $gridServices.ItemsSource  = $servicesCollection
     $summaryBar.DataContext    = $summaryVm
+    if ($miniMonitorBar) { $miniMonitorBar.DataContext = $summaryVm }
+    if ($txtMiniHostName) {
+        $txtMiniHostName.Text    = $targetLabel
+        $txtMiniHostName.ToolTip = $targetLabel
+    }
     if ($hostTabsList) { $hostTabsList.ItemsSource = $hostTabsCollection }
 
     $initialTabId = [guid]::NewGuid().ToString("N")
@@ -779,6 +822,7 @@ function Start-PSRPM {
         foreach ($dh in $dormantHosts) {
             $dhTabId = [guid]::NewGuid().ToString("N")
             $dhSumVm = [SystemSummaryViewModel]::new()
+            $dhSumVm.SetPollingIntervalMs([int]$RefreshIntervalMs)
             $dhTabVm = [HostTabItemViewModel]::new($dhTabId, $dh, $dh, $initialTransport, $false, $dhSumVm)
             $dhTabVm.Port      = [int]$Port
             $dhTabVm.UseSSL    = [bool]$UseSSL
@@ -1181,10 +1225,36 @@ function Start-PSRPM {
         $btnToolbarTheme.add_Click({ &$cycleTheme })
     }
 
+    $applyScaleToWindow = {
+        param([System.Windows.Window]$targetWin, [int]$pct)
+        if (-not $targetWin) { return }
+        $factor = [double]$pct / 100.0
+        $fmtMode = if ($pct -eq 100 -or $pct -eq 200) {
+            [System.Windows.Media.TextFormattingMode]::Display
+        } else {
+            [System.Windows.Media.TextFormattingMode]::Ideal
+        }
+        [System.Windows.Media.TextOptions]::SetTextFormattingMode($targetWin, $fmtMode)
+        if ($targetWin -eq $window -and $rootScaleTransform) {
+            $rootScaleTransform.ScaleX = $factor
+            $rootScaleTransform.ScaleY = $factor
+        } elseif ($targetWin.Content -is [System.Windows.FrameworkElement]) {
+            if ($pct -eq 100) {
+                $targetWin.Content.LayoutTransform = [System.Windows.Media.Transform]::Identity
+            } else {
+                $targetWin.Content.LayoutTransform = [System.Windows.Media.ScaleTransform]::new($factor, $factor)
+            }
+        }
+    }
+
+    $scaleActionRefs = @{ SetScale = $null; StepScale = $null }
+
     $registerChildWindow = {
         param([System.Windows.Window]$childWin)
         if (-not $childWin) { return }
         $childWin.Topmost = [bool]$window.Topmost
+        $curPct = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [int]$stateContainer.UiScalePct } else { 100 }
+        &$applyScaleToWindow $childWin $curPct
         if ($activeChildDialogs.Contains($childWin)) { return }
         [void]$activeChildDialogs.Add($childWin)
 
@@ -1196,6 +1266,7 @@ function Start-PSRPM {
         }.GetNewClosure())
 
         $localCycleTheme = $cycleTheme
+        $localScaleRefs  = $scaleActionRefs
         $childWin.add_PreviewKeyDown({
             param($s, $e)
             $mods = [System.Windows.Input.Keyboard]::Modifiers
@@ -1204,6 +1275,15 @@ function Start-PSRPM {
             $isShift = ($mods -band [System.Windows.Input.ModifierKeys]::Shift) -ne 0
             if ($isCtrl -and -not $isAlt -and -not $isShift -and $e.Key -eq [System.Windows.Input.Key]::D) {
                 &$localCycleTheme
+                $e.Handled = $true
+            } elseif ($isCtrl -and -not $isAlt -and ($e.Key -eq [System.Windows.Input.Key]::OemPlus -or $e.Key -eq [System.Windows.Input.Key]::Add)) {
+                if ($localScaleRefs.StepScale) { & $localScaleRefs.StepScale 1 }
+                $e.Handled = $true
+            } elseif ($isCtrl -and -not $isAlt -and ($e.Key -eq [System.Windows.Input.Key]::OemMinus -or $e.Key -eq [System.Windows.Input.Key]::Subtract)) {
+                if ($localScaleRefs.StepScale) { & $localScaleRefs.StepScale -1 }
+                $e.Handled = $true
+            } elseif ($isCtrl -and -not $isAlt -and -not $isShift -and ($e.Key -eq [System.Windows.Input.Key]::D0 -or $e.Key -eq [System.Windows.Input.Key]::NumPad0)) {
+                if ($localScaleRefs.SetScale) { & $localScaleRefs.SetScale 100 $false }
                 $e.Handled = $true
             }
         }.GetNewClosure())
@@ -1372,6 +1452,9 @@ function Start-PSRPM {
         $prevTopmost = [bool]$stateContainer.AlwaysOnTop
         $stateContainer.AlwaysOnTop = $enable
         $window.Topmost = $enable
+        if ($layoutState -is [hashtable] -and $stateContainer.LayoutMode -eq "Mini") {
+            $layoutState.SavedTopmost = $enable
+        }
         if ($menuAlwaysOnTop) { $menuAlwaysOnTop.IsChecked = $enable }
         foreach ($activeModal in (&$getActiveChildWindows)) {
             if ($activeModal -and $activeModal.IsLoaded) {
@@ -1438,7 +1521,8 @@ function Start-PSRPM {
 
     # 7. View Mode Switching (Tree vs Flat) & Column Header Sorting (Process Explorer 3-Way Cycle on Process Column)
     $menuViewTree         = $window.FindName("MenuViewTree")
-    $menuViewFlat         = $window.FindName("MenuViewFlat")
+    $menuViewTreeLines    = $window.FindName("MenuViewTreeLines")
+    $menuTreeOptions      = $window.FindName("MenuTreeOptions")
     $menuTreeOrderNewest  = $window.FindName("MenuTreeOrderNewest")
     $menuTreeOrderClassic = $window.FindName("MenuTreeOrderClassic")
     $btnToolbarTree       = $window.FindName("BtnToolbarTree")
@@ -1446,6 +1530,7 @@ function Start-PSRPM {
     $menuExpandAll        = $window.FindName("MenuExpandAll")
     $menuCollapseAll      = $window.FindName("MenuCollapseAll")
 
+    $stateContainer.ShowTreeLines = $true
     $stateContainer.TreeSortNewestFirst = $true
 
     $setViewMode = {
@@ -1472,8 +1557,9 @@ function Start-PSRPM {
                 }
             }
         }
-        if ($menuViewTree)     { $menuViewTree.IsChecked   = $treeMode }
-        if ($menuViewFlat)     { $menuViewFlat.IsChecked   = (-not $treeMode) }
+        if ($menuViewTree)      { $menuViewTree.IsChecked      = $treeMode }
+        if ($menuViewTreeLines) { $menuViewTreeLines.IsEnabled = $treeMode }
+        if ($menuTreeOptions)   { $menuTreeOptions.IsEnabled   = $treeMode }
         if ($txtModeIndicator) {
             $txtModeIndicator.Text = if ($treeMode) {
                 if ([bool]$stateContainer.TreeSortNewestFirst) { "Tree (New)" } else { "Tree" }
@@ -1485,6 +1571,18 @@ function Start-PSRPM {
         if ($prevTreeMode -ne $treeMode) {
             &$markUnsavedPrefs "View Mode"
         }
+    }
+
+    $setShowTreeLines = {
+        param([bool]$showLines)
+        $prevShowLines = if ($stateContainer.ContainsKey('ShowTreeLines')) { [bool]$stateContainer.ShowTreeLines } else { $true }
+        $stateContainer.ShowTreeLines = $showLines
+        if ($menuViewTreeLines) { $menuViewTreeLines.IsChecked = $showLines }
+        & $engineHandle.RefreshTree
+        if ($prevShowLines -ne $showLines) {
+            &$markUnsavedPrefs "Tree Lines"
+        }
+        &$writeAuditLog "VIEW" ("Tree view lines {0}." -f $(if ($showLines) { "shown" } else { "hidden" }))
     }
 
     $setTreeSortOrder = {
@@ -1553,8 +1651,8 @@ function Start-PSRPM {
         &$setViewMode $false
     })
 
-    if ($menuViewTree)         { $menuViewTree.add_Click({ &$setViewMode $true }) }
-    if ($menuViewFlat)         { $menuViewFlat.add_Click({ &$setViewMode $false }) }
+    if ($menuViewTree)         { $menuViewTree.add_Click({ &$setViewMode ([bool]$menuViewTree.IsChecked) }) }
+    if ($menuViewTreeLines)    { $menuViewTreeLines.add_Click({ &$setShowTreeLines ([bool]$menuViewTreeLines.IsChecked) }) }
     if ($menuTreeOrderNewest)  { $menuTreeOrderNewest.add_Click({ &$setTreeSortOrder $true }) }
     if ($menuTreeOrderClassic) { $menuTreeOrderClassic.add_Click({ &$setTreeSortOrder $false }) }
     if ($btnToolbarTree)       { $btnToolbarTree.add_Click({ &$setViewMode (-not [bool]$stateContainer.IsTreeMode) }) }
@@ -1902,6 +2000,12 @@ function Start-PSRPM {
                 $btnToolbarPause.Background = $brushAmberBg
                 $btnToolbarPause.BorderBrush = if ($useDark) { $brushAmber } else { $brushAmberDark }
             }
+            if ($btnMiniPause) {
+                $btnMiniPause.Content = "Resume"
+                $btnMiniPause.ToolTip = "Resume Polling (Space)"
+                $btnMiniPause.Background = $brushAmberBg
+                $btnMiniPause.BorderBrush = if ($useDark) { $brushAmber } else { $brushAmberDark }
+            }
             if ($badgePaused) {
                 $badgePaused.Visibility = [System.Windows.Visibility]::Visible
             }
@@ -1931,6 +2035,12 @@ function Start-PSRPM {
                 $btnToolbarPause.Background = [System.Windows.Media.Brushes]::Transparent
                 $btnToolbarPause.BorderBrush = [System.Windows.Media.Brushes]::Transparent
             }
+            if ($btnMiniPause) {
+                $btnMiniPause.Content = "Pause"
+                $btnMiniPause.ToolTip = "Pause or Resume Polling (Space)"
+                $btnMiniPause.Background = [System.Windows.Media.Brushes]::Transparent
+                $btnMiniPause.BorderBrush = [System.Windows.Media.Brushes]::Transparent
+            }
             if ($badgePaused) {
                 $badgePaused.Visibility = [System.Windows.Visibility]::Collapsed
             }
@@ -1959,6 +2069,12 @@ function Start-PSRPM {
         $stateContainer.IsPaused = $pause
         if (-not $pause -and $ms -ge 250) {
             $stateContainer.IntervalMs = $ms
+            if ($summaryVm) { $summaryVm.SetPollingIntervalMs($ms) }
+            if ($hostTabsCollection) {
+                foreach ($ht in $hostTabsCollection) {
+                    if ($ht -and $ht.SummaryVm) { $ht.SummaryVm.SetPollingIntervalMs($ms) }
+                }
+            }
         }
         if ($menuRate500ms)  { $menuRate500ms.IsChecked  = (-not $pause -and $ms -eq 500) }
         if ($menuRate1s)     { $menuRate1s.IsChecked     = (-not $pause -and $ms -eq 1000) }
@@ -2023,7 +2139,9 @@ function Start-PSRPM {
     }
 
     $getMaxLogPaneHeight = {
-        $winH = if ($window.ActualHeight -gt 0) { [double]$window.ActualHeight } elseif (-not [double]::IsNaN($window.Height) -and $window.Height -gt 0) { [double]$window.Height } else { 780.0 }
+        $uiScale = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [double]$stateContainer.UiScalePct / 100.0 } else { 1.0 }
+        $rawWinH = if ($window.ActualHeight -gt 0) { [double]$window.ActualHeight } elseif (-not [double]::IsNaN($window.Height) -and $window.Height -gt 0) { [double]$window.Height } else { 780.0 }
+        $winH = $rawWinH / $uiScale
         $twoThirdsCap = [Math]::Floor($winH * (2.0 / 3.0))
         $chromeH = 54.0
         if ($hostTabBar -and $hostTabBar.ActualHeight -gt 0) { $chromeH += $hostTabBar.ActualHeight } else { $chromeH += 32.0 }
@@ -2077,8 +2195,9 @@ function Start-PSRPM {
         $logPaneResizer.add_DragDelta({
             param($sender, $e)
             if (-not $logPane) { return }
+            $uiScale = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [double]$stateContainer.UiScalePct / 100.0 } else { 1.0 }
             $curMouseY = [System.Windows.Input.Mouse]::GetPosition($window).Y
-            $deltaY = $logResizeState.StartMouseY - $curMouseY
+            $deltaY = ($logResizeState.StartMouseY - $curMouseY) / $uiScale
             $targetH = $logResizeState.StartHeight + $deltaY
             & $clampLogPaneHeight $targetH
         })
@@ -2253,7 +2372,9 @@ function Start-PSRPM {
     }
     if ($gridProcesses) {
         $gridProcesses.add_ColumnReordered({
-            &$markUnsavedPrefs "Column Order"
+            if ($stateContainer.LayoutMode -ne "Mini") {
+                &$markUnsavedPrefs "Column Order"
+            }
         })
     }
     $jssAction = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
@@ -2293,6 +2414,63 @@ function Start-PSRPM {
         if (-not $gridProcesses) { return }
 
         $isNetActive = ([int]$stateContainer.NetEtwCap -eq 1)
+
+        if ($stateContainer.LayoutMode -eq "Mini") {
+            $miniCols = [System.Collections.Generic.List[string]]::new()
+            $miniCols.Add("Process")
+            $miniCols.Add("CPU")
+            if ($isNetActive) { $miniCols.Add("NetTotal") }
+            $miniCols.Add("PrivateBytes")
+            $miniCols.Add("PID")
+
+            $miniColSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            foreach ($mk in $miniCols) { [void]$miniColSet.Add($mk) }
+
+            foreach ($cDef in $colCatalog) {
+                $ck = [string]$cDef.Key
+                $cObj = $colObjByKey[$ck]
+                if (-not $cObj) { continue }
+                $wantVis = $miniColSet.Contains($ck)
+                $targetVis = if ($wantVis) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+                if ($cObj.Visibility -ne $targetVis) {
+                    $cObj.Visibility = $targetVis
+                }
+                if ($wantVis -and $applyWidths) {
+                    $procMiniW = if ($isNetActive) { 210.0 } else { 274.0 }
+                    switch ($ck) {
+                        "Process"      { $cObj.Width = [System.Windows.Controls.DataGridLength]::new($procMiniW) }
+                        "CPU"          { $cObj.Width = [System.Windows.Controls.DataGridLength]::new(60.0) }
+                        "NetTotal"     { $cObj.Width = [System.Windows.Controls.DataGridLength]::new(74.0) }
+                        "PrivateBytes" { $cObj.Width = [System.Windows.Controls.DataGridLength]::new(86.0) }
+                        "PID"          { $cObj.Width = [System.Windows.Controls.DataGridLength]::new(56.0) }
+                    }
+                }
+            }
+
+            $maxMiniIdx = $gridProcesses.Columns.Count - 1
+            for ($mi = 0; $mi -lt $miniCols.Count; $mi++) {
+                if ($mi -gt $maxMiniIdx) { break }
+                $mObj = $colObjByKey[$miniCols[$mi]]
+                if ($mObj -and $mObj.DisplayIndex -ne $mi) {
+                    try { $mObj.DisplayIndex = $mi } catch {}
+                }
+            }
+
+            if (-not [bool]$stateContainer.IsTreeMode) {
+                $curSort = [string]$stateContainer.SortProperty
+                $sortStillVisible = $false
+                foreach ($c in $gridProcesses.Columns) {
+                    if ($c.SortMemberPath -eq $curSort -and $c.Visibility -eq [System.Windows.Visibility]::Visible) {
+                        $sortStillVisible = $true
+                        break
+                    }
+                }
+                if (-not $sortStillVisible) {
+                    &$setViewMode $true
+                }
+            }
+            return
+        }
 
         # 1. Apply Visibility (respecting Net ETW active state + locked Process column)
         [void]$script:UserVisibleCols.Add("Process")
@@ -2380,6 +2558,7 @@ function Start-PSRPM {
 
     $syncLiveOrderAndWidths = {
         if (-not $gridProcesses) { return }
+        if ($stateContainer.LayoutMode -eq "Mini") { return }
         $pairs = [System.Collections.Generic.List[Object]]::new()
         foreach ($cDef in $colCatalog) {
             $ck = [string]$cDef.Key
@@ -2730,6 +2909,14 @@ function Start-PSRPM {
             param($sender, $e)
             $sender.Items.Clear()
 
+            if ($stateContainer.LayoutMode -eq "Mini") {
+                $miExitMini = [System.Windows.Controls.MenuItem]::new()
+                $miExitMini.Header = "Exit Mini Monitor Mode (Ctrl+Shift+M) to Customize Columns"
+                $miExitMini.add_Click({ &$setLayoutMode $layoutState.PrevNonMiniMode })
+                [void]$sender.Items.Add($miExitMini)
+                return
+            }
+
             $clickedHeader = $sender.PlacementTarget
             $clickedColKey = ""
             if ($clickedHeader -is [System.Windows.Controls.Primitives.DataGridColumnHeader] -and $clickedHeader.Column) {
@@ -2810,6 +2997,389 @@ function Start-PSRPM {
         })
     }
 
+    # 11B. Display Density & Mini Monitor Controller (Standard / Compact Density / Mini Monitor)
+    $stateContainer.LayoutMode = "Standard"
+    $layoutState = @{
+        Mode            = "Standard"
+        PrevNonMiniMode = "Standard"
+        SavedBounds     = $null
+        SavedTopmost    = $false
+        SavedMinW       = 960.0
+        SavedMinH       = 540.0
+        SavedLogVisible = $false
+    }
+    $miniSearchSync = @{ Busy = $false }
+
+    $syncHostTabBarVisibility = {
+        if (-not $hostTabBar) { return }
+        $curLayout = [string]$layoutState.Mode
+        if ($curLayout -eq "Mini") {
+            $hostTabBar.Visibility = [System.Windows.Visibility]::Collapsed
+        } elseif ($curLayout -eq "Compact") {
+            $hostTabBar.Visibility = if ($hostTabsCollection.Count -gt 1) {
+                [System.Windows.Visibility]::Visible
+            } else {
+                [System.Windows.Visibility]::Collapsed
+            }
+        } else {
+            $hostTabBar.Visibility = [System.Windows.Visibility]::Visible
+        }
+    }
+    $hostTabsCollection.add_CollectionChanged({ &$syncHostTabBarVisibility })
+
+    $applyMiniWindowDimensions = {
+        $curScalePct = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [int]$stateContainer.UiScalePct } else { 100 }
+        $scaleMult   = [double]$curScalePct / 100.0
+        $workArea    = [System.Windows.SystemParameters]::WorkArea
+        $maxW        = if ($workArea.Width -gt 400.0)  { [double]$workArea.Width - 20.0 }  else { 1600.0 }
+        $maxH        = if ($workArea.Height -gt 300.0) { [double]$workArea.Height - 20.0 } else { 1000.0 }
+        $window.MinWidth  = [Math]::Min($maxW, [Math]::Round(380.0 * $scaleMult))
+        $window.MinHeight = [Math]::Min($maxH, [Math]::Round(260.0 * $scaleMult))
+        $window.Width     = [Math]::Min($maxW, [Math]::Round(510.0 * $scaleMult))
+        $window.Height    = [Math]::Min($maxH, [Math]::Round(460.0 * $scaleMult))
+    }
+
+    $setLayoutMode = {
+        param([string]$targetMode, [bool]$suppressAudit = $false)
+        $normMode = switch ($targetMode) {
+            "Compact" { "Compact" }
+            "Mini"    { "Mini" }
+            default   { "Standard" }
+        }
+        $prevMode = [string]$layoutState.Mode
+        $wasMini  = ($prevMode -eq "Mini")
+        $wantMini = ($normMode -eq "Mini")
+
+        # 1. Window Bounds & Chrome Transition Into / Out Of Mini Monitor
+        if ($wantMini -and -not $wasMini) {
+            &$syncLiveOrderAndWidths
+            $layoutState.PrevNonMiniMode = $prevMode
+            $layoutState.SavedTopmost    = [bool]$window.Topmost
+            $layoutState.SavedMinW       = [double]$window.MinWidth
+            $layoutState.SavedMinH       = [double]$window.MinHeight
+            $layoutState.SavedLogVisible = ($logPane -and $logPane.Visibility -eq [System.Windows.Visibility]::Visible)
+            $savedW = if ($window.ActualWidth -ge 200.0 -and $window.WindowState -eq [System.Windows.WindowState]::Normal) { [double]$window.ActualWidth } elseif (-not [double]::IsNaN($window.Width) -and $window.Width -ge 200.0) { [double]$window.Width } else { 1340.0 }
+            $savedH = if ($window.ActualHeight -ge 200.0 -and $window.WindowState -eq [System.Windows.WindowState]::Normal) { [double]$window.ActualHeight } elseif (-not [double]::IsNaN($window.Height) -and $window.Height -ge 200.0) { [double]$window.Height } else { 780.0 }
+            $layoutState.SavedBounds = @{
+                WindowState = $window.WindowState
+                Left        = [double]$window.Left
+                Top         = [double]$window.Top
+                Width       = $savedW
+                Height      = $savedH
+            }
+
+            if ($window.WindowState -eq [System.Windows.WindowState]::Maximized) {
+                $window.WindowState = [System.Windows.WindowState]::Normal
+            }
+            &$applyMiniWindowDimensions
+            $window.Topmost   = $true
+            $stateContainer.AlwaysOnTop = $true
+            if ($menuAlwaysOnTop) { $menuAlwaysOnTop.IsChecked = $true }
+
+            $mainTabCtrl = $window.FindName("MainTabControl")
+            if ($mainTabCtrl -and $mainTabCtrl.SelectedIndex -ne 0) {
+                $mainTabCtrl.SelectedIndex = 0
+            }
+            $window.Resources["MainTabHeaderVisibility"] = [System.Windows.Visibility]::Collapsed
+            if ($mainMenuBar)    { $mainMenuBar.Visibility    = [System.Windows.Visibility]::Collapsed }
+            if ($summaryBar)     { $summaryBar.Visibility     = [System.Windows.Visibility]::Collapsed }
+            if ($mainStatusBar)  { $mainStatusBar.Visibility  = [System.Windows.Visibility]::Collapsed }
+            if ($logPane)        { $logPane.Visibility        = [System.Windows.Visibility]::Collapsed }
+            if ($miniMonitorBar) { $miniMonitorBar.Visibility = [System.Windows.Visibility]::Visible }
+
+            if ($txtMiniSearch -and $txtSearch) {
+                $miniSearchSync.Busy = $true
+                try {
+                    $txtMiniSearch.Text = $txtSearch.Text
+                    if ($btnClearMiniSearch) {
+                        $btnClearMiniSearch.Visibility = if ($txtSearch.Text.Length -gt 0) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+                    }
+                } finally {
+                    $miniSearchSync.Busy = $false
+                }
+            }
+        } elseif (-not $wantMini -and $wasMini) {
+            if ($miniMonitorBar) { $miniMonitorBar.Visibility = [System.Windows.Visibility]::Collapsed }
+            if ($mainMenuBar)    { $mainMenuBar.Visibility    = [System.Windows.Visibility]::Visible }
+            if ($summaryBar)     { $summaryBar.Visibility     = [System.Windows.Visibility]::Visible }
+            if ($mainStatusBar)  { $mainStatusBar.Visibility  = [System.Windows.Visibility]::Visible }
+            $window.Resources["MainTabHeaderVisibility"] = [System.Windows.Visibility]::Visible
+            if ($logPane -and [bool]$layoutState.SavedLogVisible) {
+                $logPane.Visibility = [System.Windows.Visibility]::Visible
+                if ($menuViewLog) { $menuViewLog.IsChecked = $true }
+            }
+
+            $window.MinWidth  = if ($layoutState.SavedMinW -gt 0) { [double]$layoutState.SavedMinW } else { 960.0 }
+            $window.MinHeight = if ($layoutState.SavedMinH -gt 0) { [double]$layoutState.SavedMinH } else { 540.0 }
+            if ($layoutState.SavedBounds) {
+                $sb = $layoutState.SavedBounds
+                $window.Width  = [double]$sb.Width
+                $window.Height = [double]$sb.Height
+                if (-not [double]::IsNaN($sb.Left)) { $window.Left = [double]$sb.Left }
+                if (-not [double]::IsNaN($sb.Top))  { $window.Top  = [double]$sb.Top }
+                if ($sb.WindowState -eq [System.Windows.WindowState]::Maximized) {
+                    $window.WindowState = [System.Windows.WindowState]::Maximized
+                }
+            }
+            $restoreTop = [bool]$layoutState.SavedTopmost
+            $window.Topmost = $restoreTop
+            $stateContainer.AlwaysOnTop = $restoreTop
+            if ($menuAlwaysOnTop) { $menuAlwaysOnTop.IsChecked = $restoreTop }
+            foreach ($activeModal in (&$getActiveChildWindows)) {
+                if ($activeModal -and $activeModal.IsLoaded) {
+                    $activeModal.Topmost = $restoreTop
+                }
+            }
+        }
+
+        # 2. Apply Dynamic Density Metrics (14px Ultra-Compact/Mini + Slim Chrome vs 18px Standard)
+        $isDense = ($normMode -ne "Standard")
+        $window.Resources["GridRowHeight"]        = if ($isDense) { [double]14.0 } else { [double]18.0 }
+        $window.Resources["GridFontSize"]         = if ($isDense) { [double]10.0 } else { [double]11.0 }
+        $window.Resources["GridIconSize"]         = if ($isDense) { [double]11.0 } else { [double]14.0 }
+        $window.Resources["GridFallbackIconSize"] = if ($isDense) { [double]9.5 }  else { [double]11.0 }
+        $window.Resources["GridIconMargin"]       = if ($isDense) {
+            [System.Windows.Thickness]::new(0, 0, 3, 0)
+        } else {
+            [System.Windows.Thickness]::new(0, 0, 5, 0)
+        }
+        $window.Resources["ExpanderSlotWidth"]    = if ($isDense) { [double]12.0 } else { [double]16.0 }
+        $window.Resources["ExpanderBoxSize"]      = if ($isDense) { [double]8.0 }  else { [double]9.0 }
+        $window.Resources["GridHeaderFontSize"]   = if ($isDense) { [double]10.0 } else { [double]11.0 }
+        $window.Resources["GridHeaderPadding"]    = if ($isDense) {
+            [System.Windows.Thickness]::new(4, 1, 4, 1)
+        } else {
+            [System.Windows.Thickness]::new(6, 3, 6, 3)
+        }
+        $window.Resources["GridBadgeFontSize"]    = if ($isDense) { [double]9.0 } else { [double]10.0 }
+        $window.Resources["GridBadgePadding"]     = if ($isDense) {
+            [System.Windows.Thickness]::new(4, 0, 4, 0)
+        } else {
+            [System.Windows.Thickness]::new(5, 1, 5, 1)
+        }
+        $window.Resources["SubToolbarPadding"]    = if ($normMode -eq "Compact") {
+            [System.Windows.Thickness]::new(4, 1, 4, 1)
+        } else {
+            [System.Windows.Thickness]::new(6, 3, 6, 3)
+        }
+        $window.Resources["ChipTogglePadding"]    = if ($normMode -eq "Compact") {
+            [System.Windows.Thickness]::new(5, 1, 5, 1)
+        } else {
+            [System.Windows.Thickness]::new(8, 2, 8, 2)
+        }
+        $window.Resources["MainTabStripPadding"]  = if ($isDense) {
+            [System.Windows.Thickness]::new(4, 1, 4, 0)
+        } else {
+            [System.Windows.Thickness]::new(4, 2, 4, 0)
+        }
+        $window.Resources["MainTabItemPadding"]   = if ($isDense) {
+            [System.Windows.Thickness]::new(8, 1, 8, 1)
+        } else {
+            [System.Windows.Thickness]::new(12, 4, 12, 4)
+        }
+        $window.Resources["MainTabFontSize"]      = if ($isDense) { [double]10.5 } else { [double]11.5 }
+        $window.Resources["ToolbarBtnPadding"]    = if ($normMode -eq "Compact") {
+            [System.Windows.Thickness]::new(4, 1, 4, 1)
+        } else {
+            [System.Windows.Thickness]::new(6, 4, 6, 4)
+        }
+        $window.Resources["SearchBoxHeight"]      = if ($normMode -eq "Compact") { [double]20.0 } else { [double]26.0 }
+        $window.Resources["FullToolbarSparklinesVisibility"] = if ($normMode -eq "Compact") {
+            [System.Windows.Visibility]::Collapsed
+        } else {
+            [System.Windows.Visibility]::Visible
+        }
+        $window.Resources["CompactToolbarStatsVisibility"] = if ($normMode -eq "Compact") {
+            [System.Windows.Visibility]::Visible
+        } else {
+            [System.Windows.Visibility]::Collapsed
+        }
+
+        if ($mainMenuBar) {
+            $mainMenuBar.Padding = if ($normMode -eq "Compact") {
+                [System.Windows.Thickness]::new(2, 0, 2, 0)
+            } else {
+                [System.Windows.Thickness]::new(4, 2, 4, 2)
+            }
+        }
+        if ($summaryBar) {
+            $summaryBar.Padding = if ($normMode -eq "Compact") {
+                [System.Windows.Thickness]::new(5, 1, 5, 1)
+            } else {
+                [System.Windows.Thickness]::new(8, 4, 8, 4)
+            }
+        }
+        if ($mainStatusBar) {
+            $mainStatusBar.Padding = if ($normMode -eq "Compact") {
+                [System.Windows.Thickness]::new(4, 0, 4, 0)
+            } else {
+                [System.Windows.Thickness]::new(4, 2, 4, 2)
+            }
+        }
+        if ($scrollStatusLegend) {
+            $scrollStatusLegend.Visibility = if ($normMode -eq "Compact") {
+                [System.Windows.Visibility]::Collapsed
+            } else {
+                [System.Windows.Visibility]::Visible
+            }
+        }
+        $window.Resources["StatusCol0MaxWidth"] = if ($normMode -eq "Compact") { [double]1400.0 } else { [double]380.0 }
+
+        $layoutState.Mode             = $normMode
+        $stateContainer.LayoutMode    = $normMode
+        $stateContainer.IsCompactRows = $isDense
+
+        if ($normMode -ne "Mini") {
+            $layoutState.PrevNonMiniMode = $normMode
+        }
+
+        &$syncHostTabBarVisibility
+
+        if ($menuLayoutStandard) { $menuLayoutStandard.IsChecked = ($normMode -eq "Standard") }
+        if ($menuLayoutCompact)  { $menuLayoutCompact.IsChecked  = ($normMode -eq "Compact") }
+        if ($menuLayoutMini)     { $menuLayoutMini.IsChecked     = ($normMode -eq "Mini") }
+
+        # 3. Apply Column Layout (Focused Mini Monitor columns vs Full User Columns)
+        if ($wantMini -or $wasMini) {
+            &$applyColumnLayout $true
+        }
+
+        # 4. Rebuild Tree SVG Connector Geometry for 14px Compact vs 18px Standard Row Height
+        if ($engineHandle -and $engineHandle.RefreshTree) {
+            & $engineHandle.RefreshTree
+        }
+        if ($syncStatusOverflow) { &$syncStatusOverflow }
+
+        if ($prevMode -ne $normMode) {
+            if ($prevMode -in @("Standard", "Compact") -and $normMode -in @("Standard", "Compact")) {
+                &$markUnsavedPrefs "Display Density"
+            }
+            if (-not $suppressAudit) {
+                $modeLabel = switch ($normMode) {
+                    "Compact" { "Compact Density (14px rows, slim toolbar & headers)" }
+                    "Mini"    { "Mini Monitor (chromeless pinned widget, 14px rows)" }
+                    default   { "Standard (18px rows)" }
+                }
+                &$writeAuditLog "VIEW" "Display density switched to $modeLabel."
+            }
+        }
+    }
+
+    if ($menuLayoutStandard) { $menuLayoutStandard.add_Click({ &$setLayoutMode "Standard" }) }
+    if ($menuLayoutCompact)  { $menuLayoutCompact.add_Click({ &$setLayoutMode "Compact" }) }
+    if ($menuLayoutMini)     { $menuLayoutMini.add_Click({ &$setLayoutMode "Mini" }) }
+    if ($btnExitMiniMonitor) { $btnExitMiniMonitor.add_Click({ &$setLayoutMode $layoutState.PrevNonMiniMode }) }
+    if ($btnMiniPause)       { $btnMiniPause.add_Click({ &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused) }) }
+
+    # 11C. In-App UI Scale / Zoom Controller (75%, 100%, 125%, 150%, 175%, 200%)
+    $allowedScaleSteps = @(75, 100, 125, 150, 175, 200)
+    $stateContainer.UiScalePct = 100
+    $scaleMenuMap = @{
+        75  = $menuScale75
+        100 = $menuScale100
+        125 = $menuScale125
+        150 = $menuScale150
+        175 = $menuScale175
+        200 = $menuScale200
+    }
+
+    $setUiScale = {
+        param([int]$targetPct, [bool]$suppressAudit = $false)
+        $normPct = if ($targetPct -in $allowedScaleSteps) { $targetPct } else { 100 }
+        $prevPct = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [int]$stateContainer.UiScalePct } else { 100 }
+        $stateContainer.UiScalePct = $normPct
+
+        &$applyScaleToWindow $window $normPct
+        if ($stateContainer.LayoutMode -eq "Mini" -and $prevPct -ne $normPct) {
+            &$applyMiniWindowDimensions
+        }
+        foreach ($activeModal in (&$getActiveChildWindows)) {
+            if ($activeModal -and $activeModal.IsLoaded) {
+                &$applyScaleToWindow $activeModal $normPct
+            }
+        }
+        foreach ($pctKey in $scaleMenuMap.Keys) {
+            $mi = $scaleMenuMap[$pctKey]
+            if ($mi) { $mi.IsChecked = ($pctKey -eq $normPct) }
+        }
+        if ($clampLogPaneHeight) { & $clampLogPaneHeight }
+        if ($syncStatusOverflow) { &$syncStatusOverflow }
+
+        if ($prevPct -ne $normPct) {
+            &$markUnsavedPrefs "UI Zoom"
+            if (-not $suppressAudit) {
+                &$writeAuditLog "VIEW" "UI scale set to ${normPct}%."
+            }
+        }
+    }
+
+    $stepUiScale = {
+        param([int]$delta)
+        $curPct = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [int]$stateContainer.UiScalePct } else { 100 }
+        $idx = [Array]::IndexOf($allowedScaleSteps, $curPct)
+        if ($idx -lt 0) { $idx = 1 }
+        $nextIdx = [Math]::Max(0, [Math]::Min($allowedScaleSteps.Count - 1, $idx + $delta))
+        &$setUiScale $allowedScaleSteps[$nextIdx] $false
+    }
+    $scaleActionRefs.SetScale  = $setUiScale
+    $scaleActionRefs.StepScale = $stepUiScale
+
+    if ($menuScaleZoomIn)  { $menuScaleZoomIn.add_Click({ &$stepUiScale 1 }) }
+    if ($menuScaleZoomOut) { $menuScaleZoomOut.add_Click({ &$stepUiScale -1 }) }
+    if ($menuScaleReset)   { $menuScaleReset.add_Click({ &$setUiScale 100 $false }) }
+    if ($menuScale75)      { $menuScale75.add_Click({ &$setUiScale 75 $false }) }
+    if ($menuScale100)     { $menuScale100.add_Click({ &$setUiScale 100 $false }) }
+    if ($menuScale125)     { $menuScale125.add_Click({ &$setUiScale 125 $false }) }
+    if ($menuScale150)     { $menuScale150.add_Click({ &$setUiScale 150 $false }) }
+    if ($menuScale175)     { $menuScale175.add_Click({ &$setUiScale 175 $false }) }
+    if ($menuScale200)     { $menuScale200.add_Click({ &$setUiScale 200 $false }) }
+
+    if ($txtMiniSearch) {
+        $txtMiniSearch.add_TextChanged({
+            if ($miniSearchSync.Busy) { return }
+            $miniSearchSync.Busy = $true
+            try {
+                $tVal = $txtMiniSearch.Text
+                if ($btnClearMiniSearch) {
+                    $btnClearMiniSearch.Visibility = if ($tVal.Length -gt 0) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+                }
+                if ($txtSearch -and $txtSearch.Text -ne $tVal) {
+                    $txtSearch.Text = $tVal
+                } else {
+                    $stateContainer.FilterText = $tVal
+                    & $engineHandle.RefreshTree
+                }
+            } finally {
+                $miniSearchSync.Busy = $false
+            }
+        })
+    }
+    if ($btnClearMiniSearch) {
+        $btnClearMiniSearch.add_Click({
+            if ($txtMiniSearch) {
+                $txtMiniSearch.Text = ""
+            } elseif ($txtSearch) {
+                $txtSearch.Text = ""
+            }
+        })
+    }
+    if ($txtSearch) {
+        $txtSearch.add_TextChanged({
+            if ($miniSearchSync.Busy) { return }
+            $miniSearchSync.Busy = $true
+            try {
+                if ($txtMiniSearch -and $txtMiniSearch.Text -ne $txtSearch.Text) {
+                    $txtMiniSearch.Text = $txtSearch.Text
+                }
+                if ($btnClearMiniSearch) {
+                    $btnClearMiniSearch.Visibility = if ($txtSearch.Text.Length -gt 0) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+                }
+            } finally {
+                $miniSearchSync.Busy = $false
+            }
+        })
+    }
+
     $applyPreferencesObject = {
         param([hashtable]$prefs, [bool]$overrideCli = $false)
         if (-not $prefs) { return }
@@ -2848,6 +3418,16 @@ function Start-PSRPM {
                 [int]$prefs.RefreshIntervalMs
             }
             &$setPollingRate $targetRate $false
+
+            $showLinesVal = if ($prefs.ContainsKey('ShowTreeLines')) { [bool]$prefs.ShowTreeLines } else { $true }
+            $stateContainer.ShowTreeLines = $showLinesVal
+            if ($menuViewTreeLines) { $menuViewTreeLines.IsChecked = $showLinesVal }
+
+            $compactModeVal = if ($prefs.ContainsKey('CompactMode')) { [bool]$prefs.CompactMode } else { $false }
+            &$setLayoutMode $(if ($compactModeVal) { "Compact" } else { "Standard" }) $true
+
+            $scalePctVal = if ($prefs.ContainsKey('UiScalePct')) { [int]$prefs.UiScalePct } else { 100 }
+            &$setUiScale $scalePctVal $true
 
             $newestVal = [bool]$prefs.TreeSortNewestFirst
             $stateContainer.TreeSortNewestFirst = $newestVal
@@ -2947,11 +3527,14 @@ function Start-PSRPM {
                 }
                 $snapshot = @{
                     Theme                    = if ($stateContainer.CurrentTheme) { [string]$stateContainer.CurrentTheme } else { "Light" }
-                    AlwaysOnTop              = [bool]$window.Topmost
+                    AlwaysOnTop              = if ($stateContainer.LayoutMode -eq "Mini") { [bool]$layoutState.SavedTopmost } else { [bool]$window.Topmost }
                     EnableCategoryHighlights = [bool]$stateContainer.EnableCategoryHighlights
                     ConfirmKill              = if ($menuConfirmKill) { [bool]$menuConfirmKill.IsChecked } else { $true }
                     VerboseTelemetryLog      = [bool]$stateContainer.VerboseTelemetryLog
                     IsTreeMode               = [bool]$stateContainer.IsTreeMode
+                    ShowTreeLines            = if ($stateContainer.ContainsKey('ShowTreeLines')) { [bool]$stateContainer.ShowTreeLines } else { $true }
+                    CompactMode              = ($stateContainer.LayoutMode -eq "Compact")
+                    UiScalePct               = if ($stateContainer.ContainsKey('UiScalePct') -and [int]$stateContainer.UiScalePct -gt 0) { [int]$stateContainer.UiScalePct } else { 100 }
                     TreeSortNewestFirst      = [bool]$stateContainer.TreeSortNewestFirst
                     SortProperty             = if ($stateContainer.SortProperty) { [string]$stateContainer.SortProperty } else { "PID" }
                     SortDescending           = [bool]$stateContainer.SortDescending
@@ -3424,6 +4007,18 @@ function Start-PSRPM {
         }
     }
 
+    $actionCopyName = {
+        $sel = $gridProcesses.SelectedItem
+        if ($sel -and $sel.Name) {
+            [void](&$copyToClipboardSafe $sel.Name "CLIPBOARD" "Copied process name '$($sel.Name)' (PID $($sel.PID)).")
+        }
+    }
+    $actionCopyPid = {
+        $sel = $gridProcesses.SelectedItem
+        if ($sel -and $sel.PID -ge 0) {
+            [void](&$copyToClipboardSafe ([string]$sel.PID) "CLIPBOARD" "Copied PID $($sel.PID) for $($sel.Name).")
+        }
+    }
     $actionCopyCmdLine = {
         $sel = $gridProcesses.SelectedItem
         if ($sel -and $sel.CommandLine) {
@@ -3437,12 +4032,70 @@ function Start-PSRPM {
         }
     }
 
+    $actionGoToParent = {
+        $sel = $gridProcesses.SelectedItem
+        if ($sel -and $sel.ParentPID -gt 0 -and $engineHandle.ProcessMap.ContainsKey($sel.ParentPID)) {
+            &$jumpToProcessInMainGrid $sel.ParentPID $false "" $window $false
+        }
+    }
+    $setSubtreeExpanded = {
+        param([bool]$expand)
+        $rootVm = $gridProcesses.SelectedItem
+        if (-not $rootVm -or -not [bool]$stateContainer.IsTreeMode) { return }
+        $queue = [System.Collections.Generic.Queue[Object]]::new()
+        $visited = [System.Collections.Generic.HashSet[int]]::new()
+        $queue.Enqueue($rootVm)
+        while ($queue.Count -gt 0) {
+            $cur = $queue.Dequeue()
+            if ($null -eq $cur -or -not $visited.Add([int]$cur.PID)) { continue }
+            if ($cur.HasChildren -or ($cur.Children -and $cur.Children.Count -gt 0)) {
+                $cur.IsExpanded = $expand
+                $cur.UpdateExpanderGeometry()
+                foreach ($ch in $cur.Children) {
+                    if ($null -ne $ch) { $queue.Enqueue($ch) }
+                }
+            }
+        }
+        if ($engineHandle -and $engineHandle.ProcessMap) {
+            $changed = $true
+            $guard = 0
+            while ($changed -and $guard -lt 20) {
+                $changed = $false
+                $guard++
+                foreach ($vmItem in $engineHandle.ProcessMap.Values) {
+                    if ($visited.Contains([int]$vmItem.ParentPID) -and $visited.Add([int]$vmItem.PID)) {
+                        $vmItem.IsExpanded = $expand
+                        $vmItem.UpdateExpanderGeometry()
+                        $changed = $true
+                    }
+                }
+            }
+        }
+        & $engineHandle.RefreshTree
+    }
+
     $window.FindName("CtxEndProcess").add_Click({ &$invokeProcessAction "KillProcess" $null })
     $window.FindName("CtxEndTree").add_Click({ &$invokeProcessAction "KillTree" $null })
     $window.FindName("CtxSuspend").add_Click({ &$invokeProcessAction "SuspendProcess" $null })
     $window.FindName("CtxResume").add_Click({ &$invokeProcessAction "ResumeProcess" $null })
+    $menuGoToParentItem = $window.FindName("MenuGoToParent")
+    if ($menuGoToParentItem) { $menuGoToParentItem.add_Click($actionGoToParent) }
+    $ctxGoToParentItem = $window.FindName("CtxGoToParent")
+    if ($ctxGoToParentItem) { $ctxGoToParentItem.add_Click($actionGoToParent) }
+    $ctxExpandSubtreeItem = $window.FindName("CtxExpandSubtree")
+    if ($ctxExpandSubtreeItem) { $ctxExpandSubtreeItem.add_Click({ &$setSubtreeExpanded $true }) }
+    $ctxCollapseSubtreeItem = $window.FindName("CtxCollapseSubtree")
+    if ($ctxCollapseSubtreeItem) { $ctxCollapseSubtreeItem.add_Click({ &$setSubtreeExpanded $false }) }
+    $ctxCopyNameItem = $window.FindName("CtxCopyName")
+    if ($ctxCopyNameItem) { $ctxCopyNameItem.add_Click($actionCopyName) }
+    $ctxCopyPidItem = $window.FindName("CtxCopyPid")
+    if ($ctxCopyPidItem) { $ctxCopyPidItem.add_Click($actionCopyPid) }
     $window.FindName("CtxCopyCmdLine").add_Click($actionCopyCmdLine)
     $window.FindName("CtxCopyPath").add_Click($actionCopyPath)
+    $menuCopyNameItem = $window.FindName("MenuCopyName")
+    if ($menuCopyNameItem) { $menuCopyNameItem.add_Click($actionCopyName) }
+    $menuCopyPidItem = $window.FindName("MenuCopyPid")
+    if ($menuCopyPidItem) { $menuCopyPidItem.add_Click($actionCopyPid) }
     $menuCopyCmdItem = $window.FindName("MenuCopyCmdLine")
     if ($menuCopyCmdItem) { $menuCopyCmdItem.add_Click($actionCopyCmdLine) }
     $menuCopyPathItem = $window.FindName("MenuCopyPath")
@@ -3452,50 +4105,83 @@ function Start-PSRPM {
     $menuPropsItem       = $window.FindName("MenuProperties")
     $menuSuspendItem     = $window.FindName("MenuSuspend")
     $menuResumeItem      = $window.FindName("MenuResume")
+    $menuSetPrioItem     = $window.FindName("MenuSetPriority")
     $menuKillItem        = $window.FindName("MenuEndProcess")
     $menuKillTreeItem    = $window.FindName("MenuEndProcessTree")
     $menuCreateDumpItem  = $window.FindName("MenuCreateDump")
+    $menuCopySubItem     = $window.FindName("MenuCopySubmenu")
     $ctxPropsItem        = $window.FindName("CtxProperties")
     $ctxSuspendItem      = $window.FindName("CtxSuspend")
     $ctxResumeItem       = $window.FindName("CtxResume")
+    $ctxSetPrioItem      = $window.FindName("CtxSetPriority")
     $ctxKillItem         = $window.FindName("CtxEndProcess")
     $ctxKillTreeItem     = $window.FindName("CtxEndTree")
     $ctxCreateDumpItem   = $window.FindName("CtxCreateDump")
+    $ctxCopySubItem      = $window.FindName("CtxCopySubmenu")
     $ctxCopyCmdItem      = $window.FindName("CtxCopyCmdLine")
     $ctxCopyPathItem     = $window.FindName("CtxCopyPath")
 
     $updateProcessMenuState = {
-        $selCount = if ($gridProcesses.SelectedItems) { $gridProcesses.SelectedItems.Count } elseif ($gridProcesses.SelectedItem) { 1 } else { 0 }
-        $isMulti  = ($selCount -gt 1)
-        $singleEnabled = (-not $isMulti)
+        $onProcessesTab = (-not $mainTabs -or $mainTabs.SelectedIndex -eq 0)
+        $rawSelCount    = if ($gridProcesses.SelectedItems) { $gridProcesses.SelectedItems.Count } elseif ($gridProcesses.SelectedItem) { 1 } else { 0 }
+        $selCount       = if ($onProcessesTab) { $rawSelCount } else { 0 }
+        $hasSelection   = ($selCount -gt 0)
+        $isMulti        = ($selCount -gt 1)
+        $singleEnabled  = ($selCount -eq 1)
+        $selProc        = if ($singleEnabled) { $gridProcesses.SelectedItem } else { $null }
+        $hasLiveParent  = ($singleEnabled -and $null -ne $selProc -and $selProc.ParentPID -gt 0 -and $engineHandle.ProcessMap.ContainsKey($selProc.ParentPID))
+        $hasCmdText     = ($singleEnabled -and $null -ne $selProc -and -not [string]::IsNullOrWhiteSpace([string]$selProc.CommandLine))
+        $hasPathText    = ($singleEnabled -and $null -ne $selProc -and -not [string]::IsNullOrWhiteSpace([string]$selProc.Path))
+        $canSubtree     = ($singleEnabled -and [bool]$stateContainer.IsTreeMode -and $null -ne $selProc -and ($selProc.HasChildren -or ($selProc.Children -and $selProc.Children.Count -gt 0)))
 
         if ($menuPropsItem)      { $menuPropsItem.IsEnabled      = $singleEnabled }
+        if ($menuGoToParentItem) { $menuGoToParentItem.IsEnabled = $hasLiveParent }
+        if ($menuSuspendItem)    { $menuSuspendItem.IsEnabled    = $hasSelection }
+        if ($menuResumeItem)     { $menuResumeItem.IsEnabled     = $hasSelection }
+        if ($menuSetPrioItem)    { $menuSetPrioItem.IsEnabled    = $hasSelection }
+        if ($menuKillItem)       { $menuKillItem.IsEnabled       = $hasSelection }
+        if ($menuKillTreeItem)   { $menuKillTreeItem.IsEnabled   = $hasSelection }
         if ($menuCreateDumpItem) { $menuCreateDumpItem.IsEnabled = $singleEnabled }
-        if ($menuCopyCmdItem)    { $menuCopyCmdItem.IsEnabled    = $singleEnabled }
-        if ($menuCopyPathItem)   { $menuCopyPathItem.IsEnabled   = $singleEnabled }
-        if ($ctxPropsItem)       { $ctxPropsItem.IsEnabled       = $singleEnabled }
-        if ($ctxCreateDumpItem)  { $ctxCreateDumpItem.IsEnabled  = $singleEnabled }
-        if ($ctxCopyCmdItem)     { $ctxCopyCmdItem.IsEnabled     = $singleEnabled }
-        if ($ctxCopyPathItem)    { $ctxCopyPathItem.IsEnabled    = $singleEnabled }
+        if ($menuCopySubItem)    { $menuCopySubItem.IsEnabled    = $singleEnabled }
+        if ($menuCopyNameItem)   { $menuCopyNameItem.IsEnabled   = $singleEnabled }
+        if ($menuCopyPidItem)    { $menuCopyPidItem.IsEnabled    = $singleEnabled }
+        if ($menuCopyCmdItem)    { $menuCopyCmdItem.IsEnabled    = $hasCmdText }
+        if ($menuCopyPathItem)   { $menuCopyPathItem.IsEnabled   = $hasPathText }
+
+        if ($ctxPropsItem)           { $ctxPropsItem.IsEnabled           = $singleEnabled }
+        if ($ctxGoToParentItem)      { $ctxGoToParentItem.IsEnabled      = $hasLiveParent }
+        if ($ctxExpandSubtreeItem)   { $ctxExpandSubtreeItem.IsEnabled   = $canSubtree }
+        if ($ctxCollapseSubtreeItem) { $ctxCollapseSubtreeItem.IsEnabled = $canSubtree }
+        if ($ctxSuspendItem)         { $ctxSuspendItem.IsEnabled         = $hasSelection }
+        if ($ctxResumeItem)          { $ctxResumeItem.IsEnabled          = $hasSelection }
+        if ($ctxSetPrioItem)         { $ctxSetPrioItem.IsEnabled         = $hasSelection }
+        if ($ctxKillItem)            { $ctxKillItem.IsEnabled            = $hasSelection }
+        if ($ctxKillTreeItem)        { $ctxKillTreeItem.IsEnabled        = $hasSelection }
+        if ($ctxCreateDumpItem)      { $ctxCreateDumpItem.IsEnabled      = $singleEnabled }
+        if ($ctxCopySubItem)         { $ctxCopySubItem.IsEnabled         = $singleEnabled }
+        if ($ctxCopyNameItem)        { $ctxCopyNameItem.IsEnabled        = $singleEnabled }
+        if ($ctxCopyPidItem)         { $ctxCopyPidItem.IsEnabled         = $singleEnabled }
+        if ($ctxCopyCmdItem)         { $ctxCopyCmdItem.IsEnabled         = $hasCmdText }
+        if ($ctxCopyPathItem)        { $ctxCopyPathItem.IsEnabled        = $hasPathText }
 
         if ($isMulti) {
             if ($menuKillItem)     { $menuKillItem.Header     = "_Kill $selCount Processes" }
             if ($menuKillTreeItem) { $menuKillTreeItem.Header = "Kill $selCount Process _Trees" }
             if ($menuSuspendItem)  { $menuSuspendItem.Header  = "_Suspend $selCount Processes" }
             if ($menuResumeItem)   { $menuResumeItem.Header   = "R_esume $selCount Processes" }
-            if ($ctxKillItem)      { $ctxKillItem.Header      = "Kill $selCount Processes" }
-            if ($ctxKillTreeItem)  { $ctxKillTreeItem.Header  = "Kill $selCount Process Trees" }
-            if ($ctxSuspendItem)   { $ctxSuspendItem.Header   = "Suspend $selCount Processes" }
-            if ($ctxResumeItem)    { $ctxResumeItem.Header    = "Resume $selCount Processes" }
+            if ($ctxKillItem)      { $ctxKillItem.Header      = "_Kill $selCount Processes" }
+            if ($ctxKillTreeItem)  { $ctxKillTreeItem.Header  = "Kill $selCount Process _Trees" }
+            if ($ctxSuspendItem)   { $ctxSuspendItem.Header   = "_Suspend $selCount Processes" }
+            if ($ctxResumeItem)    { $ctxResumeItem.Header    = "R_esume $selCount Processes" }
         } else {
             if ($menuKillItem)     { $menuKillItem.Header     = "_Kill Process" }
             if ($menuKillTreeItem) { $menuKillTreeItem.Header = "Kill Process _Tree" }
             if ($menuSuspendItem)  { $menuSuspendItem.Header  = "_Suspend Process" }
             if ($menuResumeItem)   { $menuResumeItem.Header   = "R_esume Process" }
-            if ($ctxKillItem)      { $ctxKillItem.Header      = "Kill Process" }
-            if ($ctxKillTreeItem)  { $ctxKillTreeItem.Header  = "Kill Process Tree" }
-            if ($ctxSuspendItem)   { $ctxSuspendItem.Header   = "Suspend Process" }
-            if ($ctxResumeItem)    { $ctxResumeItem.Header    = "Resume Process" }
+            if ($ctxKillItem)      { $ctxKillItem.Header      = "_Kill Process" }
+            if ($ctxKillTreeItem)  { $ctxKillTreeItem.Header  = "Kill Process _Tree" }
+            if ($ctxSuspendItem)   { $ctxSuspendItem.Header   = "_Suspend Process" }
+            if ($ctxResumeItem)    { $ctxResumeItem.Header    = "R_esume Process" }
         }
     }
 
@@ -4723,8 +5409,13 @@ function Start-PSRPM {
             }
         }
 
-        # 4. Swap SummaryBar, Engine SummaryVm Target, and Reconcile ServicesCollection In-Place (Zero .Clear())
-        if ($summaryBar) { $summaryBar.DataContext = $targetTabVm.SummaryVm }
+        # 4. Swap SummaryBar, MiniMonitorBar, Engine SummaryVm Target, and Reconcile ServicesCollection In-Place (Zero .Clear())
+        if ($summaryBar)     { $summaryBar.DataContext     = $targetTabVm.SummaryVm }
+        if ($miniMonitorBar) { $miniMonitorBar.DataContext = $targetTabVm.SummaryVm }
+        if ($txtMiniHostName) {
+            $txtMiniHostName.Text    = $targetTabVm.Title
+            $txtMiniHostName.ToolTip = $targetTabVm.Title
+        }
         if ($engine -and $engine.SetSummaryViewModel) {
             & $engine.SetSummaryViewModel $targetTabVm.SummaryVm
         }
@@ -4919,6 +5610,7 @@ function Start-PSRPM {
     $fnCreateHostTabVm = {
         param([string]$tabId, [string]$compName, [string]$title, [string]$transport, [bool]$isLocal)
         $newSumVm = [SystemSummaryViewModel]::new()
+        $newSumVm.SetPollingIntervalMs([int]$stateContainer.IntervalMs)
         return [HostTabItemViewModel]::new($tabId, $compName, $title, $transport, $isLocal, $newSumVm)
     }
 
@@ -4966,7 +5658,8 @@ function Start-PSRPM {
             if ($chkSsl)  { $chkSsl.IsChecked = [bool]$script:ActiveHostTab.UseSSL }
             if ($txtPort) { $txtPort.Text = if ($script:ActiveHostTab.Port -gt 0) { [string]$script:ActiveHostTab.Port } else { "" } }
         }
-        $credHolder   = @{ Value = $Credential }
+        $credHolder          = @{ Value = $Credential }
+        $connectAttemptState = @{ ActiveCancelToken = $null }
 
         $setConnectBanner = {
             param([bool]$isError, [string]$msg)
@@ -5105,6 +5798,9 @@ function Start-PSRPM {
             &$setConnectBusy $true
             &$setConnectBanner $false $(if ($useLocal) { "Initializing Local-Only telemetry session for '$targetLabel'..." } else { "Connecting to '$targetLabel' via WinRM..." })
 
+            $attemptCancel = @{ Cancelled = $false }
+            $connectAttemptState.ActiveCancelToken = $attemptCancel
+
             if ($openNew) {
                 &$writeAuditLog "CONNECT" "Opening new host session tab for '$targetLabel'..."
                 $newTabId = [guid]::NewGuid().ToString("N")
@@ -5116,6 +5812,7 @@ function Start-PSRPM {
                     Credential   = $credHolder.Value
                     Port         = $portNum
                     UseSSL       = $useSslVal
+                    CancelToken  = $attemptCancel
                 }
 
                 $localConnWin      = $connWin
@@ -5133,10 +5830,15 @@ function Start-PSRPM {
                 $localSslVal       = $useSslVal
                 $localSetBanner    = $setConnectBanner
                 $localSetBusy      = $setConnectBusy
+                $localAttemptState = $connectAttemptState
+                $localAttemptTok   = $attemptCancel
 
                 & $localEngine.SendCommand $addCmd ({
                     param($res)
                     try {
+                        if ($localAttemptState.ActiveCancelToken -eq $localAttemptTok) {
+                            $localAttemptState.ActiveCancelToken = $null
+                        }
                         if (-not $localConnWin -or -not $localConnWin.IsLoaded) { return }
                         &$localSetBusy $false
                         if ($res.Success) {
@@ -5185,6 +5887,7 @@ function Start-PSRPM {
                     Credential   = $credHolder.Value
                     Port         = $portNum
                     UseSSL       = $useSslVal
+                    CancelToken  = $attemptCancel
                 }
 
                 $localConnWin      = $connWin
@@ -5203,10 +5906,15 @@ function Start-PSRPM {
                 $localSyncTargetUi = $syncTargetSwitchUi
                 $localSetBanner    = $setConnectBanner
                 $localSetBusy      = $setConnectBusy
+                $localAttemptState = $connectAttemptState
+                $localAttemptTok   = $attemptCancel
 
                 & $engineHandle.SendCommand $switchCmd ({
                     param($res)
                     try {
+                        if ($localAttemptState.ActiveCancelToken -eq $localAttemptTok) {
+                            $localAttemptState.ActiveCancelToken = $null
+                        }
                         if (-not $localConnWin -or -not $localConnWin.IsLoaded) { return }
                         &$localSetBusy $false
                         if ($res.Success) {
@@ -5232,6 +5940,17 @@ function Start-PSRPM {
             }
         })
 
+        $connWin.add_Closed({
+            $pendingTok = $connectAttemptState.ActiveCancelToken
+            if ($pendingTok) {
+                $pendingTok.Cancelled = $true
+                $connectAttemptState.ActiveCancelToken = $null
+                if ($engineHandle -and $engineHandle.SendCommand) {
+                    & $engineHandle.SendCommand @{ CommandType = "CancelConnectRequest" } $null
+                }
+                &$writeAuditLog "CONNECT" "Cancelled pending connection attempt; active session preserved."
+            }
+        })
         $connWin.FindName("BtnConnectCancel").add_Click({ $connWin.Close() })
         &$registerDialogRenderFlush $connWin
         [void]$connWin.ShowDialog()
@@ -5255,7 +5974,61 @@ function Start-PSRPM {
     $btnAddHostTab = $window.FindName("BtnAddHostTab")
     if ($btnAddHostTab) { $btnAddHostTab.add_Click({ &$actionConnectDialog $true }) }
 
-    $window.FindName("MenuSwitchLocal").add_Click({
+    if ($hostTabBar) {
+        $hostTabBar.add_PreviewMouseLeftButtonDown({
+            param($sender, $e)
+            if ($e.ClickCount -ne 2) { return }
+            $dep = [System.Windows.DependencyObject]$e.OriginalSource
+            while ($null -ne $dep -and $dep -ne $hostTabBar) {
+                if ($dep -is [System.Windows.Controls.Primitives.ScrollBar]) { return }
+                if ($dep -is [System.Windows.FrameworkElement] -and $dep.Name -in @("TabItemBorder", "BtnCloseHostTab", "BtnAddHostTab")) {
+                    return
+                }
+                if ($dep -is [System.Windows.Media.Visual] -or $dep -is [System.Windows.Media.Media3D.Visual3D]) {
+                    $dep = [System.Windows.Media.VisualTreeHelper]::GetParent($dep)
+                } else {
+                    $dep = [System.Windows.LogicalTreeHelper]::GetParent($dep)
+                }
+            }
+            $e.Handled = $true
+            $localConnect = $actionConnectDialog
+            [void]$window.Dispatcher.BeginInvoke(
+                [System.Windows.Threading.DispatcherPriority]::Input,
+                [Action]({ & $localConnect $true }.GetNewClosure())
+            )
+        })
+    }
+
+    $menuFile          = $window.FindName("MenuFile")
+    $menuReconnectHost = $window.FindName("MenuReconnectHost")
+    $menuSwitchLocal   = $window.FindName("MenuSwitchLocal")
+    if ($menuFile) {
+        $menuFile.add_SubmenuOpened({
+            $hasMultiTabs  = ($hostTabsCollection -and $hostTabsCollection.Count -gt 1)
+            $isActiveLocal = ($script:ActiveHostTab -and [bool]$script:ActiveHostTab.IsLocal)
+            $curConnState  = [string]$stateContainer.ConnectionState
+            $canReconnect  = (-not $isActiveLocal -and $curConnState -in @("Disconnected", "Degraded", "NotConnected"))
+            if ($menuReconnectHost) { $menuReconnectHost.IsEnabled = $canReconnect }
+            if ($menuSwitchLocal)   { $menuSwitchLocal.IsEnabled   = (-not $isActiveLocal) }
+            if ($menuNextHostTab)   { $menuNextHostTab.IsEnabled   = $hasMultiTabs }
+            if ($menuPrevHostTab)   { $menuPrevHostTab.IsEnabled   = $hasMultiTabs }
+            if ($menuCloseHostTab)  { $menuCloseHostTab.IsEnabled  = $hasMultiTabs }
+        })
+    }
+    if ($menuReconnectHost) {
+        $menuReconnectHost.add_Click({
+            if ($script:ActiveHostTab -and $engineHandle -and -not $script:ActiveHostTab.IsLocal) {
+                &$writeAuditLog "CONNECT" "Reconnecting WinRM session to '$($script:ActiveHostTab.Title)'..."
+                & $engineHandle.SendCommand @{
+                    CommandType = "ConnectTabSession"
+                    TabId       = $script:ActiveHostTab.TabId
+                } $null
+            }
+        })
+    }
+
+    if ($menuSwitchLocal) {
+        $menuSwitchLocal.add_Click({
         $switchLocalCmd = @{
             CommandType  = "SwitchTarget"
             ComputerName = $env:COMPUTERNAME
@@ -5274,7 +6047,8 @@ function Start-PSRPM {
                 &$localLog "CONNECT" $res.Message
             }
         }.GetNewClosure())
-    })
+        })
+    }
 
     # 15. Forensic Snapshot Exports (Pure WPF Microsoft.Win32.SaveFileDialog)
     $exportSnapshot = {
@@ -5379,6 +6153,7 @@ function Start-PSRPM {
                             ProcessCount    = $activeSumm.ProcessCount
                             ThreadCount     = $activeSumm.ThreadCount
                             HandleCount     = $activeSumm.HandleCount
+                            History360      = $histObj
                             History240      = $histObj
                             History120      = $histObj
                         }
@@ -5492,14 +6267,22 @@ function Start-PSRPM {
 
         $tipText = ""
         if ($entry.IsStrip) {
-            $tipText = $summVm.GetGraphHoverInfo("Net", 239, $false) + "`nDouble-click for Network tab"
+            $tipText = $summVm.GetGraphHoverInfo("Net", 359, $false) + "`nDouble-click for Network tab"
         } else {
             $surf = $entry.Surface
             if (-not $surf) { return }
             $surfW = if ($surf.Width -gt 0 -and -not [double]::IsNaN($surf.Width)) { [double]$surf.Width } else { [double]$surf.ActualWidth }
             if ($surfW -le 1.0) { return }
 
-            $count = if ($entry.IsCore) { 60 } elseif ($entry.IsMini) { 30 } else { 240 }
+            $count = if ($entry.IsCore) {
+                60
+            } elseif ($entry.IsMini) {
+                30
+            } elseif ($summVm -and $summVm.PSObject.Methods['GetActiveChartWindowCount']) {
+                [int]$summVm.GetActiveChartWindowCount()
+            } else {
+                360
+            }
             $clampedX = [Math]::Max(0.0, [Math]::Min($surfW, [double]$ptSurface.X))
             $frac = $clampedX / $surfW
             $idx  = [int][Math]::Round($frac * [double]($count - 1))
@@ -5516,8 +6299,12 @@ function Start-PSRPM {
 
             if ($entry.IsCore) {
                 $tipText = $summVm.GetCoreHoverInfo($entry.CoreVm, $idx)
+            } elseif ($entry.IsMini) {
+                $tipText = $summVm.GetGraphHoverInfo([string]$entry.ChartKey, $idx, $true)
+                if ($entry.FooterHint) { $tipText += "`n$($entry.FooterHint)" }
             } else {
-                $tipText = $summVm.GetGraphHoverInfo([string]$entry.ChartKey, $idx, [bool]$entry.IsMini)
+                $rawIdx = [Math]::Max(0, (360 - $count) + $idx)
+                $tipText = $summVm.GetGraphHoverInfo([string]$entry.ChartKey, $rawIdx, $false)
                 if ($entry.FooterHint) { $tipText += "`n$($entry.FooterHint)" }
             }
         }
@@ -5840,6 +6627,27 @@ function Start-PSRPM {
                 &$actionShowSystemInfo 1
                 $e.Handled = $true
             }
+        })
+    }
+    $compactStatCpu    = $window.FindName("CompactStatCpu")
+    $compactStatCommit = $window.FindName("CompactStatCommit")
+    $compactStatRam    = $window.FindName("CompactStatRam")
+    if ($compactStatCpu) {
+        $compactStatCpu.add_MouseLeftButtonDown({
+            param($s, $e)
+            if ($e.ClickCount -eq 2) { &$actionShowSystemInfo 1; $e.Handled = $true }
+        })
+    }
+    if ($compactStatCommit) {
+        $compactStatCommit.add_MouseLeftButtonDown({
+            param($s, $e)
+            if ($e.ClickCount -eq 2) { &$actionShowSystemInfo 2; $e.Handled = $true }
+        })
+    }
+    if ($compactStatRam) {
+        $compactStatRam.add_MouseLeftButtonDown({
+            param($s, $e)
+            if ($e.ClickCount -eq 2) { &$actionShowSystemInfo 2; $e.Handled = $true }
         })
     }
     if ($cardMiniCommit) {
@@ -6380,10 +7188,61 @@ function Start-PSRPM {
         }
     }
 
-    $menuFindHandle     = $window.FindName("MenuFindHandle")
-    $btnFindHandleOrDll = $window.FindName("BtnFindHandleOrDll")
+    $menuFind            = $window.FindName("MenuFind")
+    $menuFindFilter      = $window.FindName("MenuFindFilter")
+    $menuFindClearFilter = $window.FindName("MenuFindClearFilter")
+    $menuFindHandle      = $window.FindName("MenuFindHandle")
+    $btnFindHandleOrDll  = $window.FindName("BtnFindHandleOrDll")
     if ($menuFindHandle)     { $menuFindHandle.add_Click({ &$actionShowFindHandle }) }
     if ($btnFindHandleOrDll) { $btnFindHandleOrDll.add_Click({ &$actionShowFindHandle }) }
+    if ($menuFindFilter) {
+        $menuFindFilter.add_Click({
+            if ($mainTabs -and $mainTabs.SelectedIndex -eq 1 -and $txtSearchServices) {
+                $txtSearchServices.Focus()
+                $txtSearchServices.SelectAll()
+            } elseif ($mainTabs -and $mainTabs.SelectedIndex -eq 2 -and $txtSearchNetwork) {
+                $txtSearchNetwork.Focus()
+                $txtSearchNetwork.SelectAll()
+            } elseif ($txtSearch) {
+                $txtSearch.Focus()
+                $txtSearch.SelectAll()
+            }
+        })
+    }
+    if ($menuFindClearFilter) {
+        $menuFindClearFilter.add_Click({
+            if ($mainTabs -and $mainTabs.SelectedIndex -eq 1 -and $txtSearchServices) {
+                $txtSearchServices.Text = ""
+                if ($updateServicesFilter) { &$updateServicesFilter }
+                if ($gridServices) { $gridServices.Focus() }
+            } elseif ($mainTabs -and $mainTabs.SelectedIndex -eq 2 -and $txtSearchNetwork) {
+                $txtSearchNetwork.Text = ""
+                if ($refreshNetFiltersView) { &$refreshNetFiltersView }
+                if ($netUiState -and $netUiState.SubMode -eq "Sockets" -and $gridNetworkSockets) { $gridNetworkSockets.Focus() }
+                elseif ($gridNetworkTimeline) { $gridNetworkTimeline.Focus() }
+            } else {
+                if ($txtSearch) { $txtSearch.Text = "" }
+                $stateContainer.FilterText = ""
+                $stateContainer.CategoryFilter = ""
+                if ($updateCategoryButtons) { &$updateCategoryButtons }
+                if ($engineHandle -and $engineHandle.RefreshTree) { & $engineHandle.RefreshTree }
+                if ($gridProcesses) { $gridProcesses.Focus() }
+            }
+        })
+    }
+    if ($menuFind) {
+        $menuFind.add_SubmenuOpened({
+            $hasActiveFilter = $false
+            if ($mainTabs -and $mainTabs.SelectedIndex -eq 1) {
+                $hasActiveFilter = ($txtSearchServices -and $txtSearchServices.Text.Length -gt 0)
+            } elseif ($mainTabs -and $mainTabs.SelectedIndex -eq 2) {
+                $hasActiveFilter = ($txtSearchNetwork -and $txtSearchNetwork.Text.Length -gt 0)
+            } else {
+                $hasActiveFilter = (($txtSearch -and $txtSearch.Text.Length -gt 0) -or -not [string]::IsNullOrEmpty([string]$stateContainer.CategoryFilter))
+            }
+            if ($menuFindClearFilter) { $menuFindClearFilter.IsEnabled = $hasActiveFilter }
+        })
+    }
 
     # 15B. Opt-In Per-Process Kernel Network Monitoring (ETW) Controls & Banner
     $menuViewNetEtw       = $window.FindName("MenuViewNetEtw")
@@ -6442,8 +7301,14 @@ function Start-PSRPM {
         if ($btnToolbarNetRxTx) {
             $btnToolbarNetRxTx.Visibility = if ($cap -eq 1) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
         }
-        if ($menuColTreeNet) { $menuColTreeNet.IsChecked = $script:ShowTreeNetCol }
-        if ($menuColNetRxTx) { $menuColNetRxTx.IsChecked = $script:ShowRxTxCols }
+        if ($menuColTreeNet) {
+            $menuColTreeNet.IsChecked = $script:ShowTreeNetCol
+            $menuColTreeNet.IsEnabled = $isEnabled
+        }
+        if ($menuColNetRxTx) {
+            $menuColNetRxTx.IsChecked = $script:ShowRxTxCols
+            $menuColNetRxTx.IsEnabled = $isEnabled
+        }
 
         &$syncNetColumnVisibility
 
@@ -6594,11 +7459,11 @@ function Start-PSRPM {
         if ($hasBase) {
             if ($badgeBaselineActive) { $badgeBaselineActive.Visibility = [System.Windows.Visibility]::Visible }
             if ($txtBaselineLabel)    { $txtBaselineLabel.Text = "Baseline $baseTime" }
-            if ($menuViewBaseline)    { $menuViewBaseline.Header = "Clear Process _Baseline Snapshot" }
+            if ($menuViewBaseline)    { $menuViewBaseline.Header = "Refresh Process _Baseline" }
             if ($menuViewClearBaseline) { $menuViewClearBaseline.IsEnabled = $true }
         } else {
             if ($badgeBaselineActive) { $badgeBaselineActive.Visibility = [System.Windows.Visibility]::Collapsed }
-            if ($menuViewBaseline)    { $menuViewBaseline.Header = "Set Process _Baseline Snapshot" }
+            if ($menuViewBaseline)    { $menuViewBaseline.Header = "Capture Process _Baseline" }
             if ($menuViewClearBaseline) { $menuViewClearBaseline.IsEnabled = $false }
         }
     }
@@ -6656,7 +7521,7 @@ function Start-PSRPM {
         }
     }
 
-    if ($menuViewBaseline)      { $menuViewBaseline.add_Click({ &$actionToggleBaseline }) }
+    if ($menuViewBaseline)      { $menuViewBaseline.add_Click({ &$actionSetBaseline }) }
     if ($menuViewClearBaseline) { $menuViewClearBaseline.add_Click({ &$actionClearBaseline }) }
     if ($btnClearBaseline)      { $btnClearBaseline.add_Click({ &$actionClearBaseline }) }
 
@@ -7902,7 +8767,7 @@ function Start-PSRPM {
         $mods = [System.Windows.Input.Keyboard]::Modifiers
         $isCtrl  = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
         $isShift = ($mods -band [System.Windows.Input.ModifierKeys]::Shift) -ne 0
-        $searchHasFocus = ($txtSearch.IsKeyboardFocusWithin -or ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin) -or ($txtSearchNetwork -and $txtSearchNetwork.IsKeyboardFocusWithin))
+        $searchHasFocus = ($txtSearch.IsKeyboardFocusWithin -or ($txtMiniSearch -and $txtMiniSearch.IsKeyboardFocusWithin) -or ($txtSearchServices -and $txtSearchServices.IsKeyboardFocusWithin) -or ($txtSearchNetwork -and $txtSearchNetwork.IsKeyboardFocusWithin))
 
         if ($e.Key -eq [System.Windows.Input.Key]::F1) {
             &$actionShowHelp 0
@@ -7913,11 +8778,28 @@ function Start-PSRPM {
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Space -and -not $searchHasFocus -and -not (&$isInteractiveKeyTarget $e.OriginalSource)) {
             &$setPollingRate $stateContainer.IntervalMs (-not [bool]$stateContainer.IsPaused)
             $e.Handled = $true
+        } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::C) {
+            $nextDensity = if ($stateContainer.LayoutMode -eq "Compact") { "Standard" } else { "Compact" }
+            &$setLayoutMode $nextDensity
+            $e.Handled = $true
+        } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::M) {
+            $nextMini = if ($stateContainer.LayoutMode -eq "Mini") { [string]$layoutState.PrevNonMiniMode } else { "Mini" }
+            &$setLayoutMode $nextMini
+            $e.Handled = $true
+        } elseif ($isCtrl -and ($e.Key -eq [System.Windows.Input.Key]::OemPlus -or $e.Key -eq [System.Windows.Input.Key]::Add)) {
+            &$stepUiScale 1
+            $e.Handled = $true
+        } elseif ($isCtrl -and ($e.Key -eq [System.Windows.Input.Key]::OemMinus -or $e.Key -eq [System.Windows.Input.Key]::Subtract)) {
+            &$stepUiScale -1
+            $e.Handled = $true
+        } elseif ($isCtrl -and -not $isShift -and ($e.Key -eq [System.Windows.Input.Key]::D0 -or $e.Key -eq [System.Windows.Input.Key]::NumPad0)) {
+            &$setUiScale 100 $false
+            $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::B) {
             if ($isShift) {
                 &$actionClearBaseline
             } else {
-                &$actionToggleBaseline
+                &$actionSetBaseline
             }
             $e.Handled = $true
         } elseif ($isCtrl -and $isShift -and $e.Key -eq [System.Windows.Input.Key]::N) {
@@ -7928,7 +8810,10 @@ function Start-PSRPM {
             &$actionShowFindHandle
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::F) {
-            if ($mainTabs -and $mainTabs.SelectedIndex -eq 1 -and $txtSearchServices) {
+            if ($stateContainer.LayoutMode -eq "Mini" -and $txtMiniSearch) {
+                $txtMiniSearch.Focus()
+                $txtMiniSearch.SelectAll()
+            } elseif ($mainTabs -and $mainTabs.SelectedIndex -eq 1 -and $txtSearchServices) {
                 $txtSearchServices.Focus()
                 $txtSearchServices.SelectAll()
             } elseif ($mainTabs -and $mainTabs.SelectedIndex -eq 2 -and $txtSearchNetwork) {
@@ -7940,7 +8825,14 @@ function Start-PSRPM {
             }
             $e.Handled = $true
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Escape) {
-            if ($txtSearchNetwork -and ($txtSearchNetwork.Text.Length -gt 0 -or $txtSearchNetwork.IsKeyboardFocusWithin)) {
+            if ($stateContainer.LayoutMode -eq "Mini" -and $txtMiniSearch -and ($txtMiniSearch.Text.Length -gt 0 -or $txtMiniSearch.IsKeyboardFocusWithin)) {
+                $txtMiniSearch.Text = ""
+                if ($txtSearch) { $txtSearch.Text = "" }
+                $stateContainer.FilterText = ""
+                & $engineHandle.RefreshTree
+                $gridProcesses.Focus()
+                $e.Handled = $true
+            } elseif ($txtSearchNetwork -and ($txtSearchNetwork.Text.Length -gt 0 -or $txtSearchNetwork.IsKeyboardFocusWithin)) {
                 $txtSearchNetwork.Text = ""
                 &$refreshNetFiltersView
                 if ($netUiState.SubMode -eq "Sockets" -and $gridNetworkSockets) { $gridNetworkSockets.Focus() }
@@ -7968,6 +8860,9 @@ function Start-PSRPM {
             &$cycleTheme
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::L) {
+            if ($stateContainer.LayoutMode -eq "Mini") {
+                &$setLayoutMode ([string]$layoutState.PrevNonMiniMode)
+            }
             &$toggleLogPane
             $e.Handled = $true
         } elseif ($isCtrl -and $e.Key -eq [System.Windows.Input.Key]::I) {

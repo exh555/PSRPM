@@ -99,6 +99,36 @@ $script:PSRPMCollectorScriptBlock = {
         [void]$svcTb.CreateType()
     }
 
+    # Native MUI Indirect String Resolver (SHLoadIndirectString - 100% Fileless, Resolves @%SystemRoot%\...\*.dll,-id)
+    if (-not ('PSRPM.NativeMuiV1' -as [type])) {
+        $muiAsm = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
+            [System.Reflection.AssemblyName]::new("PSRPMNativeMuiV1Asm"),
+            [System.Reflection.Emit.AssemblyBuilderAccess]::Run
+        )
+        $muiMod = $muiAsm.DefineDynamicModule("PSRPMNativeMuiV1Mod")
+        $muiTb  = $muiMod.DefineType("PSRPM.NativeMuiV1", [System.Reflection.TypeAttributes]"Public,Abstract,Sealed")
+        $dllImpCtorM = [System.Runtime.InteropServices.DllImportAttribute].GetConstructor(@([string]))
+        $fSetLastM   = [System.Runtime.InteropServices.DllImportAttribute].GetField("SetLastError")
+        $fCharSetM   = [System.Runtime.InteropServices.DllImportAttribute].GetField("CharSet")
+        $fCallConvM  = [System.Runtime.InteropServices.DllImportAttribute].GetField("CallingConvention")
+        $fEntryPtM   = [System.Runtime.InteropServices.DllImportAttribute].GetField("EntryPoint")
+        $muiMb = $muiTb.DefineMethod(
+            "SHLoadIndirectString",
+            [System.Reflection.MethodAttributes]"Public,Static,PinvokeImpl",
+            [int],
+            @([string], [System.Text.StringBuilder], [uint32], [IntPtr])
+        )
+        $muiMb.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+        $muiCab = [System.Reflection.Emit.CustomAttributeBuilder]::new(
+            $dllImpCtorM,
+            @("shlwapi.dll"),
+            @($fSetLastM, $fCharSetM, $fCallConvM, $fEntryPtM),
+            @([bool]$false, [System.Runtime.InteropServices.CharSet]::Unicode, [System.Runtime.InteropServices.CallingConvention]::Winapi, "SHLoadIndirectString")
+        )
+        $muiMb.SetCustomAttribute($muiCab)
+        [void]$muiTb.CreateType()
+    }
+
     if (-not $script:CollectorInitialized -and $NetEtwAction -ne "Dispose") {
         $script:SeqNumber      = 0
         $script:LastSnapTicks  = [DateTime]::UtcNow.Ticks
@@ -1357,6 +1387,7 @@ $script:PSRPMCollectorScriptBlock = {
         if ($script:SvcStaticCache.Count -eq 0 -or ($nowUtc - $script:LastSvcStaticRefresh).TotalMinutes -ge 10.0) {
             $newStatic = @{}
             $revMap    = @{}
+            $muiSb     = [System.Text.StringBuilder]::new(1024)
             try {
                 $regServices = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services")
                 if ($regServices) {
@@ -1364,6 +1395,8 @@ $script:PSRPMCollectorScriptBlock = {
                         try {
                             $sKey = $regServices.OpenSubKey($subName)
                             if ($sKey) {
+                                $svcTypeVal = $sKey.GetValue("Type")
+                                $isWin32Svc = ($null -ne $svcTypeVal -and ([int]$svcTypeVal -band 0x30) -ne 0)
                                 $depStr = ""
                                 $rawDeps = $sKey.GetValue("DependOnService")
                                 if ($rawDeps) {
@@ -1398,6 +1431,12 @@ $script:PSRPMCollectorScriptBlock = {
 
                                 $descVal = $sKey.GetValue("Description")
                                 $dscStr  = if ($descVal -and -not [string]::IsNullOrWhiteSpace($descVal)) { [string]$descVal } else { "" }
+                                if ($isWin32Svc -and $dscStr.StartsWith("@")) {
+                                    $muiSb.Length = 0
+                                    if ([PSRPM.NativeMuiV1]::SHLoadIndirectString($dscStr, $muiSb, [uint32]1024, [IntPtr]::Zero) -eq 0 -and $muiSb.Length -gt 0) {
+                                        $dscStr = $muiSb.ToString()
+                                    }
+                                }
 
                                 $imgPath = $sKey.GetValue("ImagePath")
                                 $binStr  = if ($imgPath -and -not [string]::IsNullOrWhiteSpace($imgPath)) { [string]$imgPath } else { "" }
@@ -1489,6 +1528,12 @@ $script:PSRPMCollectorScriptBlock = {
                         if ([string]::IsNullOrWhiteSpace($sName)) { continue }
                         $sDisp = if ($pDisp -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::PtrToStringUni($pDisp) } else { $sName }
                         if ([string]::IsNullOrWhiteSpace($sDisp)) { $sDisp = $sName }
+                        if ($sDisp.StartsWith("@")) {
+                            $dispMuiSb = [System.Text.StringBuilder]::new(512)
+                            if ([PSRPM.NativeMuiV1]::SHLoadIndirectString($sDisp, $dispMuiSb, [uint32]512, [IntPtr]::Zero) -eq 0 -and $dispMuiSb.Length -gt 0) {
+                                $sDisp = $dispMuiSb.ToString()
+                            }
+                        }
 
                         if ($sPid -gt 0) {
                             [void]$script:ServicePidSet.Add($sPid)
@@ -2339,7 +2384,7 @@ $script:PSRPMCollectorScriptBlock = {
     $metaPendCnt  = $script:PendingMetaMap.Count
 
     $sb = [System.Text.StringBuilder]::new(8192)
-    [void]$sb.Append('{"ver":1,"colVer":"1.15.1","seq":').Append($script:SeqNumber)
+    [void]$sb.Append('{"ver":1,"colVer":"1.16.0","seq":').Append($script:SeqNumber)
     [void]$sb.Append(',"full":').Append($isFullNum)
     [void]$sb.Append(',"colMs":').Append($colMs)
     [void]$sb.Append(',"svcMs":').Append($svcMs)

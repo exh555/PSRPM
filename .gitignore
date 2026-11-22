@@ -1,5 +1,6 @@
 # AI Agent & Assistant metadata
 .agent/
+.impeccable/
 
 # OS-specific files
 Thumbs.db

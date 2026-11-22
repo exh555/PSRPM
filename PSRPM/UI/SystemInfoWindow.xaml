@@ -262,7 +262,10 @@
                                 <ColumnDefinition Width="10"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="CPU Usage" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,0,0,4">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding ChartTimeSpanLabel}" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                                <TextBlock Text="CPU Usage" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </DockPanel>
                             <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}">
                                 <Viewbox Stretch="Fill">
                                     <Canvas Width="44" Height="120" ClipToBounds="True">
@@ -284,6 +287,7 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
+                                        <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                         <Polygon Points="{Binding SysCpuFillPoints}" Fill="{DynamicResource BrushGaugeCpuArea}" IsHitTestVisible="False"/>
                                         <Polyline Points="{Binding SysCpuPoints}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                         <Polygon Points="{Binding SysKernelFillPoints}" Fill="{DynamicResource BrushGaugeKernelArea}" IsHitTestVisible="False"/>
@@ -327,6 +331,7 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
+                                        <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                         <Polygon Points="{Binding SysCommitFillPoints}" Fill="{DynamicResource BrushGaugeCommitArea}" IsHitTestVisible="False"/>
                                         <Polyline Points="{Binding SysCommitPoints}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="1.2" IsHitTestVisible="False"/>
                                         <Line x:Name="CrosshairQuadCommit" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
@@ -377,6 +382,7 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
+                                        <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                         <Polygon Points="{Binding SysRamFillPoints}" Fill="{DynamicResource BrushGaugeRamArea}" IsHitTestVisible="False"/>
                                         <Polyline Points="{Binding SysRamPoints}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="1.2" IsHitTestVisible="False"/>
                                         <Line x:Name="CrosshairQuadRam" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
@@ -418,6 +424,7 @@
                                         <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
                                         <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.7"/>
+                                        <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                         <Polygon Points="{Binding SysIoFillPoints}" Fill="{DynamicResource BrushGaugeIoReadArea}" IsHitTestVisible="False"/>
                                         <Polyline Points="{Binding SysIoPoints}" Stroke="{DynamicResource BrushGaugeIoReadStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                         <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="{DynamicResource BrushGaugeIoWriteArea}" IsHitTestVisible="False"/>
@@ -468,7 +475,10 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="CPU" FontWeight="SemiBold" Margin="6,0,0,4"/>
+                    <DockPanel Grid.Row="0" Margin="6,0,0,4">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding ChartTimeSpanLabel}" FontSize="10.5" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" Visibility="{Binding SingleCpuGraphVisibility}"/>
+                        <TextBlock Text="CPU" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </DockPanel>
 
                     <!-- Upper CPU Gauge + Chart Area -->
                     <Grid Grid.Row="1">
@@ -492,6 +502,11 @@
                             </Viewbox>
                         </Border>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding CpuGaugeText}" HorizontalAlignment="Center" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Grid Grid.Row="1" Grid.Column="2" Margin="0,2,0,0" Visibility="{Binding SingleCpuGraphVisibility}">
+                            <TextBlock Text="{Binding ChartAxisLeftLabel}" HorizontalAlignment="Left" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="{Binding ChartAxisMidLabel}" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="Now" HorizontalAlignment="Right" FontSize="10" Foreground="{DynamicResource BrushTextSecondary}"/>
+                        </Grid>
 
                         <!-- Combined Single CPU History Chart -->
                         <Border x:Name="BorderSysCpuChart" Grid.Row="0" Grid.Column="2" Style="{StaticResource ChartBorder}" Visibility="{Binding SingleCpuGraphVisibility}">
@@ -506,6 +521,7 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
+                                    <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysCpuFillPoints}" Fill="{DynamicResource BrushGaugeCpuArea}" IsHitTestVisible="False"/>
                                     <Polyline Points="{Binding SysCpuPoints}" Stroke="{DynamicResource BrushGaugeCpuStroke}" StrokeThickness="1.0" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysKernelFillPoints}" Fill="{DynamicResource BrushGaugeKernelArea}" IsHitTestVisible="False"/>
@@ -645,7 +661,10 @@
                             <ColumnDefinition Width="12"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Text="System Commit" FontWeight="SemiBold" Margin="6,0,0,3"/>
+                        <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Margin="6,0,0,3">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding ChartTimeSpanLabel}" FontSize="10.5" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="System Commit" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </DockPanel>
                         <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource ChartBorder}" Margin="6,0,0,0">
                             <Viewbox Stretch="Fill">
                                 <Canvas Width="44" Height="120" ClipToBounds="True">
@@ -666,6 +685,7 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
+                                    <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysCommitFillPoints}" Fill="{DynamicResource BrushGaugeCommitArea}" IsHitTestVisible="False"/>
                                     <Polyline Points="{Binding SysCommitPoints}" Stroke="{DynamicResource BrushGaugeCommitStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                     <Line x:Name="CrosshairMemCommit" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
@@ -695,6 +715,11 @@
                             </Viewbox>
                         </Border>
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding RamGaugeText}" HorizontalAlignment="Center" Margin="6,2,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Grid Grid.Row="2" Grid.Column="2" Margin="0,2,0,0">
+                            <TextBlock Text="{Binding ChartAxisLeftLabel}" HorizontalAlignment="Left" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="{Binding ChartAxisMidLabel}" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="Now" HorizontalAlignment="Right" FontSize="10" Foreground="{DynamicResource BrushTextSecondary}"/>
+                        </Grid>
                         <Border x:Name="BorderMemRamChart" Grid.Row="1" Grid.Column="2" Style="{StaticResource ChartBorder}">
                             <Viewbox Stretch="Fill">
                                 <Canvas x:Name="CanvasMemRam" Width="360" Height="120" ClipToBounds="True" Background="Transparent">
@@ -707,6 +732,7 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
+                                    <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysRamFillPoints}" Fill="{DynamicResource BrushGaugeRamArea}" IsHitTestVisible="False"/>
                                     <Polyline Points="{Binding SysRamPoints}" Stroke="{DynamicResource BrushGaugeRamStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                     <Line x:Name="CrosshairMemRam" X1="0" Y1="0" X2="0" Y2="120" Stroke="{DynamicResource BrushAccent}" StrokeThickness="1.2" Opacity="0.85" Visibility="Collapsed" IsHitTestVisible="False"/>
@@ -845,7 +871,10 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="I/O Bytes History (Blue: Read + Write + Other | Pink: Write + Other)" FontWeight="SemiBold" Margin="6,0,0,4"/>
+                    <DockPanel Grid.Row="0" Margin="6,0,0,4">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding ChartTimeSpanLabel}" FontSize="10.5" Foreground="{DynamicResource BrushTextMuted}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                        <TextBlock Text="I/O Bytes History (Blue: Read + Write + Other | Pink: Write + Other)" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </DockPanel>
 
                     <Grid Grid.Row="1" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
@@ -865,6 +894,11 @@
                             </Viewbox>
                         </Border>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding IoGaugeText}" HorizontalAlignment="Center" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Grid Grid.Row="1" Grid.Column="2" Margin="0,2,0,0">
+                            <TextBlock Text="{Binding ChartAxisLeftLabel}" HorizontalAlignment="Left" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="{Binding ChartAxisMidLabel}" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="Now" HorizontalAlignment="Right" FontSize="10" Foreground="{DynamicResource BrushTextSecondary}"/>
+                        </Grid>
                         <Border x:Name="BorderSysIoChart" Grid.Row="0" Grid.Column="2" Style="{StaticResource ChartBorder}">
                             <Viewbox Stretch="Fill">
                                 <Canvas x:Name="CanvasSysIo" Width="360" Height="120" ClipToBounds="True" Background="Transparent">
@@ -877,6 +911,7 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
+                                    <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysIoFillPoints}" Fill="{DynamicResource BrushGaugeIoReadArea}" IsHitTestVisible="False"/>
                                     <Polyline Points="{Binding SysIoPoints}" Stroke="{DynamicResource BrushGaugeIoReadStroke}" StrokeThickness="1.1" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysIoWriteFillPoints}" Fill="{DynamicResource BrushGaugeIoWriteArea}" IsHitTestVisible="False"/>
@@ -950,6 +985,7 @@
                     <!-- Chart Title & Theme-Consistent Series Legend -->
                     <DockPanel Grid.Row="0" Margin="6,0,0,6">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ChartTimeSpanLabel}" Foreground="{DynamicResource BrushTextMuted}" FontSize="10.5" Margin="0,0,12,0" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
                             <Rectangle Width="10" Height="10" Fill="{DynamicResource BrushNetRxStroke}" RadiusX="1.5" RadiusY="1.5" Margin="0,0,5,0" VerticalAlignment="Center"/>
                             <TextBlock Text="Receive (Rx)" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,0,12,0" VerticalAlignment="Center"/>
                             <Rectangle Width="10" Height="10" Fill="{DynamicResource BrushNetTxStroke}" RadiusX="1.5" RadiusY="1.5" Margin="0,0,5,0" VerticalAlignment="Center"/>
@@ -958,7 +994,7 @@
                         <TextBlock Text="Network Interface Throughput History (Auto-Scaled Total &amp; Split Rx / Tx)" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </DockPanel>
 
-                    <!-- Gauge + 240-Sample Rx/Tx Chart + Dynamic Scale Axis -->
+                    <!-- Gauge + 360-Sample (6-Min @ 1s) Rx/Tx Chart + Dynamic Scale Axis -->
                     <Grid Grid.Row="1" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="56"/>
@@ -979,6 +1015,11 @@
                             </Viewbox>
                         </Border>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding NetGaugeText}" HorizontalAlignment="Center" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
+                        <Grid Grid.Row="1" Grid.Column="2" Margin="0,2,0,0">
+                            <TextBlock Text="{Binding ChartAxisLeftLabel}" HorizontalAlignment="Left" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="{Binding ChartAxisMidLabel}" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource BrushTextMuted}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="Now" HorizontalAlignment="Right" FontSize="10" Foreground="{DynamicResource BrushTextSecondary}"/>
+                        </Grid>
 
                         <Border x:Name="BorderSysNetChart" Grid.Row="0" Grid.Column="2" Style="{StaticResource ChartBorder}">
                             <Viewbox Stretch="Fill">
@@ -992,6 +1033,7 @@
                                     <Line X1="0" Y1="84" X2="360" Y2="84" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="96" X2="360" Y2="96" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
                                     <Line X1="0" Y1="108" X2="360" Y2="108" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6"/>
+                                    <Path Data="M 60,0 L 60,120 M 120,0 L 120,120 M 180,0 L 180,120 M 240,0 L 240,120 M 300,0 L 300,120" Stroke="{DynamicResource BrushSparkGrid}" StrokeThickness="0.6" Opacity="0.7" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysNetRxFillPoints}" Fill="{DynamicResource BrushNetRxFill}" IsHitTestVisible="False"/>
                                     <Polyline Points="{Binding SysNetRxPoints}" Stroke="{DynamicResource BrushNetRxStroke}" StrokeThickness="1.2" IsHitTestVisible="False"/>
                                     <Polygon Points="{Binding SysNetTxFillPoints}" Fill="{DynamicResource BrushNetTxFill}" IsHitTestVisible="False"/>

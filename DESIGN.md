@@ -129,9 +129,9 @@ PSPRM rejects Unicode box-drawing characters in favor of resolution-independent 
   ```
 
 ### Vector Node Expanders
-- **Collapsed Node** (`+`): Chevron pointing right `M 3,1 L 8,6 L 3,11`.
-- **Expanded Node** (`-`): Chevron pointing down `M 1,3 L 6,8 L 11,3`.
-- **Indentation Depth**: Node indent is strictly `Level * 16px`.
+- **Collapsed Node** (`+`): `9x9` vector box with centered plus cross `M 1,3.5 L 6,3.5 M 3.5,1 L 3.5,6`.
+- **Expanded Node** (`-`): `9x9` vector box with centered minus bar `M 1,3.5 L 6,3.5`.
+- **Indentation Depth**: Process Explorer-aligned uniform icon-width slot grid `(Level + 1) * 16px` for both parent and leaf nodes (with optional `View -> Show Tree Lines` toggle).
 
 ---
 
@@ -155,8 +155,8 @@ The System Information window faithfully reproduces Sysinternals Process Explore
 ```
 
 ### Chart Coordinate System & Curves
-- **Canvas Size**: Standardized `360 x 120` coordinate space (`Viewbox`).
-- **History Depth**: Exactly `240` points (4 minutes of 1-second telemetry ticks).
+- **Canvas Size**: Standardized `360 x 120` coordinate space (`Viewbox`) with subtle 1-minute vertical gridlines (`x = 60, 120, 180, 240, 300`) matching exact 1:1 sample spacing.
+- **History Depth**: Exactly `360` points (6 minutes of 1-second telemetry ticks).
 - **Theme-Bound Area Curves (`{DynamicResource BrushGauge*}`)**:
   - **CPU Graph**: Total stroke/fill (`BrushGaugeCpuStroke` / `BrushGaugeCpuFill`, Light `#16A34A` / `#3316A34A`) overlaying Kernel stroke/fill (`BrushGaugeKernelStroke` / `BrushGaugeKernelFill`, Light `#DC2626` / `#44DC2626`).
   - **Commit Graph**: Olive/gold commit stroke/fill (`BrushGaugeCommitStroke` / `BrushGaugeCommitFill`).

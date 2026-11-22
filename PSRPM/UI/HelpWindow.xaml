@@ -177,7 +177,7 @@
         <Border Grid.Row="0" Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,0,0,10">
             <DockPanel>
                 <Border DockPanel.Dock="Right" Background="{DynamicResource BrushBadgeBg}" CornerRadius="3" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.15.1" Foreground="{DynamicResource BrushBadgeFg}" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock x:Name="TxtHeaderBadge" Text="v1.16.0" Foreground="{DynamicResource BrushBadgeFg}" FontSize="11" FontWeight="Bold"/>
                 </Border>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Tachometer Vector Icon -->
@@ -208,6 +208,9 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -249,6 +252,15 @@
 
                                 <Border Grid.Row="9" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+D" Style="{StaticResource KeyBadgeText}"/></Border>
                                 <TextBlock Grid.Row="9" Grid.Column="1" Text="Cycle through themes: Clean Light, Dark Mode, Tokyo Night, Tokyo Night Light, Classic, and High-Contrast" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="10" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+Shift+C" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="10" Grid.Column="1" Text="Toggle Compact Density mode (14px ultra-compact rows, slim toolbar &amp; headers, auto-hidden single-host tab strip)" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="11" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl+Shift+M" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="11" Grid.Column="1" Text="Toggle Mini Monitor mode (chromeless pinned always-on-top widget with live CPU/RAM HUD)" Style="{StaticResource ShortcutDescText}"/>
+
+                                <Border Grid.Row="12" Grid.Column="0" Style="{StaticResource KeyBadge}"><TextBlock Text="Ctrl++ / - / 0" Style="{StaticResource KeyBadgeText}"/></Border>
+                                <TextBlock Grid.Row="12" Grid.Column="1" Text="Scale UI zoom up/down (75%, 100%, 125%, 150%, 175%, 200%) or reset to 100%" Style="{StaticResource ShortcutDescText}"/>
                             </Grid>
                         </Border>
 
@@ -510,7 +522,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="PowerShell Remote Process Manager" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource BrushTextPrimary}"/>
                                         <Border Background="{DynamicResource BrushToolbarBg}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1" CornerRadius="2" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtAboutVersion" Text="1.15.1" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="TxtAboutVersion" Text="1.16.0" Foreground="{DynamicResource BrushAccent}" FontSize="11" FontWeight="Bold"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="100% Fileless Sysinternals Process Explorer over WinRM &amp; Localhost" Foreground="{DynamicResource BrushTextSecondary}" FontSize="11" Margin="0,2,0,4"/>

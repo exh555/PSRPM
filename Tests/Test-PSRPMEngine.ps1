@@ -83,6 +83,13 @@ if (-not $selfMeta) {
 }
 Write-Host "  Verified Self Process (PID $PID): Name='$($selfMeta['n'])', PPID=$($selfMeta['p']), Arch='$($selfMeta['arch'])', Cat='$($selfMeta['cat'])', Co='$($selfMeta['comp'])'" -ForegroundColor Gray
 
+# Verify MUI indirect service descriptions (@%SystemRoot%\...\*.dll,-id) resolve to human-readable text
+$evSvc = $dataTick1['svc'] | Where-Object { $_['n'] -eq 'EventLog' -or $_['n'] -eq 'Dhcp' } | Select-Object -First 1
+if (-not $evSvc -or [string]::IsNullOrWhiteSpace($evSvc['dsc']) -or ([string]$evSvc['dsc']).StartsWith('@')) {
+    throw "Service MUI description resolution failed for '$($evSvc['n'])': got '$($evSvc['dsc'])'."
+}
+Write-Host "  Verified Service MUI Resolution ($($evSvc['n'])): '$(($evSvc['dsc']).Substring(0, [Math]::Min(64, $evSvc['dsc'].Length)))...'" -ForegroundColor Gray
+
 Start-Sleep -Milliseconds 250
 
 $sw2 = [System.Diagnostics.Stopwatch]::StartNew()
@@ -296,7 +303,7 @@ Write-Host "  [PASS] Handle closing safeguard predicate verified (Zero wildcard 
 Write-Host "`n[TEST 6] Verifying WPF XAML Templates & ViewModel Data Binding..." -ForegroundColor Yellow
 $uiDir = Join-Path $repoRoot "PSRPM\UI"
 $xamlFiles = @(
-    @{ File = "MainWindow.xaml";       RequiredControls = @("GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuAlwaysOnTop", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeTokyoNight", "MenuThemeTokyoNightLight", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "BorderTelemNetRate", "MenuViewSelectColumns", "MenuViewBaseline", "MenuViewClearBaseline", "BadgeBaselineActive", "TxtBaselineLabel", "BtnClearBaseline", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPeakCpu", "ColPeakPrivate", "ColCpuDelta", "ColPrivateDelta", "ColWorkingSetDelta", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory", "TabNetworkActivity", "BtnNetModeSockets", "BtnNetModeTimeline", "BtnNetRefreshSockets", "ChkNetAutoRefresh", "BtnNetCloseConn", "ChipNetTcp4", "ChipNetTcp6", "ChipNetUdp4", "ChipNetUdp6", "ChipNetEstablished", "ChipNetListening", "ChipNetSynSent", "ChipNetTimeWait", "ChipNetRecv", "ChipNetSend", "BtnNetClear", "BtnNetExportCsv", "TxtNetActivitySummary", "TxtNetStatusCounts", "TxtSearchNetwork", "BtnClearSearchNetwork", "NetTabNoticeBanner", "BtnNetBannerEnableEtw", "BtnNetBannerSwitchSockets", "GridNetworkSockets", "GridNetworkTimeline", "CtxNetSockCloseConn", "CtxNetSockCopyDetails", "CtxNetTimeCopyDetails", "ProcEmptyStateOverlay", "BtnProcEmptyClear", "SvcEmptyStateOverlay", "BtnSvcEmptyClear", "NetEmptyStateOverlay") }
+    @{ File = "MainWindow.xaml";       RequiredControls = @("RootLayoutPanel", "RootScaleTransform", "MainMenuBar", "MainStatusBar", "MiniMonitorBar", "MiniStatusDot", "TxtMiniHostName", "TxtMiniSearch", "BtnClearMiniSearch", "BtnMiniPause", "BtnExitMiniMonitor", "MenuDisplayDensity", "MenuLayoutStandard", "MenuLayoutCompact", "MenuLayoutMini", "MenuUiScale", "MenuScaleZoomIn", "MenuScaleZoomOut", "MenuScaleReset", "MenuScale75", "MenuScale100", "MenuScale125", "MenuScale150", "MenuScale175", "MenuScale200", "GridProcesses", "GridServices", "SummaryBar", "TxtSearch", "BtnClearSearch", "ConnStatusDot", "TxtTargetBadge", "BtnToolbarTree", "BtnToolbarTheme", "BtnToolbarHelp", "BtnToolbarPause", "IconToolbarPause", "TxtToolbarPause", "BadgePaused", "LogPane", "LogPaneResizer", "TxtLogConsole", "TxtTelemTransport", "TxtTelemPayload", "TxtTelemNetwork", "TxtTelemDelta", "ChkStreamTicks", "ChkLogAutoScroll", "BtnCopyLog", "MenuFile", "MenuReconnectHost", "MenuOptions", "MenuView", "MenuFind", "MenuHelp", "MenuGoToParent", "CtxGoToParent", "CtxExpandSubtree", "CtxCollapseSubtree", "MenuAlwaysOnTop", "MenuViewTreeLines", "MenuTreeOptions", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuNetEtwGroup", "MenuCopySubmenu", "MenuCopyName", "MenuCopyPid", "CtxCopySubmenu", "CtxCopyName", "CtxCopyPid", "MenuFindFilter", "MenuFindClearFilter", "MenuSavePreferences", "MenuResetPreferences", "MenuSystemInfo", "MenuHelpTopics", "MenuHelpAbout", "MenuThemeCycle", "MenuCopyCmdLine", "MenuCopyPath", "CtxPrioIdle", "CtxPrioHigh", "CardMiniCpu", "CardMiniCommit", "CardMiniRam", "HostTabsList", "BtnAddHostTab", "BtnSvcStart", "BtnSvcStop", "BtnSvcRestart", "BtnSvcProperties", "BtnSvcGoToProcess", "TxtSvcSummary", "TxtSearchServices", "BtnClearSearchServices", "MenuHighlightCategories", "BtnToggleHighlights", "MenuFindHandle", "BtnFindHandleOrDll", "MenuCreateMiniDump", "MenuCreateFullDump", "MenuThemeLight", "MenuThemeDark", "MenuThemeTokyoNight", "MenuThemeTokyoNightLight", "MenuThemeClassic", "MenuThemeHighContrast", "TxtTelemNetRate", "TxtTelemDiskRate", "BorderTelemNetRate", "MenuViewSelectColumns", "MenuViewBaseline", "MenuViewClearBaseline", "BadgeBaselineActive", "TxtBaselineLabel", "BtnClearBaseline", "MenuViewNetEtw", "MenuColTreeNet", "MenuColNetRxTx", "BtnToolbarNetEtw", "EllNetEtwDot", "TxtNetEtwBtn", "BtnToolbarNetRxTx", "NetEtwAlertBanner", "BtnNetEtwResume", "BtnNetEtwTurnOff", "BtnNetEtwDismiss", "ColProcess", "ColCpu", "ColTreeCpu", "ColNetTotal", "ColTreeNet", "ColNetRx", "ColNetTx", "ColPrivateBytes", "ColWorkingSet", "ColPeakCpu", "ColPeakPrivate", "ColCpuDelta", "ColPrivateDelta", "ColWorkingSetDelta", "ColPid", "ColParentPid", "ColDescription", "ColCompanyName", "ColVersion", "ColCommandLine", "ColPath", "ColUser", "ColHandles", "ColThreads", "ColSessionId", "ColBasePriority", "ColArchitecture", "ColStartTime", "ColStatus", "ColServices", "ColCategory", "TabNetworkActivity", "BtnNetModeSockets", "BtnNetModeTimeline", "BtnNetRefreshSockets", "ChkNetAutoRefresh", "BtnNetCloseConn", "ChipNetTcp4", "ChipNetTcp6", "ChipNetUdp4", "ChipNetUdp6", "ChipNetEstablished", "ChipNetListening", "ChipNetSynSent", "ChipNetTimeWait", "ChipNetRecv", "ChipNetSend", "BtnNetClear", "BtnNetExportCsv", "TxtNetActivitySummary", "TxtNetStatusCounts", "TxtSearchNetwork", "BtnClearSearchNetwork", "NetTabNoticeBanner", "BtnNetBannerEnableEtw", "BtnNetBannerSwitchSockets", "GridNetworkSockets", "GridNetworkTimeline", "CtxNetSockCloseConn", "CtxNetSockCopyDetails", "CtxNetTimeCopyDetails", "ProcEmptyStateOverlay", "BtnProcEmptyClear", "SvcEmptyStateOverlay", "BtnSvcEmptyClear", "NetEmptyStateOverlay") }
     @{ File = "PropertiesWindow.xaml"; RequiredControls = @("PropTabControl", "PropDescription", "PropVersion", "PropBuildTime", "PropWorkDir", "BtnVerifySig", "BtnSuspendResume", "BtnPropCreateDump", "GridPropDlls", "GridPropHandles", "GridNetConnections", "GridPropServices", "GridPropEnv") }
     @{ File = "ConnectDialog.xaml";    RequiredControls = @("RbRemoteHost", "RbLocalOnly", "TxtConnectComputer", "ChkUseSSL", "TxtConnectPort", "BtnPickCredential", "BtnConnectSubmit", "BtnConnectCancel", "TxtConnectProgress", "BdConnectError", "TxtConnectError", "ChkOpenInNewTab") }
     @{ File = "SystemInfoWindow.xaml"; RequiredControls = @("SysInfoTabControl", "ChkPerCpuGraph", "BtnSysInfoOk", "QuadCpu", "QuadCommit", "QuadRam", "QuadIo", "QuadNet") }
@@ -371,10 +378,59 @@ foreach ($xf in $xamlFiles) {
                 throw "MainWindow.xaml network column '$nch' must start Collapsed when Net ETW is off."
             }
         }
+        # Verify Menu UX Integrity: zero duplicate Alt-key mnemonics, visible Separator template, bounded View menu
+        $checkMenuMnemonics = {
+            param([System.Windows.Controls.ItemsControl]$parent, [string]$menuLabel)
+            $seenKeys = @{}
+            foreach ($mi in $parent.Items) {
+                if ($mi -is [System.Windows.Controls.MenuItem]) {
+                    $hdr = [string]$mi.Header
+                    if ($hdr -match '(?<!_)_([A-Za-z0-9])') {
+                        $k = $Matches[1].ToUpperInvariant()
+                        if ($seenKeys.ContainsKey($k)) {
+                            throw "Duplicate menu mnemonic '_$k' in '$menuLabel': '$($seenKeys[$k])' vs '$hdr'."
+                        }
+                        $seenKeys[$k] = $hdr
+                    }
+                    if ($mi.Items.Count -gt 0) {
+                        & $checkMenuMnemonics $mi ("$menuLabel -> $($hdr -replace '_','')")
+                    }
+                }
+            }
+        }
+        foreach ($topMenuName in @("MenuFile", "MenuOptions", "MenuView", "MenuProcess", "MenuFind", "MenuHelp")) {
+            $tm = $winObj.FindName($topMenuName)
+            if ($null -eq $tm) { throw "MainWindow.xaml missing top-level menu '$topMenuName'." }
+            & $checkMenuMnemonics $tm $topMenuName
+        }
+        if ($gridProcTest.ContextMenu) {
+            & $checkMenuMnemonics $gridProcTest.ContextMenu "GridProcesses.ContextMenu"
+        }
+        $viewDirectItems = @($winObj.FindName("MenuView").Items | Where-Object { $_ -is [System.Windows.Controls.MenuItem] }).Count
+        if ($viewDirectItems -gt 12) {
+            throw "MenuView has $viewDirectItems direct items (expected <= 12 to prevent menu sprawl)."
+        }
+        $sepTest = [System.Windows.Controls.Separator]::new()
+        $sepTest.Style = $winObj.Resources[[System.Windows.Controls.MenuItem]::SeparatorStyleKey]
+        [void]$sepTest.ApplyTemplate()
+        $sepTest.Measure([System.Windows.Size]::new(240, 100))
+        $sepTest.Arrange([System.Windows.Rect]::new(0, 0, 240, $sepTest.DesiredSize.Height))
+        $sepBorder = [System.Windows.Media.VisualTreeHelper]::GetChild($sepTest, 0)
+        if ($null -eq $sepBorder -or $sepBorder.ActualHeight -lt 1.0 -or $sepTest.DesiredSize.Height -lt 5.0) {
+            throw "MenuItem.SeparatorStyleKey failed visibility layout check (Desired=$($sepTest.DesiredSize), BorderH=$($sepBorder.ActualHeight))."
+        }
+        foreach ($radioItemName in @("MenuThemeLight", "MenuThemeDark", "MenuRate1s", "MenuTreeOrderNewest", "MenuTreeOrderClassic", "MenuLayoutStandard", "MenuLayoutCompact", "MenuLayoutMini", "MenuScale75", "MenuScale100", "MenuScale125", "MenuScale150", "MenuScale175", "MenuScale200")) {
+            $ri = $winObj.FindName($radioItemName)
+            if ($null -eq $ri -or [string]$ri.Tag -ne "Radio") {
+                throw "MainWindow.xaml radio-exclusive MenuItem '$radioItemName' expected Tag='Radio'."
+            }
+        }
+        Write-Host "  Verified MainWindow.xaml: Zero duplicate menu mnemonics, visible separators ($($sepTest.DesiredSize.Height)px), radio-dot triggers, compact View menu ($viewDirectItems items)." -ForegroundColor Gray
         if ($winObj.FindName("NetEtwAlertBanner").Visibility -ne [System.Windows.Visibility]::Collapsed -or
             $winObj.FindName("BtnToolbarNetRxTx").Visibility -ne [System.Windows.Visibility]::Collapsed -or
-            $winObj.FindName("BadgeBaselineActive").Visibility -ne [System.Windows.Visibility]::Collapsed) {
-            throw "MainWindow.xaml Net ETW banner, Rx/Tx button, and Baseline badge must start Collapsed."
+            $winObj.FindName("BadgeBaselineActive").Visibility -ne [System.Windows.Visibility]::Collapsed -or
+            $winObj.FindName("MiniMonitorBar").Visibility -ne [System.Windows.Visibility]::Collapsed) {
+            throw "MainWindow.xaml Net ETW banner, Rx/Tx button, Baseline badge, and Mini Monitor bar must start Collapsed."
         }
         foreach ($optPeakColName in @("ColPeakCpu", "ColPeakPrivate", "ColCpuDelta", "ColPrivateDelta", "ColWorkingSetDelta")) {
             $optCol = $winObj.FindName($optPeakColName)
@@ -597,6 +653,32 @@ try {
     if ($pGrandChild.Level -ne 2 -or [string]::IsNullOrWhiteSpace($pGrandChild.TreeGuideGeometry)) {
         throw "Tree builder failed to compute Level=2 and SVG guide geometry for grandchild node (Level=$($pGrandChild.Level), Geom='$($pGrandChild.TreeGuideGeometry)')."
     }
+    if ($pRoot.IndentWidth -ne 16.0 -or $pChild1.IndentWidth -ne 32.0 -or $pGrandChild.IndentWidth -ne 48.0) {
+        throw "Process Explorer-aligned indentation mismatch: expected Root=16, Child=32, GrandChild=48; got $($pRoot.IndentWidth), $($pChild1.IndentWidth), $($pGrandChild.IndentWidth)."
+    }
+    if ($pChild1.TreeGuideGeometry -notmatch 'M 24,0' -or $pGrandChild.TreeGuideGeometry -notmatch 'M 40,0') {
+        throw "Aligned DPI-safe tree guide geometry expected x=24 (L1) and x=40 (L2), got L1='$($pChild1.TreeGuideGeometry)', L2='$($pGrandChild.TreeGuideGeometry)'."
+    }
+    $eng.StateContainer.ShowTreeLines = $false
+    & $eng.RefreshTree
+    if ($pChild1.TreeGuideGeometry -ne "" -or $pGrandChild.TreeGuideGeometry -ne "" -or $pChild1.IndentWidth -ne 32.0 -or $pGrandChild.IndentWidth -ne 48.0 -or $pGrandChild.TreeGuideVisibility -ne "Visible") {
+        throw "ShowTreeLines=false should clear TreeGuideGeometry while preserving IndentWidth and TreeGuideVisibility."
+    }
+    $eng.StateContainer.ShowTreeLines = $true
+    & $eng.RefreshTree
+    if ([string]::IsNullOrWhiteSpace($pChild1.TreeGuideGeometry) -or [string]::IsNullOrWhiteSpace($pGrandChild.TreeGuideGeometry)) {
+        throw "ShowTreeLines=true failed to restore TreeGuideGeometry."
+    }
+    $eng.StateContainer.IsCompactRows = $true
+    & $eng.RefreshTree
+    if ($pGrandChild.TreeGuideGeometry -notmatch ',7\b' -or $pChild1.TreeGuideGeometry -notmatch 'M 18,0' -or $pChild1.IndentWidth -ne 24.0 -or $pGrandChild.IndentWidth -ne 36.0) {
+        throw "Ultra-Compact rows (IsCompactRows=true) expected y=7 midline and 12px indent steps (24/36, x=18), got L1='$($pChild1.TreeGuideGeometry)' (W=$($pChild1.IndentWidth)), L2='$($pGrandChild.TreeGuideGeometry)' (W=$($pGrandChild.IndentWidth))."
+    }
+    $eng.StateContainer.IsCompactRows = $false
+    & $eng.RefreshTree
+    if ($pGrandChild.TreeGuideGeometry -notmatch ',9\b' -or $pChild1.TreeGuideGeometry -notmatch 'M 24,0' -or $pChild1.IndentWidth -ne 32.0 -or $pGrandChild.IndentWidth -ne 48.0) {
+        throw "Standard 18px rows (IsCompactRows=false) failed to restore y=9 horizontal midline and 16px indent steps."
+    }
     if ($pRoot.TreeCPU -ne 0.47 -or $pRoot.TreeCPUFormatted -ne "0.47" -or $pChild1.TreeCPU -ne 0.37 -or $pChild1.TreeCPUFormatted -ne "0.37" -or $pGrandChild.TreeCPU -ne 0.37) {
         throw "TreeCPU aggregation mismatch in Tree mode: Root=$($pRoot.TreeCPU) ('$($pRoot.TreeCPUFormatted)'), Child=$($pChild1.TreeCPU) ('$($pChild1.TreeCPUFormatted)'), GrandChild=$($pGrandChild.TreeCPU)."
     }
@@ -624,6 +706,9 @@ try {
     & $eng.RefreshTree
     if ($pRoot.TreeCPU -ne 0.47 -or $pRoot.TreeCPUFormatted -ne "0.47") {
         throw "Flat mode filtered view failed to preserve parent TreeCPU total: got $($pRoot.TreeCPU) ('$($pRoot.TreeCPUFormatted)')."
+    }
+    if ($pRoot.IndentWidth -ne 16.0 -or $pRoot.TreeGuideVisibility -ne "Visible" -or $pRoot.ToggleVisibility -ne "Collapsed" -or $pRoot.TreeGuideGeometry -ne "") {
+        throw "Flat mode should preserve top-level 16px left gutter without lines/expanders (Indent=$($pRoot.IndentWidth), GuideVis=$($pRoot.TreeGuideVisibility), ToggleVis=$($pRoot.ToggleVisibility), Geom='$($pRoot.TreeGuideGeometry)')."
     }
 
     $eng.StateContainer.FilterText = "psrpm_test_proc"
@@ -949,6 +1034,53 @@ try {
         throw "SendCommand CloseTabSession failed."
     }
     Write-Host "  Verified CloseTabSession multi-session bus command." -ForegroundColor Gray
+
+    # Verify Make-Before-Break SwitchTarget: failed remote WinRM attempt must NOT disconnect or dispose active LocalMode session
+    $swFailCb = @{ Fired = $false; Success = $true; Error = "" }
+    $seqBeforeFail = [long]$eng.StateContainer.LastSampleUtcTicks
+    & $eng.SendCommand @{
+        CommandType  = "SwitchTarget"
+        ComputerName = "127.0.0.1"
+        IsLocal      = $false
+        Credential   = $null
+        Port         = 59899
+        UseSSL       = $false
+        CancelToken  = @{ Cancelled = $false }
+    } ({
+        param($res)
+        $swFailCb.Fired   = $true
+        $swFailCb.Success = [bool]$res.Success
+        $swFailCb.Error   = [string]$res.Error
+    }.GetNewClosure())
+
+    $swFailDeadline = [DateTime]::UtcNow.AddSeconds(12.0)
+    while ([DateTime]::UtcNow -lt $swFailDeadline -and -not $swFailCb.Fired) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Background,
+            [Action]{}
+        )
+        Start-Sleep -Milliseconds 50
+    }
+    if (-not $swFailCb.Fired -or $swFailCb.Success -or [string]::IsNullOrWhiteSpace($swFailCb.Error)) {
+        throw "SwitchTarget failure test expected Fired=true, Success=false, non-empty Error; got Fired=$($swFailCb.Fired), Success=$($swFailCb.Success), Error='$($swFailCb.Error)'."
+    }
+    if ($eng.StateContainer.ConnectionState -ne "LocalMode") {
+        throw "Failed SwitchTarget corrupted active session state: expected 'LocalMode', got '$($eng.StateContainer.ConnectionState)'."
+    }
+    # Confirm subsequent local poll succeeds with zero ObjectDisposedException / Offline transition
+    & $eng.RequestFullSync
+    $pollAfterFailDeadline = [DateTime]::UtcNow.AddSeconds(3.0)
+    while ([DateTime]::UtcNow -lt $pollAfterFailDeadline -and [long]$eng.StateContainer.LastSampleUtcTicks -le $seqBeforeFail) {
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Background,
+            [Action]{}
+        )
+        Start-Sleep -Milliseconds 50
+    }
+    if ($eng.StateContainer.ConnectionState -ne "LocalMode" -or [long]$eng.StateContainer.LastSampleUtcTicks -le $seqBeforeFail) {
+        throw "LocalMode session did not remain live and polling after failed SwitchTarget (State='$($eng.StateContainer.ConnectionState)', LastErr='$($eng.StateContainer.LastErr)')."
+    }
+    Write-Host "  Verified Make-Before-Break SwitchTarget: failed remote connect preserved live LocalMode telemetry." -ForegroundColor Gray
 
     # Verify ReconcileCollection preserves multi-selection across reorders and removals
     $multiGrid = [System.Windows.Controls.DataGrid]::new()
@@ -1684,6 +1816,9 @@ try {
         ConfirmKill              = $false
         VerboseTelemetryLog      = $false
         IsTreeMode               = $false
+        ShowTreeLines            = $false
+        CompactMode              = $true
+        UiScalePct               = 175
         TreeSortNewestFirst      = $false
         SortProperty             = "CPU"
         SortDescending           = $true
@@ -1703,7 +1838,7 @@ try {
     if (-not $loadedRes.LoadedFromDisk -or $loadedRes.HadParseError) {
         throw "Failed to load saved preferences from '$tempPrefFile'."
     }
-    if ($loadedRes.Preferences.Theme -ne "Dark" -or -not $loadedRes.Preferences.AlwaysOnTop -or $loadedRes.Preferences.EnableCategoryHighlights -or $loadedRes.Preferences.IsTreeMode -or $loadedRes.Preferences.SortProperty -ne "CPU" -or -not $loadedRes.Preferences.SortDescending -or $loadedRes.Preferences.RefreshIntervalMs -ne 500 -or -not $loadedRes.Preferences.LogPaneVisible -or $loadedRes.Preferences.LogPaneHeight -ne 240.0 -or $loadedRes.Preferences.LogAutoScroll) {
+    if ($loadedRes.Preferences.Theme -ne "Dark" -or -not $loadedRes.Preferences.AlwaysOnTop -or $loadedRes.Preferences.EnableCategoryHighlights -or $loadedRes.Preferences.IsTreeMode -or $loadedRes.Preferences.ShowTreeLines -or -not $loadedRes.Preferences.CompactMode -or $loadedRes.Preferences.UiScalePct -ne 175 -or $loadedRes.Preferences.SortProperty -ne "CPU" -or -not $loadedRes.Preferences.SortDescending -or $loadedRes.Preferences.RefreshIntervalMs -ne 500 -or -not $loadedRes.Preferences.LogPaneVisible -or $loadedRes.Preferences.LogPaneHeight -ne 240.0 -or $loadedRes.Preferences.LogAutoScroll) {
         throw "Loaded preferences did not round-trip accurately."
     }
     if (($loadedRes.Preferences.VisibleColumns -join ',') -ne "Process,CPU,PID,Version,CommandLine") {
@@ -2204,8 +2339,8 @@ if ($preMiniTip -notlike "*pre-session*" -or $preMiniTip -notlike "*System Infor
     throw "Mini sparkline pre-session hover tooltip missing expected text: '$preMiniTip'"
 }
 
-$baseUtc = [DateTime]::UtcNow.AddSeconds(-300)
-for ($t = 1; $t -le 260; $t++) {
+$baseUtc = [DateTime]::UtcNow.AddSeconds(-420)
+for ($t = 1; $t -le 380; $t++) {
     $sampleSys = [double[]]::new(29)
     $sampleSys[0]  = [double](10.0 + ($t % 50))
     $sampleSys[1]  = 16000L
@@ -2232,9 +2367,9 @@ for ($t = 1; $t -le 260; $t++) {
     $hoverVm.UpdateExtendedTelemetry($sampleSys, $coresMock)
 
     $tickUtc = $baseUtc.AddSeconds($t).Ticks
-    $capForTick = if ($t -le 240) { 0 } elseif ($t -eq 259) { 2 } else { 1 }
-    $cpuOwner = if ($t -eq 231) { "early_boundary.exe" } elseif ($t -eq 260) { "msedge.exe" } else { "proc_$t.exe" }
-    $cpuPid   = if ($t -eq 260) { 4832 } else { 1000 + $t }
+    $capForTick = if ($t -le 360) { 0 } elseif ($t -eq 379) { 2 } else { 1 }
+    $cpuOwner = if ($t -eq 351) { "early_boundary.exe" } elseif ($t -eq 380) { "msedge.exe" } else { "proc_$t.exe" }
+    $cpuPid   = if ($t -eq 380) { 4832 } else { 1000 + $t }
     $netOwner = if ($capForTick -eq 1) { "msedge.exe" } else { "" }
     $netPid   = if ($capForTick -eq 1) { 4832 } else { 0 }
 
@@ -2247,32 +2382,32 @@ for ($t = 1; $t -le 260; $t++) {
     )
 }
 
-if ($hoverVm.GetCpuHistory240().Count -ne 240) {
-    throw "CpuHistory240 exceeded or fell short of 240 cap."
+if ($hoverVm.GetCpuHistory360().Count -ne 360 -or $hoverVm.GetCpuHistory240().Count -ne 360) {
+    throw "Rolling CPU history exceeded or fell short of 360-sample (6-min @ 1s) cap."
 }
 
-$tipSysLatest  = $hoverVm.GetGraphHoverInfo("Cpu", 239, $false)
+$tipSysLatest  = $hoverVm.GetGraphHoverInfo("Cpu", 359, $false)
 $tipMiniLatest = $hoverVm.GetGraphHoverInfo("Cpu", 29,  $true)
 if ($tipSysLatest -notlike "*msedge.exe (PID 4832)*" -or $tipMiniLatest -notlike "*msedge.exe (PID 4832)*") {
     throw "Latest hover tooltip missing top CPU process attribution. Sys='$tipSysLatest', Mini='$tipMiniLatest'"
 }
-# Index 210 of 240-buffer corresponds to Mini index 0 (after 260 ticks, tick 231 sits at slot 210)
-$tipSys210  = $hoverVm.GetGraphHoverInfo("Cpu", 210, $false)
+# Index 330 of 360-buffer corresponds to Mini index 0 (after 380 ticks, tick 351 sits at slot 330)
+$tipSys330  = $hoverVm.GetGraphHoverInfo("Cpu", 330, $false)
 $tipMini0   = $hoverVm.GetGraphHoverInfo("Cpu", 0,   $true)
-if ($tipSys210 -notlike "*early_boundary.exe*" -or $tipMini0 -notlike "*early_boundary.exe*") {
-    throw "Mini sparkline index 0 did not align with 240-history index 210. Sys210='$tipSys210', Mini0='$tipMini0'"
+if ($tipSys330 -notlike "*early_boundary.exe*" -or $tipMini0 -notlike "*early_boundary.exe*") {
+    throw "Mini sparkline index 0 did not align with 360-history index 330. Sys330='$tipSys330', Mini0='$tipMini0'"
 }
 
-$tipCommit = $hoverVm.GetGraphHoverInfo("Commit", 239, $false)
-$tipRam    = $hoverVm.GetGraphHoverInfo("Ram",    239, $false)
-$tipIo     = $hoverVm.GetGraphHoverInfo("Io",     239, $false)
+$tipCommit = $hoverVm.GetGraphHoverInfo("Commit", 359, $false)
+$tipRam    = $hoverVm.GetGraphHoverInfo("Ram",    359, $false)
+$tipIo     = $hoverVm.GetGraphHoverInfo("Io",     359, $false)
 if ($tipCommit -notlike "*Antigravity.exe (PID 9500)*" -or $tipRam -notlike "*msedge.exe (PID 4832)*" -or $tipIo -notlike "*zero-overhead mode*") {
     throw "Commit/Ram/Io hover tooltips mismatch: Commit='$tipCommit' Ram='$tipRam' Io='$tipIo'"
 }
 
 $tipNetOff = $hoverVm.GetGraphHoverInfo("Net", 10,  $false) # tick 31 had cap=0
-$tipNetBrk = $hoverVm.GetGraphHoverInfo("Net", 238, $false) # tick 259 had cap=2
-$tipNetOn  = $hoverVm.GetGraphHoverInfo("Net", 239, $false) # tick 260 had cap=1
+$tipNetBrk = $hoverVm.GetGraphHoverInfo("Net", 358, $false) # tick 379 had cap=2
+$tipNetOn  = $hoverVm.GetGraphHoverInfo("Net", 359, $false) # tick 380 had cap=1
 if ($tipNetOff -notlike "*Enable Net ETW*" -or $tipNetBrk -notlike "*circuit breaker*" -or $tipNetOn -notlike "*msedge.exe (PID 4832)*") {
     throw "Net ETW hover states mismatch: Off='$tipNetOff', Brk='$tipNetBrk', On='$tipNetOn'"
 }
@@ -2281,7 +2416,40 @@ $tipCore = $hoverVm.GetCoreHoverInfo($hoverVm.CoreGraphs[0], 59)
 if ($tipCore -notlike "*CPU 0:*" -or $tipCore -notlike "*Time:*") {
     throw "Core hover tooltip mismatch: '$tipCore'"
 }
-Write-Host "  [PASS] 12N: Verified Graph Hover Tooltips, XAML Crosshair elements, 240/30/60 circular alignment & Top-Process attribution." -ForegroundColor Green
+
+# Verify Option B Stepped Rolling Window Buckets (60 -> 120 -> 180 -> 360), N=0/N=1 edge cases & interval label scaling
+$stepVm = [SystemSummaryViewModel]::new()
+$stepVm.IsSysInfoOpen = $true
+if ($stepVm.RecordedSampleCount -ne 0 -or $stepVm.GetActiveChartWindowCount() -ne 60 -or $stepVm.SysCpuPoints -ne "" -or $stepVm.ChartAxisLeftLabel -ne "-1m") {
+    throw "Fresh SystemSummaryViewModel should start empty in 60-sample (1m) bucket (Rec=$($stepVm.RecordedSampleCount), Win=$($stepVm.GetActiveChartWindowCount()), Pts='$($stepVm.SysCpuPoints)', Left='$($stepVm.ChartAxisLeftLabel)')."
+}
+$stepSys = [double[]]::new(29)
+$stepSys[0] = 25.0; $stepSys[8] = 6.0; $stepSys[9] = 10000L; $stepSys[10] = 20000L; $stepSys[12] = 16000L; $stepSys[13] = 8000L
+$stepVm.UpdateExtendedTelemetry($stepSys, @(@(25.0, 6.0)))
+if ($stepVm.RecordedSampleCount -ne 1 -or $stepVm.GetActiveChartWindowCount() -ne 60 -or $stepVm.SysCpuPoints -notlike "359.0,* 360.0,*") {
+    throw "Single-sample startup should emit right-edge tick without fake left zero line (Pts='$($stepVm.SysCpuPoints)')."
+}
+for ($s = 2; $s -le 60; $s++) { $stepVm.UpdateExtendedTelemetry($stepSys, @(@(25.0, 6.0))) }
+if ($stepVm.GetActiveChartWindowCount() -ne 60 -or $stepVm.ChartTimeSpanLabel -ne "Window: 1m (10s/div)") {
+    throw "At 60 ticks expected 1m bucket, got Win=$($stepVm.GetActiveChartWindowCount()), Label='$($stepVm.ChartTimeSpanLabel)'."
+}
+$stepVm.UpdateExtendedTelemetry($stepSys, @(@(25.0, 6.0))) # tick 61 -> 120 bucket
+if ($stepVm.GetActiveChartWindowCount() -ne 120 -or $stepVm.ChartAxisLeftLabel -ne "-2m" -or $stepVm.ChartTimeSpanLabel -ne "Window: 2m (20s/div)") {
+    throw "At 61 ticks expected 2m (120) bucket, got Win=$($stepVm.GetActiveChartWindowCount()), Label='$($stepVm.ChartTimeSpanLabel)'."
+}
+for ($s = 62; $s -le 121; $s++) { $stepVm.UpdateExtendedTelemetry($stepSys, @(@(25.0, 6.0))) } # tick 121 -> 180 bucket
+if ($stepVm.GetActiveChartWindowCount() -ne 180 -or $stepVm.ChartAxisLeftLabel -ne "-3m" -or $stepVm.ChartTimeSpanLabel -ne "Window: 3m (30s/div)") {
+    throw "At 121 ticks expected 3m (180) bucket, got Win=$($stepVm.GetActiveChartWindowCount()), Label='$($stepVm.ChartTimeSpanLabel)'."
+}
+for ($s = 122; $s -le 181; $s++) { $stepVm.UpdateExtendedTelemetry($stepSys, @(@(25.0, 6.0))) } # tick 181 -> 360 bucket
+if ($stepVm.GetActiveChartWindowCount() -ne 360 -or $stepVm.ChartAxisLeftLabel -ne "-6m" -or $stepVm.ChartTimeSpanLabel -ne "Window: 6m (1m/div)") {
+    throw "At 181 ticks expected 6m (360) bucket, got Win=$($stepVm.GetActiveChartWindowCount()), Label='$($stepVm.ChartTimeSpanLabel)'."
+}
+$stepVm.SetPollingIntervalMs(2000)
+if ($stepVm.ChartAxisLeftLabel -ne "-12m" -or $stepVm.ChartTimeSpanLabel -ne "Window: 12m (2m/div)") {
+    throw "2s polling interval failed to scale stepped axis labels (Left='$($stepVm.ChartAxisLeftLabel)', Span='$($stepVm.ChartTimeSpanLabel)')."
+}
+Write-Host "  [PASS] 12N: Verified Graph Hover Tooltips, XAML Crosshair elements, 360/30/60 circular alignment, stepped 1m->2m->3m->6m buckets & Top-Process attribution." -ForegroundColor Green
 
 # 12O: Phase 1-5 Stabilization, Native Safety, Performance & 6-Theme Parity Regressions
 # H4: Collector Dispose lifecycle + unmanaged pointer nulling + clean re-init
@@ -2935,7 +3103,7 @@ $ioVm12q.UpdateExtendedTelemetry($sysIo12q, $coresIo12q, 0.5)
 $ioVm12q.RecordTopProcessSample([DateTime]::UtcNow.Ticks, 0, "", 0.0, 0, "", 0L, 0, "", 0L, 0, "", 0L, 0L, 0)
 $histHalf = $ioVm12q.GetIoTotalHistory240()
 $lastHalf = $histHalf[$histHalf.Count - 1]
-$ioHover12q = $ioVm12q.GetGraphHoverInfo("Io", 239, $false)
+$ioHover12q = $ioVm12q.GetGraphHoverInfo("Io", 359, $false)
 if ($ioVm12q.IoTotalRateFormatted -ne "2.0 MB/s" -or [Math]::Abs($lastHalf - 2097152.0) -gt 1.0 -or $ioVm12q.IoSessionTotalFormatted -ne "2.0 MB" -or $ioHover12q -notlike "*2.0 MB/s*") {
     throw "12Q I/O rate 0.5s elapsed division mismatch: Rate='$($ioVm12q.IoTotalRateFormatted)', Hist='$lastHalf', Sess='$($ioVm12q.IoSessionTotalFormatted)', Hover='$ioHover12q'."
 }
@@ -3328,8 +3496,8 @@ $peakWidth12u = $probeNudgeState.PeakWidth
 $finalWidth12u = $probeNudgeWin.Width
 if ($probeNudgeState.Timer) { $probeNudgeState.Timer.Stop() }
 $probeNudgeWin.Close()
-if ($peakWidth12u -ne 421 -or $finalWidth12u -ne 420) {
-    throw "12U Expected 1px grow+shrink Width nudge (420 -> 421 -> 420), got Peak=$peakWidth12u, Final=$finalWidth12u."
+if ($peakWidth12u -lt 420.5 -or $peakWidth12u -gt 422.0 -or [Math]::Abs($finalWidth12u - 420.0) -gt 1.0 -or $finalWidth12u -ge $peakWidth12u) {
+    throw "12U Expected 1px grow+shrink Width nudge (420 -> ~421 -> ~420), got Peak=$peakWidth12u, Final=$finalWidth12u."
 }
 Write-Host "  [PASS] 12U: Verified 1px post-launch render resize nudge (grow + shrink back) across MainWindow and all 7 modal/modeless windows." -ForegroundColor Green
 

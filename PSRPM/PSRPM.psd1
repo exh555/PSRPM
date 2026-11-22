@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.15.1'
+    ModuleVersion     = '1.16.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop')
@@ -78,8 +78,12 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Fixed Start-PSRPM local/single-target hostname truncation caused by PowerShell unwrapping single-element array into a string.
-- Reduced post-ContentRendered render resize nudge delay from 1000 ms to 600 ms.
+- Display Density Modes: Standard (18px), Compact Density (Ctrl+Shift+C, 14px across Processes/Services/TCPView), and Mini Monitor (Ctrl+Shift+M, chromeless pinned widget).
+- In-App UI Zoom (75%-200%, Ctrl++ / Ctrl+- / Ctrl+0) propagated across all 7 child windows and persisted as UiScalePct.
+- Process Explorer-aligned tree indentation, 150% DPI-safe aliased expanders, View -> Show Tree Lines toggle, Menu UX overhaul, and double-click empty HostTabBar to open New Host Tab.
+- 6-minute (360-sample) rolling System Information charts with 1-minute vertical gridlines, stepped 1m->2m->3m->6m buckets, and pre-session zero-line suppression.
+- Make-before-break async WinRM connection probing with mid-flight cancellation so failed connects never drop the active session.
+- Fileless SHLoadIndirectString (PSRPM.NativeMuiV1) MUI service description resolution cached per service with zero steady-state overhead.
 '@
         }
     }

@@ -1160,6 +1160,7 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [bool]$HasChildren
     [int]$Level
     [bool]$IsTreeMode
+    [bool]$IsCompactRows
     [double]$IndentWidth
     [string]$TreeGuideVisibility
     [string]$TreeGuideGeometry
@@ -1214,12 +1215,12 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.HasChildren            = $false
         $this.Level                  = 0
         $this.IsTreeMode             = $true
-        $this.IndentWidth            = 0.0
-        $this.TreeGuideVisibility    = "Collapsed"
+        $this.IndentWidth            = 16.0
+        $this.TreeGuideVisibility    = "Visible"
         $this.TreeGuideGeometry      = ""
         $this.ToggleVisibility       = "Collapsed"
         $this.LeafVisibility         = "Visible"
-        $this.ExpanderGeometry       = "M 2,5.5 L 9,5.5"
+        $this.ExpanderGeometry       = "M 0,2.5 L 5,2.5"
         $this.IconSource             = $null
         $this.FallbackIconVisibility = "Visible"
         $this.NameFontWeight         = "Normal"
@@ -1868,10 +1869,18 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] UpdateExpanderGeometry() {
-        $newExpGeom = if ($this.IsExpanded) {
-            "M 2,5.5 L 9,5.5"
+        $newExpGeom = if ($this.IsCompactRows) {
+            if ($this.IsExpanded) {
+                "M 0,2 L 4,2"
+            } else {
+                "M 0,2 L 4,2 M 2,0 L 2,4"
+            }
         } else {
-            "M 2,5.5 L 9,5.5 M 5.5,2 L 5.5,9"
+            if ($this.IsExpanded) {
+                "M 0,2.5 L 5,2.5"
+            } else {
+                "M 0,2.5 L 5,2.5 M 2.5,0 L 2.5,5"
+            }
         }
         if ($this.ExpanderGeometry -ne $newExpGeom) {
             $this.ExpanderGeometry = $newExpGeom
@@ -1880,14 +1889,28 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] UpdateTreeState([int]$level, [bool]$isTreeMode, [bool]$hasChildren, [string]$guideGeom, [double]$opacity) {
-        $newIndent = if ($isTreeMode -and $level -gt 0) { [double]($level * 16) } else { 0.0 }
-        $newGuideVis = if ($isTreeMode -and $level -gt 0) { "Visible" } else { "Collapsed" }
+        $this.UpdateTreeState($level, $isTreeMode, $hasChildren, $guideGeom, $opacity, $false)
+    }
+
+    [void] UpdateTreeState([int]$level, [bool]$isTreeMode, [bool]$hasChildren, [string]$guideGeom, [double]$opacity, [bool]$isCompactRows) {
+        $step = if ($isCompactRows) { 12.0 } else { 16.0 }
+        $newIndent = if ($isTreeMode) { [double](($level + 1) * $step) } else { $step }
+        $newGuideVis = "Visible"
         $newToggleVis = if ($isTreeMode -and $hasChildren) { "Visible" } else { "Collapsed" }
         $newLeafVis = if ($isTreeMode -and -not $hasChildren) { "Visible" } else { "Collapsed" }
-        $newExpGeom = if ($this.IsExpanded) {
-            "M 2,5.5 L 9,5.5" # Crisp [-] minus bar
+        $this.IsCompactRows = $isCompactRows
+        $newExpGeom = if ($isCompactRows) {
+            if ($this.IsExpanded) {
+                "M 0,2 L 4,2" # Centered [-] minus bar inside 8x8 DPI-safe box
+            } else {
+                "M 0,2 L 4,2 M 2,0 L 2,4" # Centered [+] plus cross inside 8x8 DPI-safe box
+            }
         } else {
-            "M 2,5.5 L 9,5.5 M 5.5,2 L 5.5,9" # Crisp [+] plus cross
+            if ($this.IsExpanded) {
+                "M 0,2.5 L 5,2.5" # Centered [-] minus bar inside 9x9 DPI-safe box
+            } else {
+                "M 0,2.5 L 5,2.5 M 2.5,0 L 2.5,5" # Centered [+] plus cross inside 9x9 DPI-safe box
+            }
         }
         $newWeight = if ($hasChildren) { "SemiBold" } else { "Normal" }
 
@@ -2030,18 +2053,20 @@ class CpuCoreGraphViewModel : System.ComponentModel.INotifyPropertyChanged {
 
     hidden [System.Collections.Generic.Queue[double]] $TotalHistory
     hidden [System.Collections.Generic.Queue[double]] $KernelHistory
+    hidden [int] $RecordedSamples
     hidden [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]] $Handlers
 
     CpuCoreGraphViewModel([int]$idx) {
         $this.CoreIndex        = $idx
         $this.CoreLabel        = "CPU $idx"
         $this.UsageFormatted   = "0.0%"
-        $this.TotalPoints      = "0,79 180,79"
-        $this.TotalFillPoints  = "0,80 0,79 180,79 180,80"
-        $this.KernelPoints     = "0,79 180,79"
-        $this.KernelFillPoints = "0,80 0,79 180,79 180,80"
+        $this.TotalPoints      = ""
+        $this.TotalFillPoints  = ""
+        $this.KernelPoints     = ""
+        $this.KernelFillPoints = ""
         $this.TotalHistory     = [System.Collections.Generic.Queue[double]]::new()
         $this.KernelHistory    = [System.Collections.Generic.Queue[double]]::new()
+        $this.RecordedSamples  = 0
         $this.Handlers         = [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]]::new()
 
         for ($i = 0; $i -lt 60; $i++) {
@@ -2071,6 +2096,7 @@ class CpuCoreGraphViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($this.KernelHistory.Count -ge 60) { [void]$this.KernelHistory.Dequeue() }
         $this.TotalHistory.Enqueue($totPct)
         $this.KernelHistory.Enqueue($kernPct)
+        if ($this.RecordedSamples -lt 60) { $this.RecordedSamples++ }
         $this.UsageFormatted = "$($totPct.ToString('F1'))% (K: $($kernPct.ToString('F1'))%)"
 
         if ($buildGeom) {
@@ -2091,35 +2117,56 @@ class CpuCoreGraphViewModel : System.ComponentModel.INotifyPropertyChanged {
         $inv = [System.Globalization.CultureInfo]::InvariantCulture
         $totArr  = $this.TotalHistory.ToArray()
         $kernArr = $this.KernelHistory.ToArray()
-        $maxIdx  = [Math]::Max(1, $totArr.Count - 1)
+        $total   = $totArr.Count
+        $avail   = [Math]::Max(0, [Math]::Min($total, $this.RecordedSamples))
         $w = 180.0
         $h = 80.0
 
-        $tLine = [System.Text.StringBuilder]::new(320)
-        $tFill = [System.Text.StringBuilder]::new(340)
-        $kLine = [System.Text.StringBuilder]::new(320)
-        $kFill = [System.Text.StringBuilder]::new(340)
-        [void]$tFill.Append("0,80.0 ")
-        [void]$kFill.Append("0,80.0 ")
-
-        for ($i = 0; $i -lt $totArr.Count; $i++) {
-            $x  = [Math]::Round(($i / [double]$maxIdx) * $w, 1).ToString("F1", $inv)
-            $tv = [Math]::Max(0.0, [Math]::Min(100.0, $totArr[$i]))
-            $kv = [Math]::Max(0.0, [Math]::Min($tv, $kernArr[$i]))
+        if ($avail -le 0) {
+            $this.TotalPoints      = ""
+            $this.TotalFillPoints  = ""
+            $this.KernelPoints     = ""
+            $this.KernelFillPoints = ""
+        } elseif ($avail -eq 1) {
+            $tv = [Math]::Max(0.0, [Math]::Min(100.0, $totArr[$total - 1]))
+            $kv = [Math]::Max(0.0, [Math]::Min($tv, $kernArr[$total - 1]))
             $ty = [Math]::Round(($h - 1.0) - (($tv / 100.0) * ($h - 4.0)), 1).ToString("F1", $inv)
             $ky = [Math]::Round(($h - 1.0) - (($kv / 100.0) * ($h - 4.0)), 1).ToString("F1", $inv)
-            [void]$tLine.Append("$x,$ty ")
-            [void]$tFill.Append("$x,$ty ")
-            [void]$kLine.Append("$x,$ky ")
-            [void]$kFill.Append("$x,$ky ")
-        }
-        [void]$tFill.Append("180.0,80.0")
-        [void]$kFill.Append("180.0,80.0")
+            $this.TotalPoints      = "179.0,$ty 180.0,$ty"
+            $this.TotalFillPoints  = "179.0,80.0 179.0,$ty 180.0,$ty 180.0,80.0"
+            $this.KernelPoints     = "179.0,$ky 180.0,$ky"
+            $this.KernelFillPoints = "179.0,80.0 179.0,$ky 180.0,$ky 180.0,80.0"
+        } else {
+            $maxIdx    = [Math]::Max(1, $total - 1)
+            $firstIdx  = $total - $avail
+            $xFirst    = [Math]::Round(($firstIdx / [double]$maxIdx) * $w, 1).ToString("F1", $inv)
 
-        $this.TotalPoints      = $tLine.ToString().Trim()
-        $this.TotalFillPoints  = $tFill.ToString().Trim()
-        $this.KernelPoints     = $kLine.ToString().Trim()
-        $this.KernelFillPoints = $kFill.ToString().Trim()
+            $tLine = [System.Text.StringBuilder]::new(320)
+            $tFill = [System.Text.StringBuilder]::new(340)
+            $kLine = [System.Text.StringBuilder]::new(320)
+            $kFill = [System.Text.StringBuilder]::new(340)
+            [void]$tFill.Append("$xFirst,80.0 ")
+            [void]$kFill.Append("$xFirst,80.0 ")
+
+            for ($i = $firstIdx; $i -lt $total; $i++) {
+                $x  = [Math]::Round(($i / [double]$maxIdx) * $w, 1).ToString("F1", $inv)
+                $tv = [Math]::Max(0.0, [Math]::Min(100.0, $totArr[$i]))
+                $kv = [Math]::Max(0.0, [Math]::Min($tv, $kernArr[$i]))
+                $ty = [Math]::Round(($h - 1.0) - (($tv / 100.0) * ($h - 4.0)), 1).ToString("F1", $inv)
+                $ky = [Math]::Round(($h - 1.0) - (($kv / 100.0) * ($h - 4.0)), 1).ToString("F1", $inv)
+                [void]$tLine.Append("$x,$ty ")
+                [void]$tFill.Append("$x,$ty ")
+                [void]$kLine.Append("$x,$ky ")
+                [void]$kFill.Append("$x,$ky ")
+            }
+            [void]$tFill.Append("180.0,80.0")
+            [void]$kFill.Append("180.0,80.0")
+
+            $this.TotalPoints      = $tLine.ToString().Trim()
+            $this.TotalFillPoints  = $tFill.ToString().Trim()
+            $this.KernelPoints     = $kLine.ToString().Trim()
+            $this.KernelFillPoints = $kFill.ToString().Trim()
+        }
 
         $this.OnPropertyChanged('UsageFormatted')
         $this.OnPropertyChanged('TotalPoints')
@@ -2180,7 +2227,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$HwFileSystem
     [string]$HwReadOnly
 
-    # System Information 240-Sample (4-Minute) Chart Point Collections (360x120 Viewbox Canvas)
+    # System Information 360-Sample (6-Minute @ 1s) Chart Point Collections (360x120 Viewbox Canvas, 1:1 X mapping)
     [string]$SysCpuPoints
     [string]$SysCpuFillPoints
     [string]$SysKernelPoints
@@ -2197,6 +2244,13 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$SysNetRxFillPoints
     [string]$SysNetTxPoints
     [string]$SysNetTxFillPoints
+
+    # Stepped Rolling Window (60 -> 120 -> 180 -> 360 samples) Axis Labels
+    [int]$RecordedSampleCount
+    [int]$PollingIntervalMs
+    [string]$ChartTimeSpanLabel
+    [string]$ChartAxisLeftLabel
+    [string]$ChartAxisMidLabel
 
     # Vertical Bar Gauge Heights & Labels (44x120 Viewbox Canvas)
     [double]$CpuGaugeTotalHeight
@@ -2278,7 +2332,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     hidden [System.Collections.Generic.Queue[double]] $CommitHistory
     hidden [System.Collections.Generic.Queue[double]] $RamHistory
 
-    # 240-Sample (4-Minute) Circular Ring Buffers (< 16 KB Total Memory)
+    # 360-Sample (6-Minute @ 1s) Circular Ring Buffers (23 KB Total Metric Memory)
     hidden [System.Collections.Generic.Queue[double]] $CpuHistory240
     hidden [System.Collections.Generic.Queue[double]] $KernelHistory240
     hidden [System.Collections.Generic.Queue[double]] $CommitHistory240
@@ -2288,7 +2342,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     hidden [System.Collections.Generic.Queue[double]] $NetRxHistory240
     hidden [System.Collections.Generic.Queue[double]] $NetTxHistory240
 
-    # Parallel 240-Sample Hover Attribution Ring Buffers (~23 KB Total, Zero Per-Tick Alloc)
+    # Parallel 360-Sample Hover Attribution Ring Buffers (~35 KB Total, Zero Per-Tick Alloc)
     hidden [System.Collections.Generic.Queue[long]]   $CoreSampleUtcTicks60
     hidden [System.Collections.Generic.Queue[long]]   $SampleUtcTicks240
     hidden [System.Collections.Generic.Queue[int]]    $TopCpuPid240
@@ -2327,30 +2381,30 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CpuHistory             = [System.Collections.Generic.Queue[double]]::new()
         $this.CommitHistory          = [System.Collections.Generic.Queue[double]]::new()
         $this.RamHistory             = [System.Collections.Generic.Queue[double]]::new()
-        $this.CpuHistory240          = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.KernelHistory240       = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.CommitHistory240       = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.RamHistory240          = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.IoTotalHistory240      = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.IoWriteHistory240      = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.NetRxHistory240        = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.NetTxHistory240        = [System.Collections.Generic.Queue[double]]::new(240)
+        $this.CpuHistory240          = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.KernelHistory240       = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.CommitHistory240       = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.RamHistory240          = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.IoTotalHistory240      = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.IoWriteHistory240      = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.NetRxHistory240        = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.NetTxHistory240        = [System.Collections.Generic.Queue[double]]::new(360)
         $this.CoreSampleUtcTicks60   = [System.Collections.Generic.Queue[long]]::new(60)
-        $this.SampleUtcTicks240      = [System.Collections.Generic.Queue[long]]::new(240)
-        $this.TopCpuPid240           = [System.Collections.Generic.Queue[int]]::new(240)
-        $this.TopCpuName240          = [System.Collections.Generic.Queue[string]]::new(240)
-        $this.TopCpuVal240           = [System.Collections.Generic.Queue[double]]::new(240)
-        $this.TopCommitPid240        = [System.Collections.Generic.Queue[int]]::new(240)
-        $this.TopCommitName240       = [System.Collections.Generic.Queue[string]]::new(240)
-        $this.TopCommitVal240        = [System.Collections.Generic.Queue[long]]::new(240)
-        $this.TopRamPid240           = [System.Collections.Generic.Queue[int]]::new(240)
-        $this.TopRamName240          = [System.Collections.Generic.Queue[string]]::new(240)
-        $this.TopRamVal240           = [System.Collections.Generic.Queue[long]]::new(240)
-        $this.TopNetPid240           = [System.Collections.Generic.Queue[int]]::new(240)
-        $this.TopNetName240          = [System.Collections.Generic.Queue[string]]::new(240)
-        $this.TopNetRx240            = [System.Collections.Generic.Queue[long]]::new(240)
-        $this.TopNetTx240            = [System.Collections.Generic.Queue[long]]::new(240)
-        $this.TopNetCap240           = [System.Collections.Generic.Queue[int]]::new(240)
+        $this.SampleUtcTicks240      = [System.Collections.Generic.Queue[long]]::new(360)
+        $this.TopCpuPid240           = [System.Collections.Generic.Queue[int]]::new(360)
+        $this.TopCpuName240          = [System.Collections.Generic.Queue[string]]::new(360)
+        $this.TopCpuVal240           = [System.Collections.Generic.Queue[double]]::new(360)
+        $this.TopCommitPid240        = [System.Collections.Generic.Queue[int]]::new(360)
+        $this.TopCommitName240       = [System.Collections.Generic.Queue[string]]::new(360)
+        $this.TopCommitVal240        = [System.Collections.Generic.Queue[long]]::new(360)
+        $this.TopRamPid240           = [System.Collections.Generic.Queue[int]]::new(360)
+        $this.TopRamName240          = [System.Collections.Generic.Queue[string]]::new(360)
+        $this.TopRamVal240           = [System.Collections.Generic.Queue[long]]::new(360)
+        $this.TopNetPid240           = [System.Collections.Generic.Queue[int]]::new(360)
+        $this.TopNetName240          = [System.Collections.Generic.Queue[string]]::new(360)
+        $this.TopNetRx240            = [System.Collections.Generic.Queue[long]]::new(360)
+        $this.TopNetTx240            = [System.Collections.Generic.Queue[long]]::new(360)
+        $this.TopNetCap240           = [System.Collections.Generic.Queue[int]]::new(360)
         $this.LastCommitLimitBytes   = 0L
         $this.LastPhysTotalBytes     = 0L
 
@@ -2421,22 +2475,26 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.HwFileSystem        = "NTFS"
         $this.HwReadOnly          = "No"
 
-        $this.SysCpuPoints         = "0,119 360,119"
-        $this.SysCpuFillPoints     = "0,120 0,119 360,119 360,120"
-        $this.SysKernelPoints      = "0,119 360,119"
-        $this.SysKernelFillPoints  = "0,120 0,119 360,119 360,120"
-        $this.SysCommitPoints      = "0,119 360,119"
-        $this.SysCommitFillPoints  = "0,120 0,119 360,119 360,120"
-        $this.SysRamPoints         = "0,119 360,119"
-        $this.SysRamFillPoints     = "0,120 0,119 360,119 360,120"
-        $this.SysIoPoints          = "0,119 360,119"
-        $this.SysIoFillPoints      = "0,120 0,119 360,119 360,120"
-        $this.SysIoWritePoints     = "0,119 360,119"
-        $this.SysIoWriteFillPoints = "0,120 0,119 360,119 360,120"
-        $this.SysNetRxPoints       = "0,119 360,119"
-        $this.SysNetRxFillPoints   = "0,120 0,119 360,119 360,120"
-        $this.SysNetTxPoints       = "0,119 360,119"
-        $this.SysNetTxFillPoints   = "0,120 0,119 360,119 360,120"
+        $this.SysCpuPoints         = ""
+        $this.SysCpuFillPoints     = ""
+        $this.SysKernelPoints      = ""
+        $this.SysKernelFillPoints  = ""
+        $this.SysCommitPoints      = ""
+        $this.SysCommitFillPoints  = ""
+        $this.SysRamPoints         = ""
+        $this.SysRamFillPoints     = ""
+        $this.SysIoPoints          = ""
+        $this.SysIoFillPoints      = ""
+        $this.SysIoWritePoints     = ""
+        $this.SysIoWriteFillPoints = ""
+        $this.SysNetRxPoints       = ""
+        $this.SysNetRxFillPoints   = ""
+        $this.SysNetTxPoints       = ""
+        $this.SysNetTxFillPoints   = ""
+
+        $this.RecordedSampleCount  = 0
+        $this.PollingIntervalMs    = 1000
+        $this.UpdateChartAxisLabels()
 
         $this.CpuGaugeTotalHeight  = 0.0
         $this.CpuGaugeTotalTop     = 120.0
@@ -2511,7 +2569,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         for ($i = 0; $i -lt 60; $i++) {
             $this.CoreSampleUtcTicks60.Enqueue(0L)
         }
-        for ($i = 0; $i -lt 240; $i++) {
+        for ($i = 0; $i -lt 360; $i++) {
             $this.CpuHistory240.Enqueue(0.0)
             $this.KernelHistory240.Enqueue(0.0)
             $this.CommitHistory240.Enqueue(0.0)
@@ -2537,6 +2595,15 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $this.TopNetCap240.Enqueue(0)
         }
     }
+
+    [double[]] GetCpuHistory360()     { return $this.CpuHistory240.ToArray() }
+    [double[]] GetKernelHistory360()  { return $this.KernelHistory240.ToArray() }
+    [double[]] GetCommitHistory360()  { return $this.CommitHistory240.ToArray() }
+    [double[]] GetRamHistory360()     { return $this.RamHistory240.ToArray() }
+    [double[]] GetIoTotalHistory360() { return $this.IoTotalHistory240.ToArray() }
+    [double[]] GetIoWriteHistory360() { return $this.IoWriteHistory240.ToArray() }
+    [double[]] GetNetRxHistory360()   { return $this.NetRxHistory240.ToArray() }
+    [double[]] GetNetTxHistory360()   { return $this.NetTxHistory240.ToArray() }
 
     [double[]] GetCpuHistory240()     { return $this.CpuHistory240.ToArray() }
     [double[]] GetKernelHistory240()  { return $this.KernelHistory240.ToArray() }
@@ -2620,21 +2687,83 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         return @($lineSb.ToString().Trim(), $fillSb.ToString().Trim())
     }
 
-    hidden [string[]] BuildLargeChart([double[]]$arr, [double]$maxScale, [double]$width, [double]$height) {
-        $lineSb = [System.Text.StringBuilder]::new(2800)
-        $fillSb = [System.Text.StringBuilder]::new(3072)
-        $inv = [System.Globalization.CultureInfo]::InvariantCulture
-        $wStr = $width.ToString("F1", $inv)
-        $hStr = $height.ToString("F1", $inv)
-        [void]$fillSb.Append("0,$hStr ")
+    [int] GetActiveChartWindowCount() {
+        $n = $this.RecordedSampleCount
+        if ($n -le 60)  { return 60 }
+        if ($n -le 120) { return 120 }
+        if ($n -le 180) { return 180 }
+        return 360
+    }
 
+    hidden [string] FormatAxisDuration([double]$sec) {
+        $s = [int][Math]::Round($sec)
+        if ($s -le 0) { return "0s" }
+        if ($s -lt 60) { return "${s}s" }
+        $m = [int][Math]::Floor($s / 60)
+        $r = $s % 60
+        if ($r -eq 0) { return "${m}m" }
+        return ("{0}:{1:D2}" -f $m, $r)
+    }
+
+    hidden [void] UpdateChartAxisLabels() {
+        $bucket   = $this.GetActiveChartWindowCount()
+        $stepSec  = [Math]::Max(0.25, $this.PollingIntervalMs / 1000.0)
+        $totalSec = $bucket * $stepSec
+        $divSec   = $totalSec / 6.0
+        $this.ChartAxisLeftLabel = "-" + $this.FormatAxisDuration($totalSec)
+        $this.ChartAxisMidLabel  = "-" + $this.FormatAxisDuration($totalSec / 2.0)
+        $this.ChartTimeSpanLabel = "Window: $($this.FormatAxisDuration($totalSec)) ($($this.FormatAxisDuration($divSec))/div)"
+    }
+
+    [void] SetPollingIntervalMs([int]$ms) {
+        $safeMs = [Math]::Max(250, $ms)
+        if ($this.PollingIntervalMs -ne $safeMs) {
+            $this.PollingIntervalMs = $safeMs
+            $this.UpdateChartAxisLabels()
+            $this.OnPropertyChanged('ChartTimeSpanLabel')
+            $this.OnPropertyChanged('ChartAxisLeftLabel')
+            $this.OnPropertyChanged('ChartAxisMidLabel')
+        }
+    }
+
+    hidden [string[]] BuildLargeChart([double[]]$arr, [double]$maxScale, [double]$width, [double]$height) {
+        return $this.BuildLargeChart($arr, $maxScale, $width, $height, $arr.Count, $arr.Count)
+    }
+
+    hidden [string[]] BuildLargeChart([double[]]$arr, [double]$maxScale, [double]$width, [double]$height, [int]$bucketSize, [int]$recordedCount) {
+        $total = if ($arr) { $arr.Count } else { 0 }
+        if ($total -le 0) { return @("", "") }
+        $winSize = [Math]::Max(2, [Math]::Min($total, $bucketSize))
+        $avail   = [Math]::Max(0, [Math]::Min($winSize, $recordedCount))
+        if ($avail -le 0) { return @("", "") }
+
+        $inv     = [System.Globalization.CultureInfo]::InvariantCulture
+        $wStr    = $width.ToString("F1", $inv)
+        $hStr    = $height.ToString("F1", $inv)
         $safeMax = if ($maxScale -gt 0.0) { $maxScale } else { 100.0 }
-        $maxIdx  = [Math]::Max(1, $arr.Count - 1)
-        for ($i = 0; $i -lt $arr.Count; $i++) {
-            $x   = [Math]::Round(($i / [double]$maxIdx) * $width, 1)
-            $val = [Math]::Max(0.0, [Math]::Min($safeMax, $arr[$i]))
-            $y   = [Math]::Round(($height - 1.0) - (($val / $safeMax) * ($height - 4.0)), 1)
-            $pt  = "$($x.ToString('F1', $inv)),$($y.ToString('F1', $inv)) "
+
+        if ($avail -eq 1) {
+            $val  = [Math]::Max(0.0, [Math]::Min($safeMax, $arr[$total - 1]))
+            $y    = [Math]::Round(($height - 1.0) - (($val / $safeMax) * ($height - 4.0)), 1)
+            $yStr = $y.ToString("F1", $inv)
+            $xPrev = [Math]::Max(0.0, $width - 1.0).ToString("F1", $inv)
+            return @("$xPrev,$yStr $wStr,$yStr", "$xPrev,$hStr $xPrev,$yStr $wStr,$yStr $wStr,$hStr")
+        }
+
+        $lineSb        = [System.Text.StringBuilder]::new(2800)
+        $fillSb        = [System.Text.StringBuilder]::new(3072)
+        $winStartInArr = $total - $winSize
+        $firstSlot     = $winSize - $avail
+        $maxIdx        = [Math]::Max(1, $winSize - 1)
+        $xFirst        = [Math]::Round(($firstSlot / [double]$maxIdx) * $width, 1)
+        [void]$fillSb.Append("$($xFirst.ToString('F1', $inv)),$hStr ")
+
+        for ($s = $firstSlot; $s -lt $winSize; $s++) {
+            $arrIdx = $winStartInArr + $s
+            $x      = [Math]::Round(($s / [double]$maxIdx) * $width, 1)
+            $val    = [Math]::Max(0.0, [Math]::Min($safeMax, $arr[$arrIdx]))
+            $y      = [Math]::Round(($height - 1.0) - (($val / $safeMax) * ($height - 4.0)), 1)
+            $pt     = "$($x.ToString('F1', $inv)),$($y.ToString('F1', $inv)) "
             [void]$lineSb.Append($pt)
             [void]$fillSb.Append($pt)
         }
@@ -2790,13 +2919,13 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $ioWriteRate = [double]$ioWriteAllD / $safeElapsed
         $this.SessionIoBytesTotal += $ioTotalD
 
-        # 1. Enqueue 240-Sample Circular Ring Buffers (< 12 KB Total RAM)
-        if ($this.CpuHistory240.Count -ge 240)     { [void]$this.CpuHistory240.Dequeue() }
-        if ($this.KernelHistory240.Count -ge 240)  { [void]$this.KernelHistory240.Dequeue() }
-        if ($this.CommitHistory240.Count -ge 240)  { [void]$this.CommitHistory240.Dequeue() }
-        if ($this.RamHistory240.Count -ge 240)     { [void]$this.RamHistory240.Dequeue() }
-        if ($this.IoTotalHistory240.Count -ge 240) { [void]$this.IoTotalHistory240.Dequeue() }
-        if ($this.IoWriteHistory240.Count -ge 240) { [void]$this.IoWriteHistory240.Dequeue() }
+        # 1. Enqueue 360-Sample Circular Ring Buffers (6 Minutes @ 1s)
+        if ($this.CpuHistory240.Count -ge 360)     { [void]$this.CpuHistory240.Dequeue() }
+        if ($this.KernelHistory240.Count -ge 360)  { [void]$this.KernelHistory240.Dequeue() }
+        if ($this.CommitHistory240.Count -ge 360)  { [void]$this.CommitHistory240.Dequeue() }
+        if ($this.RamHistory240.Count -ge 360)     { [void]$this.RamHistory240.Dequeue() }
+        if ($this.IoTotalHistory240.Count -ge 360) { [void]$this.IoTotalHistory240.Dequeue() }
+        if ($this.IoWriteHistory240.Count -ge 360) { [void]$this.IoWriteHistory240.Dequeue() }
 
         $comPctExact = if ($commitLimKB -gt 0L) { ($commitCurKB / [double]$commitLimKB) * 100.0 } else { $this.CommitPct }
         $ramPctExact = if ($physTotKB -gt 0L)   { ($physUsedKB  / [double]$physTotKB)   * 100.0 } else { $this.RamPct }
@@ -2807,6 +2936,7 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.RamHistory240.Enqueue($ramPctExact)
         $this.IoTotalHistory240.Enqueue($ioTotalRate)
         $this.IoWriteHistory240.Enqueue($ioWriteRate)
+        if ($this.RecordedSampleCount -lt 360) { $this.RecordedSampleCount++ }
 
         # 2. Enqueue Per-Core CPU Ring Buffers
         if ($coresArr -and $coresArr.Count -gt 0) {
@@ -2881,8 +3011,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             $dStr = if ($dTotKB -ge 1024.0) { "$(([Math]::Round($dTotKB / 1024.0, 1)).ToString('F1')) MB/s" } else { "$(([Math]::Round($dTotKB, 1)).ToString('F1')) KB/s" }
             $this.DiskActivityFormatted = "I/O: $dStr | $([int]$this.DiskQueueDepth) IOPS"
 
-            if ($this.NetRxHistory240.Count -ge 240) { [void]$this.NetRxHistory240.Dequeue() }
-            if ($this.NetTxHistory240.Count -ge 240) { [void]$this.NetTxHistory240.Dequeue() }
+            if ($this.NetRxHistory240.Count -ge 360) { [void]$this.NetRxHistory240.Dequeue() }
+            if ($this.NetTxHistory240.Count -ge 360) { [void]$this.NetTxHistory240.Dequeue() }
             $this.NetRxHistory240.Enqueue($this.NetRxKBs)
             $this.NetTxHistory240.Enqueue($this.NetTxKBs)
 
@@ -2939,31 +3069,39 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $netRxArr = $this.NetRxHistory240.ToArray()
         $netTxArr = $this.NetTxHistory240.ToArray()
 
+        $winSize = $this.GetActiveChartWindowCount()
+        $recCnt  = $this.RecordedSampleCount
+        $this.UpdateChartAxisLabels()
+
+        $visIoCount  = [Math]::Min($winSize, $recCnt)
+        $visIoStart  = [Math]::Max(0, $ioTotArr.Count - $visIoCount)
         $maxIo = 65536.0 # 64 KB/s minimum full-scale so idle noise stays flat at bottom
-        for ($i = 0; $i -lt $ioTotArr.Count; $i++) {
+        for ($i = $visIoStart; $i -lt $ioTotArr.Count; $i++) {
             if ($ioTotArr[$i] -gt $maxIo) { $maxIo = $ioTotArr[$i] }
         }
         $this.PeakIoBytesDelta = $maxIo
         $this.IoPeakRateFormatted = "$($this.FormatBytesCompact($maxIo))/s"
 
+        $visNetCount = [Math]::Min($winSize, $recCnt)
+        $visNetStart = [Math]::Max(0, $netRxArr.Count - $visNetCount)
         $maxNetKB = 64.0 # 64 KB/s minimum full-scale matching I/O ceiling
-        for ($i = 0; $i -lt $netRxArr.Count; $i++) {
+        for ($i = $visNetStart; $i -lt $netRxArr.Count; $i++) {
             if ($netRxArr[$i] -gt $maxNetKB) { $maxNetKB = $netRxArr[$i] }
         }
-        for ($i = 0; $i -lt $netTxArr.Count; $i++) {
+        for ($i = $visNetStart; $i -lt $netTxArr.Count; $i++) {
             if ($netTxArr[$i] -gt $maxNetKB) { $maxNetKB = $netTxArr[$i] }
         }
         $this.NetPeakRateFormatted = "$($this.FormatBytesCompact($maxNetKB * 1024.0))/s"
         $this.NetMidRateFormatted  = "$($this.FormatBytesCompact($maxNetKB * 512.0))/s"
 
-        $cTot   = $this.BuildLargeChart($cpuArr,   100.0,     360.0, 120.0)
-        $cKern  = $this.BuildLargeChart($kernArr,  100.0,     360.0, 120.0)
-        $cCom   = $this.BuildLargeChart($comArr,   100.0,     360.0, 120.0)
-        $cRam   = $this.BuildLargeChart($ramArr,   100.0,     360.0, 120.0)
-        $cIoT   = $this.BuildLargeChart($ioTotArr, $maxIo,    360.0, 120.0)
-        $cIoW   = $this.BuildLargeChart($ioWrtArr, $maxIo,    360.0, 120.0)
-        $cNetRx = $this.BuildLargeChart($netRxArr, $maxNetKB, 360.0, 120.0)
-        $cNetTx = $this.BuildLargeChart($netTxArr, $maxNetKB, 360.0, 120.0)
+        $cTot   = $this.BuildLargeChart($cpuArr,   100.0,     360.0, 120.0, $winSize, $recCnt)
+        $cKern  = $this.BuildLargeChart($kernArr,  100.0,     360.0, 120.0, $winSize, $recCnt)
+        $cCom   = $this.BuildLargeChart($comArr,   100.0,     360.0, 120.0, $winSize, $recCnt)
+        $cRam   = $this.BuildLargeChart($ramArr,   100.0,     360.0, 120.0, $winSize, $recCnt)
+        $cIoT   = $this.BuildLargeChart($ioTotArr, $maxIo,    360.0, 120.0, $winSize, $recCnt)
+        $cIoW   = $this.BuildLargeChart($ioWrtArr, $maxIo,    360.0, 120.0, $winSize, $recCnt)
+        $cNetRx = $this.BuildLargeChart($netRxArr, $maxNetKB, 360.0, 120.0, $winSize, $recCnt)
+        $cNetTx = $this.BuildLargeChart($netTxArr, $maxNetKB, 360.0, 120.0, $winSize, $recCnt)
 
         $this.SysCpuPoints         = $cTot[0]
         $this.SysCpuFillPoints     = $cTot[1]
@@ -3042,7 +3180,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
             'NetRxRateFormatted', 'NetTxRateFormatted', 'NetTotalRateFormatted',
             'NetPeakRateFormatted', 'NetMidRateFormatted',
             'NetSessionRxFormatted', 'NetSessionTxFormatted', 'NetSessionTotalFormatted', 'NetEtwStatusSummary',
-            'HwMemoryGBText', 'HwCommitLimitGBText'
+            'HwMemoryGBText', 'HwCommitLimitGBText',
+            'ChartTimeSpanLabel', 'ChartAxisLeftLabel', 'ChartAxisMidLabel'
         )) {
             $this.OnPropertyChanged($prop)
         }
@@ -3075,21 +3214,21 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         [int]$topRamPid,    [string]$topRamName,    [long]$topRamBytes,
         [int]$topNetPid,    [string]$topNetName,    [long]$topNetRxBps, [long]$topNetTxBps, [int]$netCap
     ) {
-        if ($this.SampleUtcTicks240.Count -ge 240) { [void]$this.SampleUtcTicks240.Dequeue() }
-        if ($this.TopCpuPid240.Count -ge 240)      { [void]$this.TopCpuPid240.Dequeue() }
-        if ($this.TopCpuName240.Count -ge 240)     { [void]$this.TopCpuName240.Dequeue() }
-        if ($this.TopCpuVal240.Count -ge 240)      { [void]$this.TopCpuVal240.Dequeue() }
-        if ($this.TopCommitPid240.Count -ge 240)   { [void]$this.TopCommitPid240.Dequeue() }
-        if ($this.TopCommitName240.Count -ge 240)  { [void]$this.TopCommitName240.Dequeue() }
-        if ($this.TopCommitVal240.Count -ge 240)   { [void]$this.TopCommitVal240.Dequeue() }
-        if ($this.TopRamPid240.Count -ge 240)      { [void]$this.TopRamPid240.Dequeue() }
-        if ($this.TopRamName240.Count -ge 240)     { [void]$this.TopRamName240.Dequeue() }
-        if ($this.TopRamVal240.Count -ge 240)      { [void]$this.TopRamVal240.Dequeue() }
-        if ($this.TopNetPid240.Count -ge 240)      { [void]$this.TopNetPid240.Dequeue() }
-        if ($this.TopNetName240.Count -ge 240)     { [void]$this.TopNetName240.Dequeue() }
-        if ($this.TopNetRx240.Count -ge 240)       { [void]$this.TopNetRx240.Dequeue() }
-        if ($this.TopNetTx240.Count -ge 240)       { [void]$this.TopNetTx240.Dequeue() }
-        if ($this.TopNetCap240.Count -ge 240)      { [void]$this.TopNetCap240.Dequeue() }
+        if ($this.SampleUtcTicks240.Count -ge 360) { [void]$this.SampleUtcTicks240.Dequeue() }
+        if ($this.TopCpuPid240.Count -ge 360)      { [void]$this.TopCpuPid240.Dequeue() }
+        if ($this.TopCpuName240.Count -ge 360)     { [void]$this.TopCpuName240.Dequeue() }
+        if ($this.TopCpuVal240.Count -ge 360)      { [void]$this.TopCpuVal240.Dequeue() }
+        if ($this.TopCommitPid240.Count -ge 360)   { [void]$this.TopCommitPid240.Dequeue() }
+        if ($this.TopCommitName240.Count -ge 360)  { [void]$this.TopCommitName240.Dequeue() }
+        if ($this.TopCommitVal240.Count -ge 360)   { [void]$this.TopCommitVal240.Dequeue() }
+        if ($this.TopRamPid240.Count -ge 360)      { [void]$this.TopRamPid240.Dequeue() }
+        if ($this.TopRamName240.Count -ge 360)     { [void]$this.TopRamName240.Dequeue() }
+        if ($this.TopRamVal240.Count -ge 360)      { [void]$this.TopRamVal240.Dequeue() }
+        if ($this.TopNetPid240.Count -ge 360)      { [void]$this.TopNetPid240.Dequeue() }
+        if ($this.TopNetName240.Count -ge 360)     { [void]$this.TopNetName240.Dequeue() }
+        if ($this.TopNetRx240.Count -ge 360)       { [void]$this.TopNetRx240.Dequeue() }
+        if ($this.TopNetTx240.Count -ge 360)       { [void]$this.TopNetTx240.Dequeue() }
+        if ($this.TopNetCap240.Count -ge 360)      { [void]$this.TopNetCap240.Dequeue() }
 
         $this.SampleUtcTicks240.Enqueue($utcTicks)
         $this.TopCpuPid240.Enqueue($topCpuPid)
