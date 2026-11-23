@@ -3501,6 +3501,30 @@ if ($peakWidth12u -lt 420.5 -or $peakWidth12u -gt 422.0 -or [Math]::Abs($finalWi
 }
 Write-Host "  [PASS] 12U: Verified 1px post-launch render resize nudge (grow + shrink back) across MainWindow and all 7 modal/modeless windows." -ForegroundColor Green
 
+# 12V: WinRM Async Connect OwnerRunspace Retention & Teardown Guard
+$rsEngineSrc12v = Get-Content -Path (Join-Path $repoRoot "PSRPM\Private\RunspaceEngine.ps1") -Raw
+if ($rsEngineSrc12v -notmatch '\$disposeSessionOwner\s*=\s*\{') {
+    throw "12V Missing `$disposeSessionOwner helper in RunspaceEngine.ps1."
+}
+$ownerAssignCount12v = ([regex]::Matches($rsEngineSrc12v, 'OwnerRunspace\s*=\s*\$(dcRs|pcRs)')).Count
+if ($ownerAssignCount12v -lt 3) {
+    throw "12V Expected at least 3 OwnerRunspace adoption sites (SwitchTarget, AddTabSession, pendingConnects), found $ownerAssignCount12v."
+}
+$disposeOwnerCalls12v = ([regex]::Matches($rsEngineSrc12v, '&\$disposeSessionOwner\b')).Count
+if ($disposeOwnerCalls12v -lt 7) {
+    throw "12V Expected at least 7 &$disposeSessionOwner teardown calls across switch/reconnect/close/local/shutdown paths, found $disposeOwnerCalls12v."
+}
+$harvestIdx12v = $rsEngineSrc12v.IndexOf('$harvestPendingConnects = {')
+$harvestEnd12v = $rsEngineSrc12v.IndexOf('$lastPollUtcTicks = 0L', $harvestIdx12v)
+if ($harvestIdx12v -lt 0 -or $harvestEnd12v -le $harvestIdx12v) {
+    throw "12V Could not locate `$harvestPendingConnects block in RunspaceEngine.ps1."
+}
+$harvestBlock12v = $rsEngineSrc12v.Substring($harvestIdx12v, $harvestEnd12v - $harvestIdx12v)
+if ($harvestBlock12v -match '\$dc\.Runspace\.Close\(\)|\$pc\.Runspace\.Close\(\)') {
+    throw "12V Detected unconditional `$dc.Runspace.Close() or `$pc.Runspace.Close() inside `$harvestPendingConnects (would tear down newly created WinRM PSSession)."
+}
+Write-Host "  [PASS] 12V: Verified async WinRM OwnerRunspace retention ($ownerAssignCount12v adoption sites) and teardown ($disposeOwnerCalls12v dispose calls)." -ForegroundColor Green
+
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()
 foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-22
+
+### Fixed
+- **Async WinRM `OwnerRunspace` Retention & Teardown (`PSRPM/Private/RunspaceEngine.ps1`)**:
+  - Retained the creating child `Runspace` as `OwnerRunspace` on active session entries (`SwitchTarget`, `AddTabSession`, and background `$pendingConnects`) instead of closing/disposing it immediately after `EndInvoke()`, preventing premature teardown of newly opened WinRM `PSSession` instances.
+  - Added `$disposeSessionOwner` and invoked it after `Remove-PSSession` across all session replacement, failed reconnect, tab close, local switch, auto-reconnect, and engine shutdown paths, while disposing unadopted runspaces on cancellation, closed target tabs, or connection failures.
+
+### Added
+- **Async WinRM `OwnerRunspace` Regression Suite (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added Test `12V` verifying `$disposeSessionOwner`, all 3 `OwnerRunspace` adoption sites, all 7 teardown calls, and ensuring `$harvestPendingConnects` never unconditionally closes `$dc.Runspace` or `$pc.Runspace`.
+
 ## [1.16.0] - 2026-11-22
 
 ### Added

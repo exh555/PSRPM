@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.16.0'
+    ModuleVersion     = '1.17.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop')
@@ -78,12 +78,9 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Display Density Modes: Standard (18px), Compact Density (Ctrl+Shift+C, 14px across Processes/Services/TCPView), and Mini Monitor (Ctrl+Shift+M, chromeless pinned widget).
-- In-App UI Zoom (75%-200%, Ctrl++ / Ctrl+- / Ctrl+0) propagated across all 7 child windows and persisted as UiScalePct.
-- Process Explorer-aligned tree indentation, 150% DPI-safe aliased expanders, View -> Show Tree Lines toggle, Menu UX overhaul, and double-click empty HostTabBar to open New Host Tab.
-- 6-minute (360-sample) rolling System Information charts with 1-minute vertical gridlines, stepped 1m->2m->3m->6m buckets, and pre-session zero-line suppression.
-- Make-before-break async WinRM connection probing with mid-flight cancellation so failed connects never drop the active session.
-- Fileless SHLoadIndirectString (PSRPM.NativeMuiV1) MUI service description resolution cached per service with zero steady-state overhead.
+- Fixed premature Runspace disposal on async WinRM connections by retaining OwnerRunspace for the lifetime of each active PSSession across SwitchTarget, AddTabSession, and background reconnects.
+- Added $disposeSessionOwner cleanup across all session replacement, failed reconnect, tab close, local switch, auto-reconnect, and shutdown paths.
+- Added regression test 12V in Test-PSRPMEngine.ps1 verifying OwnerRunspace retention and teardown.
 '@
         }
     }

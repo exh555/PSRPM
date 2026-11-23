@@ -473,6 +473,16 @@ function Start-PSRPMEngine {
 
         $pendingConnects = @{}
         $pendingDialogConnects = @{}
+        $disposeSessionOwner = {
+            param($sessObj)
+            if (-not $sessObj) { return }
+            if ($sessObj.ContainsKey('OwnerRunspace') -and $null -ne $sessObj.OwnerRunspace) {
+                $oRs = $sessObj.OwnerRunspace
+                $sessObj.OwnerRunspace = $null
+                try { $oRs.Close() } catch {}
+                try { $oRs.Dispose() } catch {}
+            }
+        }
         $emitSessionState = {
             param([string]$tId, [string]$cState, [string]$tName, [string]$msg, [string]$errText)
             if ($stateContainer -and $stateContainer.SessionStateEvents) {
@@ -653,14 +663,16 @@ function Start-PSRPMEngine {
                     } catch {
                         $dcInvErr = $_.Exception.Message
                     }
+                    $dcRs = $dc.Runspace
+                    $dcAdoptRs = $false
                     try { if ($dc.PowerShell) { $dc.PowerShell.Dispose() } } catch {}
-                    try { if ($dc.Runspace) { $dc.Runspace.Close(); $dc.Runspace.Dispose() } } catch {}
 
                     $wasCancelled = [bool]$dc.Cancelled -or ($dc.CancelToken -and [bool]$dc.CancelToken.Cancelled)
                     if ($wasCancelled) {
                         if ($dcResObj -and $dcResObj.Session) {
                             try { Remove-PSSession -Session $dcResObj.Session -ErrorAction SilentlyContinue } catch {}
                         }
+                        try { if ($dcRs) { $dcRs.Close(); $dcRs.Dispose() } } catch {}
                         continue
                     }
 
@@ -675,6 +687,7 @@ function Start-PSRPMEngine {
                                     $dcTabId = $activeTabId
                                 } else {
                                     try { Remove-PSSession -Session $dcResObj.Session -ErrorAction SilentlyContinue } catch {}
+                                    try { if ($dcRs) { $dcRs.Close(); $dcRs.Dispose() } } catch {}
                                     $stateContainer.ResultQueue.Enqueue(@{
                                         RequestId   = $dc.RequestId
                                         CommandType = "SwitchTarget"
@@ -696,10 +709,12 @@ function Start-PSRPMEngine {
                                 if ($oldSessObj.Session) {
                                     Remove-PSSession -Session $oldSessObj.Session -ErrorAction SilentlyContinue
                                 }
+                                &$disposeSessionOwner $oldSessObj
                             }
 
                             $sessions[$dcTabId] = @{
                                 Session              = $dcResObj.Session
+                                OwnerRunspace        = $dcRs
                                 IsLocal              = $false
                                 Target               = $dcComp
                                 Badge                = $dcBadge
@@ -741,6 +756,7 @@ function Start-PSRPMEngine {
                                 $stateContainer.TabNeedsResync[$dcTabId] = $true
                             }
 
+                            $dcAdoptRs = $true
                             $stateContainer.ResultQueue.Enqueue(@{
                                 RequestId   = $dc.RequestId
                                 CommandType = "SwitchTarget"
@@ -750,6 +766,7 @@ function Start-PSRPMEngine {
                         } elseif ($dc.CommandType -eq "AddTabSession") {
                             $sessions[$dcTabId] = @{
                                 Session              = $dcResObj.Session
+                                OwnerRunspace        = $dcRs
                                 IsLocal              = $false
                                 Target               = $dcComp
                                 Badge                = $dcBadge
@@ -788,6 +805,7 @@ function Start-PSRPMEngine {
                             &$setFullSync $true
                             $nextScheduledUtcTicks = [DateTime]::UtcNow.Ticks
 
+                            $dcAdoptRs = $true
                             $stateContainer.ResultQueue.Enqueue(@{
                                 RequestId   = $dc.RequestId
                                 CommandType = "AddTabSession"
@@ -800,10 +818,15 @@ function Start-PSRPMEngine {
                                 ElapsedMs   = $dcElapsedMs
                             })
                         }
+                        if (-not $dcAdoptRs) {
+                            try { Remove-PSSession -Session $dcResObj.Session -ErrorAction SilentlyContinue } catch {}
+                            try { if ($dcRs) { $dcRs.Close(); $dcRs.Dispose() } } catch {}
+                        }
                     } else {
                         if ($dcResObj -and $dcResObj.Session) {
                             try { Remove-PSSession -Session $dcResObj.Session -ErrorAction SilentlyContinue } catch {}
                         }
+                        try { if ($dcRs) { $dcRs.Close(); $dcRs.Dispose() } } catch {}
                         $dcErrMsg = if ($dcResObj -and -not [string]::IsNullOrWhiteSpace($dcResObj.Error)) {
                             [string]$dcResObj.Error
                         } elseif ($dcInvErr) {
@@ -841,13 +864,14 @@ function Start-PSRPMEngine {
                 } catch {
                     $invErr = $_.Exception.Message
                 }
+                $pcRs = $pc.Runspace
                 try { if ($pc.PowerShell) { $pc.PowerShell.Dispose() } } catch {}
-                try { if ($pc.Runspace) { $pc.Runspace.Close(); $pc.Runspace.Dispose() } } catch {}
 
                 if ($pc.Cancelled -or (-not $sessions.ContainsKey($tId))) {
                     if ($resObj -and $resObj.Session) {
                         try { Remove-PSSession -Session $resObj.Session -ErrorAction SilentlyContinue } catch {}
                     }
+                    try { if ($pcRs) { $pcRs.Close(); $pcRs.Dispose() } } catch {}
                     continue
                 }
 
@@ -856,7 +880,9 @@ function Start-PSRPMEngine {
                     if ($sObj.Session) {
                         try { Remove-PSSession -Session $sObj.Session -ErrorAction SilentlyContinue } catch {}
                     }
+                    &$disposeSessionOwner $sObj
                     $sObj.Session              = $resObj.Session
+                    $sObj.OwnerRunspace        = $pcRs
                     $sObj.CollectorInitialized = $false
                     $sObj.InspectorInitialized = $false
                     $sObj.ActionInitialized    = $false
@@ -881,6 +907,7 @@ function Start-PSRPMEngine {
                     if ($resObj -and $resObj.Session) {
                         try { Remove-PSSession -Session $resObj.Session -ErrorAction SilentlyContinue } catch {}
                     }
+                    try { if ($pcRs) { $pcRs.Close(); $pcRs.Dispose() } } catch {}
                     $errMsg = if ($resObj -and -not [string]::IsNullOrWhiteSpace($resObj.Error)) {
                         [string]$resObj.Error
                     } elseif ($invErr) {
@@ -888,6 +915,10 @@ function Start-PSRPMEngine {
                     } else {
                         "WinRM connection failed."
                     }
+                    if ($sObj.Session) {
+                        try { Remove-PSSession -Session $sObj.Session -ErrorAction SilentlyContinue } catch {}
+                    }
+                    &$disposeSessionOwner $sObj
                     $sObj.Session          = $null
                     $sObj.ConnState        = "Disconnected"
                     $sObj.LastConnectError = $errMsg
@@ -1434,6 +1465,7 @@ function Start-PSRPMEngine {
                                 if ($sessToClose.Session) {
                                     Remove-PSSession -Session $sessToClose.Session -ErrorAction SilentlyContinue
                                 }
+                                &$disposeSessionOwner $sessToClose
                                 $sessions.Remove($closeTabId)
                                 if ($stateContainer.ContainsKey('TabNeedsResync') -and $null -ne $stateContainer.TabNeedsResync) {
                                     [void]$stateContainer.TabNeedsResync.Remove($closeTabId)
@@ -1519,6 +1551,7 @@ function Start-PSRPMEngine {
                                 if ($sessions[$activeTabId].Session) {
                                     Remove-PSSession -Session $sessions[$activeTabId].Session -ErrorAction SilentlyContinue
                                 }
+                                &$disposeSessionOwner $sessions[$activeTabId]
                             }
 
                             $stateContainer.ConnectionState   = "LocalMode"
@@ -1757,6 +1790,7 @@ function Start-PSRPMEngine {
                                         if ($activeSessObj.Session) {
                                             Remove-PSSession -Session $activeSessObj.Session -ErrorAction SilentlyContinue
                                         }
+                                        &$disposeSessionOwner $activeSessObj
                                         $cfg = $activeSessObj.ConnectionConfig
                                         $so = New-PSSessionOption -OpenTimeout 8000 -OperationTimeout 30000 -CancelTimeout 3000 -NoMachineProfile
                                         $sParams = @{
@@ -1875,6 +1909,7 @@ function Start-PSRPMEngine {
                 if ($sItem.Session) {
                     Remove-PSSession -Session $sItem.Session -ErrorAction SilentlyContinue
                 }
+                &$disposeSessionOwner $sItem
             }
         }
     })
