@@ -3,10 +3,69 @@
 # 100% In-Memory Reflection.Emit Class Compilation (Zero DLL Writes, Zero csc.exe)
 # Dirty-Checked INotifyPropertyChanged + Process Explorer Tree Geometry & Sparkline Builders
 
+class PSRPMProcessCollection : System.Collections.ObjectModel.ObservableCollection[Object] {
+    hidden [System.Collections.Generic.IList[Object]] $_backing
+    hidden static [System.Reflection.PropertyInfo] $_itemsProp = [System.Collections.ObjectModel.Collection[Object]].GetProperty(
+        "Items",
+        [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
+    )
+
+    PSRPMProcessCollection() : base() {
+        $this._backing = [System.Collections.Generic.IList[Object]]([PSRPMProcessCollection]::_itemsProp.GetValue($this, $null))
+    }
+
+    [void] ReplaceOrder([System.Collections.Generic.List[Object]]$desired) {
+        $n = $desired.Count
+        $m = $this.Count
+        if ($m -gt $n) {
+            for ($i = $m - 1; $i -ge $n; $i--) {
+                $this.RemoveAt($i)
+            }
+        }
+        $common = [Math]::Min($this.Count, $n)
+        $changedIdx = [System.Collections.Generic.List[int]]::new()
+        $oldItems   = [System.Collections.Generic.List[Object]]::new()
+        $backing    = $this._backing
+        for ($i = 0; $i -lt $common; $i++) {
+            $oldItem = $backing[$i]
+            $newItem = $desired[$i]
+            if (-not [Object]::ReferenceEquals($oldItem, $newItem)) {
+                $changedIdx.Add($i)
+                $oldItems.Add($oldItem)
+                $backing[$i] = $newItem
+            }
+        }
+        for ($c = 0; $c -lt $changedIdx.Count; $c++) {
+            $idx = $changedIdx[$c]
+            $evArgs = [System.Collections.Specialized.NotifyCollectionChangedEventArgs]::new(
+                [System.Collections.Specialized.NotifyCollectionChangedAction]::Replace,
+                $backing[$idx],
+                $oldItems[$c],
+                $idx
+            )
+            $this.OnCollectionChanged($evArgs)
+        }
+        if ($changedIdx.Count -gt 0) {
+            $this.OnPropertyChanged([PSRPMThemeRegistry]::GetPropArgs("Item[]"))
+        }
+        for ($i = $common; $i -lt $n; $i++) {
+            $this.Add($desired[$i])
+        }
+    }
+}
+
 class PSRPMThemeRegistry {
     hidden static [hashtable] $_PaletteCache = @{}
     hidden static [hashtable] $_CustomPalettes = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
     hidden static [System.Collections.Generic.Dictionary[string, System.ComponentModel.PropertyChangedEventArgs]] $_PropArgsCache = [System.Collections.Generic.Dictionary[string, System.ComponentModel.PropertyChangedEventArgs]]::new([System.StringComparer]::Ordinal)
+    hidden static [System.Collections.Generic.Dictionary[string, Object]] $_FrozenBrushCache = [System.Collections.Generic.Dictionary[string, Object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    hidden static [System.Collections.Generic.Dictionary[string, Object]] $_FrozenGeomCache = [System.Collections.Generic.Dictionary[string, Object]]::new([System.StringComparer]::Ordinal)
+    hidden static [Object] $_BrushConverter = $null
+    hidden static [Object] $_VisVisible = $null
+    hidden static [Object] $_VisCollapsed = $null
+    hidden static [Object] $_WeightNormal = $null
+    hidden static [Object] $_WeightSemiBold = $null
+    hidden static [Object] $_WeightBold = $null
 
     static [System.ComponentModel.PropertyChangedEventArgs] GetPropArgs([string]$name) {
         $argsObj = $null
@@ -16,6 +75,94 @@ class PSRPMThemeRegistry {
         $argsObj = [System.ComponentModel.PropertyChangedEventArgs]::new($name)
         [PSRPMThemeRegistry]::_PropArgsCache[$name] = $argsObj
         return $argsObj
+    }
+
+    static [Object] GetFrozenBrush([string]$hex) {
+        if ([string]::IsNullOrWhiteSpace($hex)) { return $null }
+        $cached = $null
+        if ([PSRPMThemeRegistry]::_FrozenBrushCache.TryGetValue($hex, [ref]$cached)) {
+            return $cached
+        }
+        try {
+            if ($null -eq [PSRPMThemeRegistry]::_BrushConverter) {
+                $bcType = [System.Type]::GetType("System.Windows.Media.BrushConverter, PresentationCore, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35", $false)
+                if ($null -ne $bcType) {
+                    [PSRPMThemeRegistry]::_BrushConverter = [Activator]::CreateInstance($bcType)
+                }
+            }
+            if ($null -ne [PSRPMThemeRegistry]::_BrushConverter) {
+                $b = [PSRPMThemeRegistry]::_BrushConverter.ConvertFromString($hex)
+                if ($null -ne $b -and $b.CanFreeze) { $b.Freeze() }
+                if ([PSRPMThemeRegistry]::_FrozenBrushCache.Count -ge 512) {
+                    [PSRPMThemeRegistry]::_FrozenBrushCache.Clear()
+                }
+                [PSRPMThemeRegistry]::_FrozenBrushCache[$hex] = $b
+                return $b
+            }
+        } catch {}
+        return $hex
+    }
+
+    static [Object] GetFrozenGeometry([string]$pathData) {
+        if ([string]::IsNullOrEmpty($pathData)) { return $null }
+        $cached = $null
+        if ([PSRPMThemeRegistry]::_FrozenGeomCache.TryGetValue($pathData, [ref]$cached)) {
+            return $cached
+        }
+        try {
+            $gType = [System.Type]::GetType("System.Windows.Media.Geometry, PresentationCore, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35", $false)
+            if ($null -ne $gType) {
+                $g = $gType.GetMethod("Parse", [Type[]]@([string])).Invoke($null, [Object[]]@($pathData))
+                if ($null -ne $g -and $g.CanFreeze) { $g.Freeze() }
+                if ([PSRPMThemeRegistry]::_FrozenGeomCache.Count -ge 256) {
+                    [PSRPMThemeRegistry]::_FrozenGeomCache.Clear()
+                }
+                [PSRPMThemeRegistry]::_FrozenGeomCache[$pathData] = $g
+                return $g
+            }
+        } catch {}
+        return $pathData
+    }
+
+    static [Object] GetVisibility([string]$visStr) {
+        if ($null -eq [PSRPMThemeRegistry]::_VisVisible) {
+            try {
+                $vType = [System.Type]::GetType("System.Windows.Visibility, PresentationCore, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35", $false)
+                if ($null -ne $vType) {
+                    [PSRPMThemeRegistry]::_VisVisible   = [Enum]::Parse($vType, "Visible")
+                    [PSRPMThemeRegistry]::_VisCollapsed = [Enum]::Parse($vType, "Collapsed")
+                }
+            } catch {}
+        }
+        if ($visStr -eq "Visible") {
+            if ($null -ne [PSRPMThemeRegistry]::_VisVisible) { return [PSRPMThemeRegistry]::_VisVisible }
+            return "Visible"
+        }
+        if ($null -ne [PSRPMThemeRegistry]::_VisCollapsed) { return [PSRPMThemeRegistry]::_VisCollapsed }
+        return "Collapsed"
+    }
+
+    static [Object] GetFontWeight([string]$weightStr) {
+        if ($null -eq [PSRPMThemeRegistry]::_WeightNormal) {
+            try {
+                $fwType = [System.Type]::GetType("System.Windows.FontWeights, PresentationCore, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35", $false)
+                if ($null -ne $fwType) {
+                    [PSRPMThemeRegistry]::_WeightNormal   = $fwType.GetProperty("Normal").GetValue($null, $null)
+                    [PSRPMThemeRegistry]::_WeightSemiBold = $fwType.GetProperty("SemiBold").GetValue($null, $null)
+                    [PSRPMThemeRegistry]::_WeightBold     = $fwType.GetProperty("Bold").GetValue($null, $null)
+                }
+            } catch {}
+        }
+        if ($weightStr -eq "Bold") {
+            if ($null -ne [PSRPMThemeRegistry]::_WeightBold) { return [PSRPMThemeRegistry]::_WeightBold }
+            return "Bold"
+        }
+        if ($weightStr -eq "SemiBold") {
+            if ($null -ne [PSRPMThemeRegistry]::_WeightSemiBold) { return [PSRPMThemeRegistry]::_WeightSemiBold }
+            return "SemiBold"
+        }
+        if ($null -ne [PSRPMThemeRegistry]::_WeightNormal) { return [PSRPMThemeRegistry]::_WeightNormal }
+        return "Normal"
     }
 
     static [bool] IsDarkMode([string]$mode) {
@@ -47,11 +194,13 @@ class PSRPMThemeRegistry {
 
     static [void] ClearCache() {
         [PSRPMThemeRegistry]::_PaletteCache.Clear()
+        [PSRPMThemeRegistry]::_FrozenBrushCache.Clear()
     }
 
     static [void] ClearCustomPalettes() {
         [PSRPMThemeRegistry]::_CustomPalettes.Clear()
         [PSRPMThemeRegistry]::_PaletteCache.Clear()
+        [PSRPMThemeRegistry]::_FrozenBrushCache.Clear()
     }
 
     hidden static [hashtable] CloneDeep([hashtable]$src) {
@@ -1137,16 +1286,22 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [int]$HandlesDelta
     [string]$CPUDeltaFormatted
     [string]$CPUDeltaBrush
+    [Object]$CPUDeltaSolidBrush
     [string]$PrivateDeltaFormatted
     [string]$PrivateDeltaBadgeText
     [string]$PrivateDeltaBadgeVisibility
+    [Object]$PrivateDeltaBadgeVis
     [string]$PrivateDeltaBrush
+    [Object]$PrivateDeltaSolidBrush
     [string]$MemoryDeltaFormatted
     [string]$WsDeltaBadgeText
     [string]$WsDeltaBadgeVisibility
+    [Object]$WsDeltaBadgeVis
     [string]$MemoryDeltaBrush
+    [Object]$MemoryDeltaSolidBrush
     [string]$HandlesDeltaFormatted
     [string]$HandlesDeltaBrush
+    [Object]$HandlesDeltaSolidBrush
 
     # Enriched Hover & Cell ToolTips (CommandLineToolTip preserved separately)
     [string]$ProcessHoverToolTip
@@ -1163,15 +1318,24 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [bool]$IsCompactRows
     [double]$IndentWidth
     [string]$TreeGuideVisibility
+    [Object]$TreeGuideVis
     [string]$TreeGuideGeometry
+    [Object]$TreeGuidePathGeometry
     [string]$ToggleVisibility
+    [Object]$ToggleVis
     [string]$LeafVisibility
+    [Object]$LeafVis
     [string]$ExpanderGeometry
+    [Object]$ExpanderPathGeometry
     [Object]$IconSource
     [string]$FallbackIconVisibility
+    [Object]$FallbackIconVis
     [string]$NameFontWeight
+    [Object]$NameWeight
     [string]$RowBackground
+    [Object]$RowBackgroundBrush
     [string]$RowForeground
+    [Object]$RowForegroundBrush
     [double]$RowOpacity
     [bool]$IsDarkTheme
     [string]$ThemeMode
@@ -1217,15 +1381,24 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.IsTreeMode             = $true
         $this.IndentWidth            = 16.0
         $this.TreeGuideVisibility    = "Visible"
+        $this.TreeGuideVis           = [PSRPMThemeRegistry]::GetVisibility("Visible")
         $this.TreeGuideGeometry      = ""
+        $this.TreeGuidePathGeometry  = $null
         $this.ToggleVisibility       = "Collapsed"
+        $this.ToggleVis              = [PSRPMThemeRegistry]::GetVisibility("Collapsed")
         $this.LeafVisibility         = "Visible"
+        $this.LeafVis                = [PSRPMThemeRegistry]::GetVisibility("Visible")
         $this.ExpanderGeometry       = "M 0,2.5 L 5,2.5"
+        $this.ExpanderPathGeometry   = [PSRPMThemeRegistry]::GetFrozenGeometry("M 0,2.5 L 5,2.5")
         $this.IconSource             = $null
         $this.FallbackIconVisibility = "Visible"
+        $this.FallbackIconVis        = [PSRPMThemeRegistry]::GetVisibility("Visible")
         $this.NameFontWeight         = "Normal"
+        $this.NameWeight             = [PSRPMThemeRegistry]::GetFontWeight("Normal")
         $this.RowBackground          = "#FFFFFF"
+        $this.RowBackgroundBrush     = [PSRPMThemeRegistry]::GetFrozenBrush("#FFFFFF")
         $this.RowForeground          = "#0F172A"
+        $this.RowForegroundBrush     = [PSRPMThemeRegistry]::GetFrozenBrush("#0F172A")
         $this.RowOpacity             = 1.0
         $this.IsDarkTheme            = $false
         $this.ThemeMode              = "Light"
@@ -1254,16 +1427,22 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.HandlesDelta               = 0
         $this.CPUDeltaFormatted          = ""
         $this.CPUDeltaBrush              = "#475569"
+        $this.CPUDeltaSolidBrush         = [PSRPMThemeRegistry]::GetFrozenBrush("#475569")
         $this.PrivateDeltaFormatted      = ""
         $this.PrivateDeltaBadgeText      = ""
         $this.PrivateDeltaBadgeVisibility= "Collapsed"
+        $this.PrivateDeltaBadgeVis       = [PSRPMThemeRegistry]::GetVisibility("Collapsed")
         $this.PrivateDeltaBrush          = "#64748B"
+        $this.PrivateDeltaSolidBrush     = [PSRPMThemeRegistry]::GetFrozenBrush("#64748B")
         $this.MemoryDeltaFormatted       = ""
         $this.WsDeltaBadgeText           = ""
         $this.WsDeltaBadgeVisibility     = "Collapsed"
+        $this.WsDeltaBadgeVis            = [PSRPMThemeRegistry]::GetVisibility("Collapsed")
         $this.MemoryDeltaBrush           = "#64748B"
+        $this.MemoryDeltaSolidBrush      = [PSRPMThemeRegistry]::GetFrozenBrush("#64748B")
         $this.HandlesDeltaFormatted      = ""
         $this.HandlesDeltaBrush          = "#64748B"
+        $this.HandlesDeltaSolidBrush     = [PSRPMThemeRegistry]::GetFrozenBrush("#64748B")
 
         $this.ProcessHoverToolTip        = ""
         $this.CpuCellToolTip             = ""
@@ -1529,20 +1708,20 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
 
         if ($this.CPUDeltaFormatted -ne $cFmt)           { $this.CPUDeltaFormatted = $cFmt;           $this.OnPropertyChanged('CPUDeltaFormatted') }
-        if ($this.CPUDeltaBrush -ne $cBr)                { $this.CPUDeltaBrush = $cBr;                $this.OnPropertyChanged('CPUDeltaBrush') }
+        if ($this.CPUDeltaBrush -ne $cBr)                { $this.CPUDeltaBrush = $cBr;                $this.CPUDeltaSolidBrush = [PSRPMThemeRegistry]::GetFrozenBrush($cBr); $this.OnPropertyChanged('CPUDeltaBrush'); $this.OnPropertyChanged('CPUDeltaSolidBrush') }
 
         if ($this.PrivateDeltaFormatted -ne $pFmt)       { $this.PrivateDeltaFormatted = $pFmt;       $this.OnPropertyChanged('PrivateDeltaFormatted') }
         if ($this.PrivateDeltaBadgeText -ne $pBadge)     { $this.PrivateDeltaBadgeText = $pBadge;     $this.OnPropertyChanged('PrivateDeltaBadgeText') }
-        if ($this.PrivateDeltaBadgeVisibility -ne $pVis) { $this.PrivateDeltaBadgeVisibility = $pVis; $this.OnPropertyChanged('PrivateDeltaBadgeVisibility') }
-        if ($this.PrivateDeltaBrush -ne $pBr)            { $this.PrivateDeltaBrush = $pBr;            $this.OnPropertyChanged('PrivateDeltaBrush') }
+        if ($this.PrivateDeltaBadgeVisibility -ne $pVis) { $this.PrivateDeltaBadgeVisibility = $pVis; $this.PrivateDeltaBadgeVis = [PSRPMThemeRegistry]::GetVisibility($pVis); $this.OnPropertyChanged('PrivateDeltaBadgeVisibility'); $this.OnPropertyChanged('PrivateDeltaBadgeVis') }
+        if ($this.PrivateDeltaBrush -ne $pBr)            { $this.PrivateDeltaBrush = $pBr;            $this.PrivateDeltaSolidBrush = [PSRPMThemeRegistry]::GetFrozenBrush($pBr); $this.OnPropertyChanged('PrivateDeltaBrush'); $this.OnPropertyChanged('PrivateDeltaSolidBrush') }
 
         if ($this.MemoryDeltaFormatted -ne $wFmt)        { $this.MemoryDeltaFormatted = $wFmt;        $this.OnPropertyChanged('MemoryDeltaFormatted') }
         if ($this.WsDeltaBadgeText -ne $wBadge)          { $this.WsDeltaBadgeText = $wBadge;          $this.OnPropertyChanged('WsDeltaBadgeText') }
-        if ($this.WsDeltaBadgeVisibility -ne $wVis)      { $this.WsDeltaBadgeVisibility = $wVis;      $this.OnPropertyChanged('WsDeltaBadgeVisibility') }
-        if ($this.MemoryDeltaBrush -ne $wBr)             { $this.MemoryDeltaBrush = $wBr;             $this.OnPropertyChanged('MemoryDeltaBrush') }
+        if ($this.WsDeltaBadgeVisibility -ne $wVis)      { $this.WsDeltaBadgeVisibility = $wVis;      $this.WsDeltaBadgeVis = [PSRPMThemeRegistry]::GetVisibility($wVis); $this.OnPropertyChanged('WsDeltaBadgeVisibility'); $this.OnPropertyChanged('WsDeltaBadgeVis') }
+        if ($this.MemoryDeltaBrush -ne $wBr)             { $this.MemoryDeltaBrush = $wBr;             $this.MemoryDeltaSolidBrush = [PSRPMThemeRegistry]::GetFrozenBrush($wBr); $this.OnPropertyChanged('MemoryDeltaBrush'); $this.OnPropertyChanged('MemoryDeltaSolidBrush') }
 
         if ($this.HandlesDeltaFormatted -ne $hFmt)       { $this.HandlesDeltaFormatted = $hFmt;       $this.OnPropertyChanged('HandlesDeltaFormatted') }
-        if ($this.HandlesDeltaBrush -ne $hBr)            { $this.HandlesDeltaBrush = $hBr;            $this.OnPropertyChanged('HandlesDeltaBrush') }
+        if ($this.HandlesDeltaBrush -ne $hBr)            { $this.HandlesDeltaBrush = $hBr;            $this.HandlesDeltaSolidBrush = [PSRPMThemeRegistry]::GetFrozenBrush($hBr); $this.OnPropertyChanged('HandlesDeltaBrush'); $this.OnPropertyChanged('HandlesDeltaSolidBrush') }
 
         $this.RefreshCpuCellToolTip()
     }
@@ -1860,11 +2039,26 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
 
         if ($this.RowBackground -ne $bg) {
             $this.RowBackground = $bg
+            $this.RowBackgroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush($bg)
             $this.OnPropertyChanged('RowBackground')
+            $this.OnPropertyChanged('RowBackgroundBrush')
         }
         if ($this.RowForeground -ne $fg) {
             $this.RowForeground = $fg
+            $this.RowForegroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush($fg)
             $this.OnPropertyChanged('RowForeground')
+            $this.OnPropertyChanged('RowForegroundBrush')
+        }
+    }
+
+    [void] SetIcon([Object]$icoBmp) {
+        if ($null -ne $icoBmp) {
+            $this.IconSource = $icoBmp
+            $this.FallbackIconVisibility = "Collapsed"
+            $this.FallbackIconVis = [PSRPMThemeRegistry]::GetVisibility("Collapsed")
+            $this.OnPropertyChanged('IconSource')
+            $this.OnPropertyChanged('FallbackIconVisibility')
+            $this.OnPropertyChanged('FallbackIconVis')
         }
     }
 
@@ -1884,7 +2078,9 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         }
         if ($this.ExpanderGeometry -ne $newExpGeom) {
             $this.ExpanderGeometry = $newExpGeom
+            $this.ExpanderPathGeometry = [PSRPMThemeRegistry]::GetFrozenGeometry($newExpGeom)
             $this.OnPropertyChanged('ExpanderGeometry')
+            $this.OnPropertyChanged('ExpanderPathGeometry')
         }
     }
 
@@ -1918,12 +2114,12 @@ class ProcessItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         if ($this.Level -ne $level) { $this.Level = $level; $this.OnPropertyChanged('Level') }
         if ($this.IsTreeMode -ne $isTreeMode) { $this.IsTreeMode = $isTreeMode; $this.OnPropertyChanged('IsTreeMode') }
         if ($this.IndentWidth -ne $newIndent) { $this.IndentWidth = $newIndent; $this.OnPropertyChanged('IndentWidth') }
-        if ($this.TreeGuideVisibility -ne $newGuideVis) { $this.TreeGuideVisibility = $newGuideVis; $this.OnPropertyChanged('TreeGuideVisibility') }
-        if ($this.TreeGuideGeometry -ne $guideGeom) { $this.TreeGuideGeometry = $guideGeom; $this.OnPropertyChanged('TreeGuideGeometry') }
-        if ($this.ToggleVisibility -ne $newToggleVis) { $this.ToggleVisibility = $newToggleVis; $this.OnPropertyChanged('ToggleVisibility') }
-        if ($this.LeafVisibility -ne $newLeafVis) { $this.LeafVisibility = $newLeafVis; $this.OnPropertyChanged('LeafVisibility') }
-        if ($this.ExpanderGeometry -ne $newExpGeom) { $this.ExpanderGeometry = $newExpGeom; $this.OnPropertyChanged('ExpanderGeometry') }
-        if ($this.NameFontWeight -ne $newWeight) { $this.NameFontWeight = $newWeight; $this.OnPropertyChanged('NameFontWeight') }
+        if ($this.TreeGuideVisibility -ne $newGuideVis) { $this.TreeGuideVisibility = $newGuideVis; $this.TreeGuideVis = [PSRPMThemeRegistry]::GetVisibility($newGuideVis); $this.OnPropertyChanged('TreeGuideVisibility'); $this.OnPropertyChanged('TreeGuideVis') }
+        if ($this.TreeGuideGeometry -ne $guideGeom) { $this.TreeGuideGeometry = $guideGeom; $this.TreeGuidePathGeometry = [PSRPMThemeRegistry]::GetFrozenGeometry($guideGeom); $this.OnPropertyChanged('TreeGuideGeometry'); $this.OnPropertyChanged('TreeGuidePathGeometry') }
+        if ($this.ToggleVisibility -ne $newToggleVis) { $this.ToggleVisibility = $newToggleVis; $this.ToggleVis = [PSRPMThemeRegistry]::GetVisibility($newToggleVis); $this.OnPropertyChanged('ToggleVisibility'); $this.OnPropertyChanged('ToggleVis') }
+        if ($this.LeafVisibility -ne $newLeafVis) { $this.LeafVisibility = $newLeafVis; $this.LeafVis = [PSRPMThemeRegistry]::GetVisibility($newLeafVis); $this.OnPropertyChanged('LeafVisibility'); $this.OnPropertyChanged('LeafVis') }
+        if ($this.ExpanderGeometry -ne $newExpGeom) { $this.ExpanderGeometry = $newExpGeom; $this.ExpanderPathGeometry = [PSRPMThemeRegistry]::GetFrozenGeometry($newExpGeom); $this.OnPropertyChanged('ExpanderGeometry'); $this.OnPropertyChanged('ExpanderPathGeometry') }
+        if ($this.NameFontWeight -ne $newWeight) { $this.NameFontWeight = $newWeight; $this.NameWeight = [PSRPMThemeRegistry]::GetFontWeight($newWeight); $this.OnPropertyChanged('NameFontWeight'); $this.OnPropertyChanged('NameWeight') }
         if ($this.RowOpacity -ne $opacity) { $this.RowOpacity = $opacity; $this.OnPropertyChanged('RowOpacity') }
     }
 }
@@ -2199,6 +2395,12 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$CommitFillPoints
     [string]$RamPoints
     [string]$RamFillPoints
+    [Object]$CpuPointCollection
+    [Object]$CpuFillPointCollection
+    [Object]$CommitPointCollection
+    [Object]$CommitFillPointCollection
+    [Object]$RamPointCollection
+    [Object]$RamFillPointCollection
 
     # System Information Modal State & Per-Core Toggle
     [bool]$IsSysInfoOpen
@@ -2454,6 +2656,12 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CommitFillPoints       = "0,26 0,25 98,25 98,26"
         $this.RamPoints              = "0,25 105,25"
         $this.RamFillPoints          = "0,26 0,25 105,25 105,26"
+        $this.CpuPointCollection     = $null
+        $this.CpuFillPointCollection = $null
+        $this.CommitPointCollection  = $null
+        $this.CommitFillPointCollection = $null
+        $this.RamPointCollection     = $null
+        $this.RamFillPointCollection = $null
 
         # Default System Information Values
         $cores = [Environment]::ProcessorCount
@@ -2666,7 +2874,8 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         return [SystemSummaryViewModel]::FormatBytesStatic($bytes)
     }
 
-    hidden [string[]] BuildSparkline([double[]]$arr, [double]$width, [double]$height) {
+    hidden [Object[]] BuildSparklineNative([double[]]$arr, [double]$width, [double]$height) {
+        $cnt = $arr.Count
         $lineSb = [System.Text.StringBuilder]::new(256)
         $fillSb = [System.Text.StringBuilder]::new(280)
         $inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -2674,17 +2883,45 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $hStr = $height.ToString("F1", $inv)
         [void]$fillSb.Append("0,$hStr ")
 
-        $maxIdx = [Math]::Max(1, $arr.Count - 1)
-        for ($i = 0; $i -lt $arr.Count; $i++) {
+        $linePts = $null
+        $fillPts = $null
+        $hasWpf = $false
+        try {
+            $pcType = [System.Type]::GetType("System.Windows.Media.PointCollection, PresentationCore, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35", $false)
+            if ($null -ne $pcType) {
+                $linePts = [Activator]::CreateInstance($pcType, [Object[]]@([int]$cnt))
+                $fillPts = [Activator]::CreateInstance($pcType, [Object[]]@([int]($cnt + 2)))
+                $fillPts.Add([System.Windows.Point]::new(0.0, $height))
+                $hasWpf = $true
+            }
+        } catch { $hasWpf = $false }
+
+        $maxIdx = [Math]::Max(1, $cnt - 1)
+        for ($i = 0; $i -lt $cnt; $i++) {
             $x = [Math]::Round(($i / [double]$maxIdx) * $width, 1)
             $val = [Math]::Max(0.0, [Math]::Min(100.0, $arr[$i]))
             $y = [Math]::Round(($height - 1.0) - (($val / 100.0) * ($height - 13.0)), 1)
+            if ($hasWpf) {
+                $wp = [System.Windows.Point]::new($x, $y)
+                $linePts.Add($wp)
+                $fillPts.Add($wp)
+            }
             $pt = "$($x.ToString('F1', $inv)),$($y.ToString('F1', $inv)) "
             [void]$lineSb.Append($pt)
             [void]$fillSb.Append($pt)
         }
         [void]$fillSb.Append("$wStr,$hStr")
-        return @($lineSb.ToString().Trim(), $fillSb.ToString().Trim())
+        if ($hasWpf) {
+            $fillPts.Add([System.Windows.Point]::new($width, $height))
+            if ($linePts.CanFreeze) { $linePts.Freeze() }
+            if ($fillPts.CanFreeze) { $fillPts.Freeze() }
+        }
+        return @($lineSb.ToString().Trim(), $fillSb.ToString().Trim(), $linePts, $fillPts)
+    }
+
+    hidden [string[]] BuildSparkline([double[]]$arr, [double]$width, [double]$height) {
+        $res = $this.BuildSparklineNative($arr, $width, $height)
+        return @([string]$res[0], [string]$res[1])
     }
 
     [int] GetActiveChartWindowCount() {
@@ -2810,25 +3047,40 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] UpdateSummary([double]$cpu, [long]$ramUsed, [long]$ramTotal, [int]$procs, [int]$threads, [int]$handles, [long]$commitUsed, [long]$commitLimit) {
-        $this.CpuUsage            = $cpu
-        $this.CpuSummaryFormatted = "$($cpu.ToString('F1'))%"
-        $this.RamUsedMB           = $ramUsed
-        $this.RamTotalMB          = $ramTotal
-        $this.RamPct              = if ($ramTotal -gt 0) { [Math]::Round(($ramUsed / [double]$ramTotal) * 100.0, 1) } else { 0.0 }
-        $this.RamPctFormatted     = "$($this.RamPct.ToString('F1'))%"
-        $this.RamSummaryFormatted = "Physical Memory: $($this.RamUsedMB.ToString('N0')) / $($this.RamTotalMB.ToString('N0')) MB ($($this.RamPctFormatted))"
+        $cpuChanged = ($this.CpuUsage -ne $cpu)
+        $this.CpuUsage = $cpu
+        $newCpuFmt = "$($cpu.ToString('F1'))%"
+        $cpuFmtChanged = ($this.CpuSummaryFormatted -ne $newCpuFmt)
+        $this.CpuSummaryFormatted = $newCpuFmt
 
-        $this.CommitUsedMB           = $commitUsed
-        $this.CommitLimitMB          = $commitLimit
-        $this.CommitPct              = if ($commitLimit -gt 0) { [Math]::Round(($commitUsed / [double]$commitLimit) * 100.0, 1) } else { 0.0 }
-        $this.CommitSummaryFormatted = "$($this.CommitPct.ToString('F1'))%"
+        $ramUsedChanged  = ($this.RamUsedMB -ne $ramUsed)
+        $ramTotalChanged = ($this.RamTotalMB -ne $ramTotal)
+        $this.RamUsedMB  = $ramUsed
+        $this.RamTotalMB = $ramTotal
+        $this.RamPct     = if ($ramTotal -gt 0) { [Math]::Round(($ramUsed / [double]$ramTotal) * 100.0, 1) } else { 0.0 }
+        $newRamPctFmt    = "$($this.RamPct.ToString('F1'))%"
+        $ramPctChanged   = ($this.RamPctFormatted -ne $newRamPctFmt)
+        $this.RamPctFormatted = $newRamPctFmt
+        $newRamSumFmt    = "Physical Memory: $($this.RamUsedMB.ToString('N0')) / $($this.RamTotalMB.ToString('N0')) MB ($($this.RamPctFormatted))"
+        $ramSumChanged   = ($this.RamSummaryFormatted -ne $newRamSumFmt)
+        $this.RamSummaryFormatted = $newRamSumFmt
 
+        $this.CommitUsedMB  = $commitUsed
+        $this.CommitLimitMB = $commitLimit
+        $this.CommitPct     = if ($commitLimit -gt 0) { [Math]::Round(($commitUsed / [double]$commitLimit) * 100.0, 1) } else { 0.0 }
+        $newComFmt          = "$($this.CommitPct.ToString('F1'))%"
+        $comFmtChanged      = ($this.CommitSummaryFormatted -ne $newComFmt)
+        $this.CommitSummaryFormatted = $newComFmt
+
+        $procChanged   = ($this.ProcessCount -ne $procs)
+        $threadChanged = ($this.ThreadCount -ne $threads)
+        $handleChanged = ($this.HandleCount -ne $handles)
         $this.ProcessCount       = $procs
         $this.ThreadCount        = $threads
         $this.HandleCount        = $handles
-        $this.ProcessesFormatted = $procs.ToString("N0")
-        $this.ThreadsFormatted   = $threads.ToString("N0")
-        $this.HandlesFormatted   = $handles.ToString("N0")
+        if ($procChanged)   { $this.ProcessesFormatted = $procs.ToString("N0") }
+        if ($threadChanged) { $this.ThreadsFormatted   = $threads.ToString("N0") }
+        if ($handleChanged) { $this.HandlesFormatted   = $handles.ToString("N0") }
 
         $this.HwMemoryGBText      = "$([Math]::Round($ramTotal / 1024.0, 1).ToString('F1')) GB"
         $this.HwCommitLimitGBText = "$([Math]::Round($commitLimit / 1024.0, 1).ToString('F1')) GB"
@@ -2843,16 +3095,16 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.CommitHistory.Enqueue($this.CommitPct)
         $this.RamHistory.Enqueue($this.RamPct)
 
-        $this.OnPropertyChanged('CpuUsage')
-        $this.OnPropertyChanged('CpuSummaryFormatted')
-        $this.OnPropertyChanged('RamUsedMB')
-        $this.OnPropertyChanged('RamTotalMB')
-        $this.OnPropertyChanged('RamPctFormatted')
-        $this.OnPropertyChanged('RamSummaryFormatted')
-        $this.OnPropertyChanged('CommitSummaryFormatted')
-        $this.OnPropertyChanged('ProcessCount')
-        $this.OnPropertyChanged('ThreadCount')
-        $this.OnPropertyChanged('HandleCount')
+        if ($cpuChanged)      { $this.OnPropertyChanged('CpuUsage') }
+        if ($cpuFmtChanged)   { $this.OnPropertyChanged('CpuSummaryFormatted') }
+        if ($ramUsedChanged)  { $this.OnPropertyChanged('RamUsedMB') }
+        if ($ramTotalChanged) { $this.OnPropertyChanged('RamTotalMB') }
+        if ($ramPctChanged)   { $this.OnPropertyChanged('RamPctFormatted') }
+        if ($ramSumChanged)   { $this.OnPropertyChanged('RamSummaryFormatted') }
+        if ($comFmtChanged)   { $this.OnPropertyChanged('CommitSummaryFormatted') }
+        if ($procChanged)     { $this.OnPropertyChanged('ProcessCount') }
+        if ($threadChanged)   { $this.OnPropertyChanged('ThreadCount') }
+        if ($handleChanged)   { $this.OnPropertyChanged('HandleCount') }
 
         if (-not $this.IsWindowMinimized) {
             $this.RefreshSparklines()
@@ -2860,24 +3112,36 @@ class SystemSummaryViewModel : System.ComponentModel.INotifyPropertyChanged {
     }
 
     [void] RefreshSparklines() {
-        $cpuSpark = $this.BuildSparkline($this.CpuHistory.ToArray(), 86.0, 26.0)
-        $this.CpuPoints     = $cpuSpark[0]
-        $this.CpuFillPoints = $cpuSpark[1]
+        $cpuSpark = $this.BuildSparklineNative($this.CpuHistory.ToArray(), 86.0, 26.0)
+        $this.CpuPoints              = [string]$cpuSpark[0]
+        $this.CpuFillPoints          = [string]$cpuSpark[1]
+        $this.CpuPointCollection     = $cpuSpark[2]
+        $this.CpuFillPointCollection = $cpuSpark[3]
 
-        $comSpark = $this.BuildSparkline($this.CommitHistory.ToArray(), 90.0, 26.0)
-        $this.CommitPoints     = $comSpark[0]
-        $this.CommitFillPoints = $comSpark[1]
+        $comSpark = $this.BuildSparklineNative($this.CommitHistory.ToArray(), 90.0, 26.0)
+        $this.CommitPoints              = [string]$comSpark[0]
+        $this.CommitFillPoints          = [string]$comSpark[1]
+        $this.CommitPointCollection     = $comSpark[2]
+        $this.CommitFillPointCollection = $comSpark[3]
 
-        $ramSpark = $this.BuildSparkline($this.RamHistory.ToArray(), 96.0, 26.0)
-        $this.RamPoints     = $ramSpark[0]
-        $this.RamFillPoints = $ramSpark[1]
+        $ramSpark = $this.BuildSparklineNative($this.RamHistory.ToArray(), 96.0, 26.0)
+        $this.RamPoints              = [string]$ramSpark[0]
+        $this.RamFillPoints          = [string]$ramSpark[1]
+        $this.RamPointCollection     = $ramSpark[2]
+        $this.RamFillPointCollection = $ramSpark[3]
 
         $this.OnPropertyChanged('CpuPoints')
         $this.OnPropertyChanged('CpuFillPoints')
+        $this.OnPropertyChanged('CpuPointCollection')
+        $this.OnPropertyChanged('CpuFillPointCollection')
         $this.OnPropertyChanged('CommitPoints')
         $this.OnPropertyChanged('CommitFillPoints')
+        $this.OnPropertyChanged('CommitPointCollection')
+        $this.OnPropertyChanged('CommitFillPointCollection')
         $this.OnPropertyChanged('RamPoints')
         $this.OnPropertyChanged('RamFillPoints')
+        $this.OnPropertyChanged('RamPointCollection')
+        $this.OnPropertyChanged('RamFillPointCollection')
     }
 
     [void] UpdateExtendedTelemetry([Object]$sysArr, [Object]$coresArr) {
@@ -3491,17 +3755,25 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [string]$Title
     [string]$Transport
     [string]$BadgeBackground
+    [Object]$BadgeBackgroundBrush
     [bool]$IsLocal
     [bool]$IsActive
     [bool]$IsDarkTheme
     [string]$ThemeMode
     [string]$StatusDotFill
+    [Object]$StatusDotFillBrush
     [string]$TabBackground
+    [Object]$TabBackgroundBrush
     [string]$TabBorderBrush
+    [Object]$TabBorderSolidBrush
     [string]$TitleForeground
+    [Object]$TitleForegroundBrush
     [string]$TitleFontWeight
+    [Object]$TitleWeight
     [string]$AccentVisibility
+    [Object]$AccentVis
     [string]$CloseVisibility
+    [Object]$CloseVis
     [string]$LatencyText
     [string]$ConnState
     [int]$Port
@@ -3530,6 +3802,8 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
     [hashtable]$NetworkPrevSnapshot
     [string]$NetworkStatusCountsText
 
+    hidden [string]$_LastTitle
+    hidden [string]$_LastTransport
     hidden [System.Collections.Generic.List[System.ComponentModel.PropertyChangedEventHandler]] $Handlers
 
     HostTabItemViewModel([string]$tabId, [string]$compName, [string]$title, [string]$transport, [bool]$isLocal, [Object]$summaryVm) {
@@ -3538,7 +3812,10 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.ComputerName    = $compName
         $this.Title           = $title
         $this.Transport       = $transport
+        $this._LastTitle      = $title
+        $this._LastTransport  = $transport
         $this.BadgeBackground = if ($isLocal) { "#0D9488" } else { "#0284C7" }
+        $this.BadgeBackgroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush($this.BadgeBackground)
         $this.IsLocal         = $isLocal
         $this.ConnState       = if ($isLocal) { "LocalMode" } else { "Connected" }
         $this.Port            = 0
@@ -3547,12 +3824,19 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $this.IsDarkTheme     = $false
         $this.ThemeMode       = "Light"
         $this.StatusDotFill   = "#16A34A"
+        $this.StatusDotFillBrush = [PSRPMThemeRegistry]::GetFrozenBrush("#16A34A")
         $this.TabBackground   = "#FFFFFF"
+        $this.TabBackgroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush("#FFFFFF")
         $this.TabBorderBrush  = "#0284C7"
+        $this.TabBorderSolidBrush = [PSRPMThemeRegistry]::GetFrozenBrush("#0284C7")
         $this.TitleForeground = "#0F172A"
+        $this.TitleForegroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush("#0F172A")
         $this.TitleFontWeight = "Bold"
+        $this.TitleWeight     = [PSRPMThemeRegistry]::GetFontWeight("Bold")
         $this.AccentVisibility = "Visible"
+        $this.AccentVis       = [PSRPMThemeRegistry]::GetVisibility("Visible")
         $this.CloseVisibility = "Collapsed"
+        $this.CloseVis        = [PSRPMThemeRegistry]::GetVisibility("Collapsed")
         $this.LatencyText     = ""
         $this.EnableNetEtw    = $false
         $this.NetEtwCap       = 0
@@ -3616,71 +3900,134 @@ class HostTabItemViewModel : System.ComponentModel.INotifyPropertyChanged {
         $palette = [PSRPMThemeRegistry]::GetPalette($resolvedMode)
         $tabColors = $palette.TabColors
 
-        $this.IsActive    = $active
         $this.ThemeMode   = $resolvedMode
         $this.IsDarkTheme = [bool]$palette.IsDark
-        $this.CloseVisibility  = if ($canClose) { "Visible" } else { "Collapsed" }
-        $this.AccentVisibility = if ($active)   { "Visible" } else { "Collapsed" }
-        $this.TitleFontWeight  = if ($active)   { "Bold" }    else { "SemiBold" }
-        $this.BadgeBackground  = if ($this.IsLocal) { $tabColors.BadgeLocalBg } else { $tabColors.BadgeWinRmBg }
+
+        $newCloseVis  = if ($canClose) { "Visible" } else { "Collapsed" }
+        $newAccentVis = if ($active)   { "Visible" } else { "Collapsed" }
+        $newWeight    = if ($active)   { "Bold" }    else { "SemiBold" }
+        $newBadgeBg   = if ($this.IsLocal) { [string]$tabColors.BadgeLocalBg } else { [string]$tabColors.BadgeWinRmBg }
+
+        $newDotFill = "#64748B"
+        $newLatText = ""
+        $newTabBg   = ""
+        $newTabBd   = ""
+        $newTitleFg = ""
 
         if ($active) {
             if ($connState -eq "NotConnected") {
-                $this.StatusDotFill = "#64748B"
-                $this.LatencyText   = "Not Connected"
+                $newDotFill = "#64748B"
+                $newLatText = "Not Connected"
             } elseif ($connState -eq "Connecting") {
-                $this.StatusDotFill = "#0284C7"
-                $this.LatencyText   = "Connecting..."
+                $newDotFill = "#0284C7"
+                $newLatText = "Connecting..."
             } elseif ($isPaused) {
-                $this.StatusDotFill = "#F59E0B"
-                $this.LatencyText   = "Paused"
+                $newDotFill = "#F59E0B"
+                $newLatText = "Paused"
             } elseif ($connState -in @("Connected", "LocalMode")) {
-                $this.StatusDotFill = "#16A34A"
-                $this.LatencyText   = "${rttMs}ms"
+                $newDotFill = "#16A34A"
+                $newLatText = "${rttMs}ms"
             } elseif ($connState -eq "Degraded") {
-                $this.StatusDotFill = "#EAB308"
-                $this.LatencyText   = "Degraded"
+                $newDotFill = "#EAB308"
+                $newLatText = "Degraded"
             } elseif ($connState -eq "Reconnecting") {
-                $this.StatusDotFill = "#EA580C"
-                $this.LatencyText   = "Reconnecting"
+                $newDotFill = "#EA580C"
+                $newLatText = "Reconnecting"
             } else {
-                $this.StatusDotFill = "#DC2626"
-                $this.LatencyText   = "Offline"
+                $newDotFill = "#DC2626"
+                $newLatText = "Offline"
             }
-            $this.TabBackground   = $tabColors.ActiveBg
-            $this.TabBorderBrush  = $tabColors.ActiveBorder
-            $this.TitleForeground = $tabColors.ActiveFg
+            $newTabBg   = [string]$tabColors.ActiveBg
+            $newTabBd   = [string]$tabColors.ActiveBorder
+            $newTitleFg = [string]$tabColors.ActiveFg
         } else {
             if ($connState -eq "NotConnected") {
-                $this.LatencyText   = "Not Connected"
-                $this.StatusDotFill = "#64748B"
+                $newLatText = "Not Connected"
+                $newDotFill = "#64748B"
             } elseif ($connState -eq "Connecting") {
-                $this.LatencyText   = "Connecting..."
-                $this.StatusDotFill = "#0284C7"
+                $newLatText = "Connecting..."
+                $newDotFill = "#0284C7"
             } elseif ($connState -eq "Disconnected") {
-                $this.LatencyText   = "Offline"
-                $this.StatusDotFill = "#DC2626"
+                $newLatText = "Offline"
+                $newDotFill = "#DC2626"
             } elseif ($connState -eq "Reconnecting") {
-                $this.LatencyText   = "Reconnecting"
-                $this.StatusDotFill = "#EA580C"
+                $newLatText = "Reconnecting"
+                $newDotFill = "#EA580C"
             } elseif ($connState -eq "Degraded") {
-                $this.LatencyText   = "Degraded"
-                $this.StatusDotFill = "#EAB308"
+                $newLatText = "Degraded"
+                $newDotFill = "#EAB308"
             } else {
-                $this.LatencyText   = "Standby"
-                $this.StatusDotFill = "#64748B"
+                $newLatText = "Standby"
+                $newDotFill = "#64748B"
             }
-            $this.TabBackground   = $tabColors.StandbyBg
-            $this.TabBorderBrush  = $tabColors.StandbyBorder
-            $this.TitleForeground = $tabColors.StandbyFg
+            $newTabBg   = [string]$tabColors.StandbyBg
+            $newTabBd   = [string]$tabColors.StandbyBorder
+            $newTitleFg = [string]$tabColors.StandbyFg
         }
 
-        foreach ($p in @(
-            'Title', 'Transport', 'BadgeBackground', 'IsActive', 'StatusDotFill',
-            'TabBackground', 'TabBorderBrush', 'TitleForeground', 'TitleFontWeight',
-            'AccentVisibility', 'CloseVisibility', 'LatencyText'
-        )) {
-            $this.OnPropertyChanged($p)
+        if ($this.Title -ne $this._LastTitle) {
+            $this._LastTitle = $this.Title
+            $this.OnPropertyChanged('Title')
+        }
+        if ($this.Transport -ne $this._LastTransport) {
+            $this._LastTransport = $this.Transport
+            $this.OnPropertyChanged('Transport')
+        }
+        if ($this.IsActive -ne $active) {
+            $this.IsActive = $active
+            $this.OnPropertyChanged('IsActive')
+        }
+        if ($this.BadgeBackground -ne $newBadgeBg) {
+            $this.BadgeBackground = $newBadgeBg
+            $this.BadgeBackgroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush($newBadgeBg)
+            $this.OnPropertyChanged('BadgeBackground')
+            $this.OnPropertyChanged('BadgeBackgroundBrush')
+        }
+        if ($this.StatusDotFill -ne $newDotFill) {
+            $this.StatusDotFill = $newDotFill
+            $this.StatusDotFillBrush = [PSRPMThemeRegistry]::GetFrozenBrush($newDotFill)
+            $this.OnPropertyChanged('StatusDotFill')
+            $this.OnPropertyChanged('StatusDotFillBrush')
+        }
+        if ($this.TabBackground -ne $newTabBg) {
+            $this.TabBackground = $newTabBg
+            $this.TabBackgroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush($newTabBg)
+            $this.OnPropertyChanged('TabBackground')
+            $this.OnPropertyChanged('TabBackgroundBrush')
+        }
+        if ($this.TabBorderBrush -ne $newTabBd) {
+            $this.TabBorderBrush = $newTabBd
+            $this.TabBorderSolidBrush = [PSRPMThemeRegistry]::GetFrozenBrush($newTabBd)
+            $this.OnPropertyChanged('TabBorderBrush')
+            $this.OnPropertyChanged('TabBorderSolidBrush')
+        }
+        if ($this.TitleForeground -ne $newTitleFg) {
+            $this.TitleForeground = $newTitleFg
+            $this.TitleForegroundBrush = [PSRPMThemeRegistry]::GetFrozenBrush($newTitleFg)
+            $this.OnPropertyChanged('TitleForeground')
+            $this.OnPropertyChanged('TitleForegroundBrush')
+        }
+        if ($this.TitleFontWeight -ne $newWeight) {
+            $this.TitleFontWeight = $newWeight
+            $this.TitleWeight = [PSRPMThemeRegistry]::GetFontWeight($newWeight)
+            $this.OnPropertyChanged('TitleFontWeight')
+            $this.OnPropertyChanged('TitleWeight')
+        }
+        if ($this.AccentVisibility -ne $newAccentVis) {
+            $this.AccentVisibility = $newAccentVis
+            $this.AccentVis = [PSRPMThemeRegistry]::GetVisibility($newAccentVis)
+            $this.OnPropertyChanged('AccentVisibility')
+            $this.OnPropertyChanged('AccentVis')
+        }
+        if ($this.CloseVisibility -ne $newCloseVis) {
+            $this.CloseVisibility = $newCloseVis
+            $this.CloseVis = [PSRPMThemeRegistry]::GetVisibility($newCloseVis)
+            $this.OnPropertyChanged('CloseVisibility')
+            $this.OnPropertyChanged('CloseVis')
+        }
+        if ($this.LatencyText -ne $newLatText) {
+            $this.LatencyText = $newLatText
+            $this.OnPropertyChanged('LatencyText')
         }
     }
 }

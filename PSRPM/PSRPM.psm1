@@ -42,7 +42,7 @@ if (-not ([System.Management.Automation.PSTypeName]'PSRPM.Shell32Native').Type) 
 }
 
 # Resolve dynamic module version from single source of truth (PSRPM.psd1)
-$script:AppVersion = "1.17.0"
+$script:AppVersion = "1.18.0"
 try {
     $manifestPath = Join-Path $PSScriptRoot "PSRPM.psd1"
     if (Test-Path $manifestPath) {
@@ -761,7 +761,7 @@ function Start-PSRPM {
     }
 
     # 3. Initialize ObservableCollections & Summary ViewModel
-    $processCollection  = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
+    $processCollection  = [PSRPMProcessCollection]::new()
     $servicesCollection = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
     $hostTabsCollection = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
     $summaryVm          = [SystemSummaryViewModel]::new()

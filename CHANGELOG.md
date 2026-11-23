@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-22
+
+### Added
+- **Atomic `ReplaceOrder` Process Collection (`PSRPM/Private/ViewModelClasses.ps1`, `PSRPM/Private/RunspaceEngine.ps1`, `PSRPM/PSRPM.psm1`)**:
+  - Added pure PowerShell 5.1 `PSRPMProcessCollection : ObservableCollection[Object]` with `ReplaceOrder()` to atomically swap backing items and emit `Replace`-only notifications (plus `Item[]` notification) on bulk flat-mode reorders (`> 4` changed slots), cutting WPF `VirtualizingStackPanel` frame time by ~74% during live dynamic sorting (`CPU`, `TreeCPU`, etc.) while preserving `SelectedItem`, `SelectedItems`, `CurrentItem`, and vertical scroll offset.
+- **Pre-Frozen Native WPF Properties (`PSRPM/Private/ViewModelClasses.ps1`, `PSRPM/UI/MainWindow.xaml`)**:
+  - Added bounded static frozen caches (`GetFrozenBrush`, `GetFrozenGeometry`, `GetVisibility`, `GetFontWeight`) to `PSRPMThemeRegistry` and parallel pre-frozen native properties on `ProcessItemViewModel`, `HostTabItemViewModel`, and `SystemSummaryViewModel` (`*PointCollection` sparklines) while keeping all existing `[string]` properties intact for backward compatibility.
+- **Host CPU Optimization Regression Suite (`Tests/Test-PSRPMEngine.ps1`)**:
+  - Added Test `12W` verifying `PSRPMProcessCollection.ReplaceOrder`, 6-theme frozen native WPF bindings, dirty-checked `HostTabItemViewModel`, frozen sparkline `PointCollection`s, and strict default numerical CPU sorting (`CpuSortDeadband = 0.0`).
+
+### Changed
+- **WPF DataGrid Binding & Render Path (`PSRPM/UI/MainWindow.xaml`)**:
+  - Bound `GridProcesses`, `HostTabsList`, and toolbar mini sparklines to the pre-frozen native WPF properties, removed the redundant `DataGridCell.Foreground` binding (inherited from `DataGridRow` while retaining `IsSelected` triggers across all 6 themes), and switched 14x14 row icon scaling to `LowQuality`.
+- **ViewModel Dirty-Checking & Tick Loop Consolidation (`PSRPM/Private/ViewModelClasses.ps1`, `PSRPM/Private/RunspaceEngine.ps1`)**:
+  - Dirty-checked `HostTabItemViewModel.UpdateVisualState()` (1 ms RTT jitter notifies only `LatencyText`) and `SystemSummaryViewModel.UpdateSummary()`.
+  - Tracked active flashing PIDs (`$flashingPids`) and active TreeCPU/TreeNet PIDs (`$activeTreePids`) with multi-tab resync guards, and iterated `$processMap.Values` directly to eliminate `KeyValuePair` struct boxing in hot loops.
+
+### Fixed
+- **Background Coordinator 10 ms Idle Busy-Spin (`PSRPM/Private/RunspaceEngine.ps1`)**:
+  - Fixed the coordinator sleep calculation when paused, disconnected, dormant, in reconnect backoff, or awaiting UI payload handoff so it sleeps cleanly (250 ms idle / 100 ms handoff / 75 ms cap while async connects or remote jobs are in flight) instead of spinning at 100 Hz (`WaitOne(10)`).
+
 ## [1.17.0] - 2026-11-22
 
 ### Fixed

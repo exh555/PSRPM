@@ -3,7 +3,7 @@
     RootModule        = 'PSRPM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.17.0'
+    ModuleVersion     = '1.18.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop')
@@ -78,9 +78,11 @@
             LicenseUri   = 'https://github.com/exh555/psrpm/blob/main/LICENSE'
             IconUri      = 'https://raw.githubusercontent.com/exh555/psrpm/main/PSRPM/Assets/psrpm_256.png'
             ReleaseNotes = @'
-- Fixed premature Runspace disposal on async WinRM connections by retaining OwnerRunspace for the lifetime of each active PSSession across SwitchTarget, AddTabSession, and background reconnects.
-- Added $disposeSessionOwner cleanup across all session replacement, failed reconnect, tab close, local switch, auto-reconnect, and shutdown paths.
-- Added regression test 12V in Test-PSRPMEngine.ps1 verifying OwnerRunspace retention and teardown.
+v1.18.0 - Host PC CPU & Dynamic Sorting Performance Optimization:
+- Added pure PowerShell 5.1 PSRPMProcessCollection.ReplaceOrder() for atomic silent-swap + Replace reconciliation during bulk flat-mode dynamic sorting (cutting WPF frame time by ~74% while preserving selection, multi-select, CurrentItem, and scroll position).
+- Added pre-frozen native WPF brush, geometry, visibility, font-weight, and sparkline PointCollection properties across ProcessItemViewModel, HostTabItemViewModel, and SystemSummaryViewModel, and removed redundant DataGridCell.Foreground bindings.
+- Fixed background coordinator 10 ms busy-spin when paused, disconnected, dormant, or waiting on payload handoff (dropping idle paused host CPU to ~0%).
+- Dirty-checked HostTabItemViewModel.UpdateVisualState() and SystemSummaryViewModel.UpdateSummary(), tracked active flashing and TreeCPU/TreeNet PIDs with multi-tab resync guards, and added Suite 12W regression tests.
 '@
         }
     }

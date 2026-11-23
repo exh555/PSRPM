@@ -1,6 +1,6 @@
 # PSRPM — PowerShell Remote Process Manager
 
-[![Version: 1.17.0](https://img.shields.io/badge/version-1.17.0-0284c7.svg)](CHANGELOG.md)
+[![Version: 1.18.0](https://img.shields.io/badge/version-1.18.0-0284c7.svg)](CHANGELOG.md)
 [![Windows PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1%20Desktop-5391FE.svg)](PSRPM/PSRPM.psd1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -45,7 +45,7 @@ Remote Windows diagnostics have historically forced engineers into an awkward co
 
 **PSRPM solves all four constraints at once** by executing `ntdll!NtQuerySystemInformation` and native IP Helper / ETW collectors entirely in memory via `.NET Reflection.Emit` over your existing WinRM session—delivering Process Explorer + TCPView workflows at **`< 0.25%` remote CPU** and **`~1.1 - 1.8 KB/s`** steady-state bandwidth.
 
-| Metric / Capability | Standard Task Manager | PowerShell (`Get-CimInstance` / `.NET Process`) | Sysinternals over SMB / RPC | **PSRPM (`v1.17.0`)** |
+| Metric / Capability | Standard Task Manager | PowerShell (`Get-CimInstance` / `.NET Process`) | Sysinternals over SMB / RPC | **PSRPM (`v1.18.0`)** |
 | :--- | :--- | :--- | :--- | :--- |
 | **Remote Collector Engine** | N/A (Local UI) | WMI / DCOM RPC (`WmiPrvSE.exe`) | Remote binary + service / RPC | **Single `ntdll!NtQuerySystemInformation(5)` syscall** |
 | **Remote CPU Overhead** | N/A | `12% - 25%` RPC spikes | Low once running | **`< 0.25%` CPU (`2 - 8 ms` per tick)** |
@@ -246,7 +246,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Tests\Test-ReleaseReadines
 - **[`Tests/`](Tests/)** — 12-suite engine verification (`Test-PSRPMEngine.ps1`), 44-check extended QA (`Test-PSRPMExtendedQA.ps1`, `QA_Report.md`), GZIP benchmark (`Test-GzipPerformance.ps1`), and release readiness checker (`Test-ReleaseReadiness.ps1`).
 - **[`docs/`](docs/)** — **[Operator User Guide](docs/USER_GUIDE.md)**, **[Telemetry & Wire Protocol](docs/TELEMETRY_AND_PROTOCOL.md)**, **[Engineering Playbook](docs/ENGINEERING_PLAYBOOK.md)**, **[Visual Design System](DESIGN.md)**, **[Product Spec](PRODUCT.md)**, and **[Screenshot Tour](docs/screenshots/README.md)**.
 - **[`tools/`](tools/)** — Screenshot automation (`Capture-Screenshots.ps1`), workload simulator (`Simulate-Workload.ps1`), and release helper (`Set-ReleaseVersion.ps1`).
-- **[`CHANGELOG.md`](CHANGELOG.md)** — Full version history following Keep a Changelog & SemVer (`1.17.0`).
+- **[`CHANGELOG.md`](CHANGELOG.md)** — Full version history following Keep a Changelog & SemVer (`1.18.0`).
 - **[`LICENSE`](LICENSE)** — MIT License.
 
 ---

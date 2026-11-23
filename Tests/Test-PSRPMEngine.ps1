@@ -3525,6 +3525,111 @@ if ($harvestBlock12v -match '\$dc\.Runspace\.Close\(\)|\$pc\.Runspace\.Close\(\)
 }
 Write-Host "  [PASS] 12V: Verified async WinRM OwnerRunspace retention ($ownerAssignCount12v adoption sites) and teardown ($disposeOwnerCalls12v dispose calls)." -ForegroundColor Green
 
+# 12W: Host PC CPU Optimization Regressions (PSRPMProcessCollection ReplaceOrder, Frozen Native WPF Properties, Dirty-Checked Tab Sync, CPU Sort Deadband & Paused Spin Guard)
+$fastCol12w = [PSRPMProcessCollection]::new()
+$grid12w = [System.Windows.Controls.DataGrid]::new()
+$grid12w.SelectionMode = [System.Windows.Controls.DataGridSelectionMode]::Extended
+$grid12w.ItemsSource = $fastCol12w
+$items12w = @(
+    [PSCustomObject]@{ PID = 10; Name = "p10.exe" },
+    [PSCustomObject]@{ PID = 20; Name = "p20.exe" },
+    [PSCustomObject]@{ PID = 30; Name = "p30.exe" },
+    [PSCustomObject]@{ PID = 40; Name = "p40.exe" },
+    [PSCustomObject]@{ PID = 50; Name = "p50.exe" },
+    [PSCustomObject]@{ PID = 60; Name = "p60.exe" }
+)
+$initList12w = [System.Collections.Generic.List[Object]]::new()
+foreach ($it12w in $items12w) { [void]$initList12w.Add($it12w) }
+$fastCol12w.ReplaceOrder($initList12w)
+if ($fastCol12w.Count -ne 6 -or $fastCol12w[0].PID -ne 10 -or $fastCol12w[5].PID -ne 60) {
+    throw "12W PSRPMProcessCollection initial ReplaceOrder failed (Count=$($fastCol12w.Count))."
+}
+$evActions12w = [System.Collections.Generic.List[string]]::new()
+$fastCol12w.add_CollectionChanged({
+    param($s, $e)
+    [void]$evActions12w.Add([string]$e.Action)
+})
+$revList12w = [System.Collections.Generic.List[Object]]::new()
+foreach ($it12w in @($items12w[5], $items12w[4], $items12w[3], $items12w[2], $items12w[1], $items12w[0])) { [void]$revList12w.Add($it12w) }
+$fastCol12w.ReplaceOrder($revList12w)
+if ($fastCol12w[0].PID -ne 60 -or $fastCol12w[5].PID -ne 10 -or ($evActions12w -contains "Move") -or ($evActions12w -contains "Reset")) {
+    throw "12W PSRPMProcessCollection ReplaceOrder expected Replace-only notifications (Actions=$($evActions12w -join ','))."
+}
+$shrinkList12w = [System.Collections.Generic.List[Object]]::new()
+foreach ($it12w in @($items12w[5], $items12w[2], $items12w[0])) { [void]$shrinkList12w.Add($it12w) }
+$fastCol12w.ReplaceOrder($shrinkList12w)
+if ($fastCol12w.Count -ne 3 -or $fastCol12w[1].PID -ne 30) {
+    throw "12W PSRPMProcessCollection tail shrink failed (Count=$($fastCol12w.Count))."
+}
+
+# Verify pre-frozen native WPF properties across all 6 themes
+$vm12w = [ProcessItemViewModel]::new()
+$vm12w.SetStaticMetadata(@{ id = 777; ct = 100L; n = "svc.exe"; p = 4; u = "SYSTEM"; arch = "x64"; path = "N/A"; cmd = "N/A"; desc = "d"; comp = "c"; ver = "1.0"; start = "now"; sid = 0; prio = 8; cat = "Service" }, $false)
+$vm12w.UpdateTreeState(1, $true, $true, "M 24,0 L 24,18 M 24,9 L 32,9", 1.0, $false)
+foreach ($th12w in [PSRPMThemeRegistry]::GetBuiltInNames()) {
+    $vm12w.SetThemeMode($th12w)
+    if ($null -eq $vm12w.RowBackgroundBrush -or -not $vm12w.RowBackgroundBrush.IsFrozen -or $null -eq $vm12w.RowForegroundBrush -or -not $vm12w.RowForegroundBrush.IsFrozen) {
+        throw "12W Theme '$th12w' failed to produce frozen RowBackgroundBrush/RowForegroundBrush."
+    }
+}
+if ($null -eq $vm12w.TreeGuidePathGeometry -or -not $vm12w.TreeGuidePathGeometry.IsFrozen -or $null -eq $vm12w.ExpanderPathGeometry -or -not $vm12w.ExpanderPathGeometry.IsFrozen) {
+    throw "12W ProcessItemViewModel geometry properties must be pre-frozen Geometry instances."
+}
+
+# Verify HostTabItemViewModel dirty-checking on 1ms RTT jitter
+$tab12w = [HostTabItemViewModel]::new("t12w", "HOST1", "HOST1", "WINRM", $false, [SystemSummaryViewModel]::new())
+$tab12w.UpdateVisualState($true, "Light", $false, "Connected", $false, 12)
+$tabNotifs12w = [System.Collections.Generic.List[string]]::new()
+$tab12w.add_PropertyChanged({
+    param($s, $e)
+    [void]$tabNotifs12w.Add([string]$e.PropertyName)
+})
+$tab12w.UpdateVisualState($true, "Light", $false, "Connected", $false, 13)
+if ($tabNotifs12w.Count -ne 1 -or $tabNotifs12w[0] -ne "LatencyText") {
+    throw "12W HostTabItemViewModel 1ms RTT jitter should notify only LatencyText, got: $($tabNotifs12w -join ',')."
+}
+if ($null -eq $tab12w.TabBackgroundBrush -or -not $tab12w.TabBackgroundBrush.IsFrozen) {
+    throw "12W HostTabItemViewModel.TabBackgroundBrush must be frozen."
+}
+
+# Verify SystemSummaryViewModel frozen PointCollection sparklines
+$sum12w = [SystemSummaryViewModel]::new()
+$sum12w.UpdateSummary(25.0, 8192L, 16384L, 120, 1500, 45000, 10240L, 20480L)
+if ($null -eq $sum12w.CpuPointCollection -or -not $sum12w.CpuPointCollection.IsFrozen -or $sum12w.CpuPointCollection.Count -ne 30) {
+    throw "12W SystemSummaryViewModel.CpuPointCollection must be a frozen 30-point PointCollection."
+}
+
+# Verify strict CPU sorting by default (CpuSortDeadband = 0.0) and optional opt-in deadband
+$dbWin12w = [System.Windows.Window]::new()
+$dbCol12w = [PSRPMProcessCollection]::new()
+$dbEng12w = Start-PSRPMEngine -PSSession $null -Window $dbWin12w -ProcessCollection $dbCol12w -ServicesCollection ([System.Collections.ObjectModel.ObservableCollection[Object]]::new()) -SummaryViewModel ([SystemSummaryViewModel]::new()) -CollectorScript { $null } -InspectorScript { $null } -ActionScript { $null } -IntervalMs 60000 -IsLocal $true -TargetName "DB12W"
+try {
+    $dbEng12w.StateContainer.IsPaused = $true
+    $dbEng12w.Timer.Stop()
+    $dbEng12w.StateContainer.IsTreeMode = $false
+    $dbEng12w.StateContainer.SortProperty = "CPU"
+    $dbEng12w.StateContainer.SortDescending = $true
+    if ([double]$dbEng12w.StateContainer.CpuSortDeadband -ne 0.0) {
+        throw "12W Expected default CpuSortDeadband = 0.0 (strict sorting), got $($dbEng12w.StateContainer.CpuSortDeadband)."
+    }
+    foreach ($spec12w in @(@{ id = 200; cpu = 0.08 }, @{ id = 100; cpu = 0.02 }, @{ id = 50; cpu = 0.0 }, @{ id = 300; cpu = 5.5 })) {
+        $pVm12w = [ProcessItemViewModel]::new()
+        $pVm12w.SetStaticMetadata(@{ id = $spec12w.id; ct = 100L; n = "p$($spec12w.id).exe"; p = 4; u = "U"; arch = "x64"; path = "N/A"; cmd = "N/A"; desc = ""; comp = ""; ver = ""; start = ""; sid = 1; prio = 8; cat = "Own" }, $false)
+        $pVm12w.UpdateDynamic([double]$spec12w.cpu, 1048576L, 1048576L, 1, 10, 0)
+        $dbEng12w.ProcessMap[[int]$spec12w.id] = $pVm12w
+    }
+    & $dbEng12w.RefreshTree
+    if ($dbCol12w.Count -ne 4 -or $dbCol12w[0].PID -ne 300 -or $dbCol12w[1].PID -ne 200 -or $dbCol12w[2].PID -ne 100 -or $dbCol12w[3].PID -ne 50) {
+        throw "12W Strict default CPU sort order mismatch: expected [300, 200, 100, 50], got [$($dbCol12w[0].PID), $($dbCol12w[1].PID), $($dbCol12w[2].PID), $($dbCol12w[3].PID)]."
+    }
+} finally {
+    $dbEng12w.StateContainer.IsStopping = $true
+    [void]$dbEng12w.StateContainer.WakeEvent.Set()
+    $dbEng12w.Timer.Stop()
+    try { $dbEng12w.PowerShell.Dispose(); $dbEng12w.Runspace.Close(); $dbEng12w.Runspace.Dispose() } catch {}
+}
+Write-Host "  [PASS] 12W: Verified PSRPMProcessCollection ReplaceOrder, 6-theme frozen native WPF bindings, dirty-checked HostTabItemViewModel, frozen sparklines & strict default CPU sort." -ForegroundColor Green
+
 # 12E: Strict 7-bit ASCII Audit Across All .ps1 / .psm1 Files
 $nonAsciiHits = [System.Collections.Generic.List[string]]::new()
 foreach ($psFile in (Get-ChildItem -Path (Join-Path $repoRoot "PSRPM"), (Join-Path $repoRoot "Tests") -Include *.ps1,*.psm1 -Recurse)) {
